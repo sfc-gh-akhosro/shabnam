@@ -128,7 +128,19 @@ art under a brand's name implies an association that does not exist.
 
 **Cost to close:** replace the files. No code.
 
-### V5. My Style cannot override an `#id` rule that Base CSS emitted
+### V5. ~~My Style cannot override an `#id` rule that Base CSS emitted~~ — **closed by decision, option 1**
+
+**Specificity mirrors intent.** If the DOT styled one node specifically, that
+is an `#id` and it is meant to be emphatic — so an id rule outranking a class
+rule is the correct outcome, not a limit to engineer around. To override it,
+reach for the same id in My Style: `#runtime { … }` wins on sheet order.
+
+This is also what keeps the effects library safe: Base CSS emits no
+`transform`, `animation`, `filter` or `transition`, so class-based effects
+never compete with generated id rules at all. Colour and theme stay separate
+from effects precisely to preserve that.
+
+The original reasoning follows.
 
 Found in a browser in iteration 5. With the fixture loaded,
 `.diagram .node { background-color: #ffe0b2 }` in My Style recoloured every node
