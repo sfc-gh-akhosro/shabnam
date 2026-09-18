@@ -106,7 +106,7 @@ What got settled, because iteration 5 inherits it:
 Known gaps, for iteration 5 to decide on rather than discover — all of them now written up in `docs/technical-debts.md`, which is the ledger from here on:
 
 - **`ATTR_CSS` is HTML-only** (debt R1). It maps `penwidth` → `border-width` and `color` → `border-color`, which mean nothing on a `<line>` or a `<rect>`. So `#e-horizon-runtime`'s `penwidth=3` and the fixture's edge colours do not reach the connectors, which take their look from the preamble instead. An SVG twin of `ATTR_CSS` (`stroke`, `stroke-width`) is the obvious fix and is a registry, not a redesign.
-- The `icon/` files are crude placeholder glyphs — a generic info circle for `bigquery.svg`, a plus square for `gcs.svg` (debt V4). They render correctly; they just are not real logos.
+- The `icon/` files are crude placeholder glyphs — a generic info circle for `chart.svg`, a plus square for `bucket.svg` (debt V4). They render correctly; they just are not real artwork. (These two were named `bigquery.svg` and `gcs.svg` at the time; see the note at the top of this file.)
 - Browser zoom below 100% reflows the HTML layer without redrawing the SVG, so shells drift until the next Redraw (debt V3). Expected under this design — geometry is measured, not live — but worth knowing before someone reports it as a bug.
 
 Housekeeping, unchanged: in the enclosing git repo the whole `yad/` folder is still one untracked `?? ./`, so `git status` cannot act as a per-file canary yet. The rules themselves are right — `git check-ignore -v` confirms `src/diagram/node-sheller.ts`, `src/assets.d.ts` and `svg/box.svg` are un-ignored by `!*/**/*.ts` and `!*/**/*.svg`, and `node_modules/` is ignored. Still worth an initial commit.
