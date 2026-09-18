@@ -1,0 +1,26 @@
+<!-- Shabnam — logo. Flat drop, three-node graph, no gradient.
+     Recolour by editing the three lines in :root. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Shabnam">
+  <style>
+    :root {
+      --drop: #0EA5E9;
+      --graph: #FFFFFF;
+      --bg: transparent;
+    }
+    .bg    { fill: var(--bg); }
+    .drop  { fill: var(--drop); }
+    .graph { fill: var(--graph); stroke: var(--graph); stroke-width: 3; stroke-linecap: round; }
+  </style>
+
+  <rect class="bg" width="64" height="64" />
+
+  <path class="drop" d="M32 4 C32 4 53 27 53 40 A21 21 0 0 1 11 40 C11 27 32 4 32 4 Z" />
+
+  <g class="graph">
+    <path d="M23 33 L41 27" />
+    <path d="M41 27 L33 47" />
+    <circle cx="23" cy="33" r="4.8" />
+    <circle cx="41" cy="27" r="4.8" />
+    <circle cx="33" cy="47" r="4.8" />
+  </g>
+</svg>

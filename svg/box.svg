@@ -1,0 +1,5 @@
+<!-- The first shell (§3.4). A shell file is an SVG *fragment*, not a standalone
+     document: NodeSheller wraps it in the group that carries the node's classes.
+     Tokens are {{x}} {{y}} {{width}} {{height}}, already inflated by SHELL_PAD
+     around the measured box. -->
+<rect class="shell" x="{{x}}" y="{{y}}" width="{{width}}" height="{{height}}" rx="8" ry="8" />

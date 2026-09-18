@@ -1,0 +1,35 @@
+<!-- Shabnam — logo with words. Same drop, plus the name and the tagline.
+     Recolour by editing :root. Text is live <text>, so convert to outlines
+     before it has to look identical on someone else's machine. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 72" role="img" aria-label="Shabnam — CSS on DOT Diagrams">
+  <style>
+    :root {
+      --drop: #0EA5E9;
+      --graph: #FFFFFF;
+      --bg: transparent;
+      --name: #0F172A;
+      --tagline: #64748B;
+    }
+    .bg      { fill: var(--bg); }
+    .drop    { fill: var(--drop); }
+    .graph   { fill: var(--graph); stroke: var(--graph); stroke-width: 3; stroke-linecap: round; }
+    .name    { fill: var(--name); font: 600 30px/1 Inter, "Helvetica Neue", Helvetica, system-ui, sans-serif; }
+    .tagline { fill: var(--tagline); font: 400 12.5px/1 Inter, "Helvetica Neue", Helvetica, system-ui, sans-serif; letter-spacing: 0.3px; }
+  </style>
+
+  <rect class="bg" width="300" height="72" />
+
+  <g transform="translate(6 8) scale(0.86)">
+    <path class="drop" d="M32 4 C32 4 53 27 53 40 A21 21 0 0 1 11 40 C11 27 32 4 32 4 Z" />
+    <g class="graph">
+      <path d="M23 33 L41 27" />
+      <path d="M41 27 L33 47" />
+      <circle cx="23" cy="33" r="4.8" />
+      <circle cx="41" cy="27" r="4.8" />
+      <circle cx="33" cy="47" r="4.8" />
+    </g>
+  </g>
+
+  <text class="name" x="68" y="36">Shabnam</text>
+  <text class="tagline" x="69" y="55">CSS on DOT Diagrams</text>
+</svg>

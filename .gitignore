@@ -1,0 +1,92 @@
+# Shabnam git canary — extreme vetting
+#
+# A path is tracked only if BOTH are true:
+#   1. it lives under an allowed root folder (nesting is fine), or it is a
+#      named root file
+#   2. its extension is on the whitelist
+#
+# Everything else is invisible to git by default. The canary's job is to stay
+# quiet about junk and loud about nothing.
+#
+# Weakening this file to sneak something in is a rule violation.
+# Move the file, or change the rule on purpose.
+
+# ---------------------------------------------------------------------------
+# Gate 1 — the root.
+# Ignore every top-level entry, then re-admit the allowed root folders and
+# the named root files.
+# ---------------------------------------------------------------------------
+
+# The repo allows having many local (not git tracked) folders like temp/ local/ input/ output/ 
+# Not all files or codes need to be tracked but the repo in each remote push should be neat and clean with no need to the local files to compile and run and do the job.
+
+
+/*
+
+!/src/
+!/svg/
+!/icon/
+!/test/
+!/build/
+!/theme/
+!/docs/
+!/research-lab/
+!/dist/
+
+!/AGENTS.md
+!/CLAUDE.md
+!/README.md
+!/app-architecture.md
+!/coding-rules.md
+!/current-task.md
+!/package.json
+!/tsconfig.json
+!/bun.lock
+!/.gitignore
+
+# ---------------------------------------------------------------------------
+# Gate 2 — inside those roots.
+# Ignore everything nested, then re-admit directories (so git will descend,
+# at any depth) and the whitelisted extensions.
+#
+# `*/**` matches only paths two or more segments deep, so it can never undo
+# Gate 1. `!*/**/` is what makes nested packages work — without it git
+# refuses to descend and your source silently disappears.
+# ---------------------------------------------------------------------------
+
+*/**
+
+!*/**/
+
+!*/**/*.ts
+!*/**/*.tsx
+!*/**/*.js
+!*/**/*.jsx
+!*/**/*.mjs
+!*/**/*.json
+!*/**/*.lock
+!*/**/*.md
+!*/**/*.css
+!*/**/*.html
+!*/**/*.svg
+!*/**/*.png
+!*/**/*.dot
+!*/**/*.sh
+!*/**/*.toml
+
+# ---------------------------------------------------------------------------
+# Gate 3 — junk that would otherwise slip through Gate 2, at any depth.
+# Last match wins, so these beat the whitelist above.
+# ---------------------------------------------------------------------------
+
+**/node_modules/
+**/.git/
+**/.DS_Store
+**/.turbo/
+**/.cache/
+**/.vite/
+**/.solid/
+**/.bun/
+**/coverage/
+**/dist-ssr/
+**/target/

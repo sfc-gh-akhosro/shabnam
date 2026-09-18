@@ -1,0 +1,165 @@
+/* Workbench chrome only. The diagram's own styling is derived Base CSS plus
+   the user's My Style, which land in the canvas sinks — never here. */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  color: #1f2933;
+  background: #f4f6f8;
+}
+
+#shabnam-workbench {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  grid-template-columns: 1fr 26rem;
+  grid-template-areas:
+    "toolbar toolbar"
+    "canvas  editors";
+  height: 100vh;
+}
+
+/* ---------------------------------------------------------------- toolbar */
+
+#shabnam-toolbar {
+  grid-area: toolbar;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #ffffff;
+  border-bottom: 1px solid #d6dbe0;
+}
+
+#shabnam-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+#shabnam-brand-logo {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+#shabnam-toolbar button {
+  padding: 0.35rem 0.8rem;
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid #cbd2d9;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1f2933;
+}
+
+#shabnam-redraw {
+  border-color: #1565c0;
+  background: #1565c0;
+  color: #ffffff;
+}
+
+#shabnam-status {
+  color: #7b8794;
+  margin-left: 0.5rem;
+}
+
+/* ----------------------------------------------------------------- canvas */
+
+#shabnam-canvas {
+  grid-area: canvas;
+  position: relative;
+  overflow: auto;
+  background: #ffffff;
+}
+
+/* The coordinate contract (§3.4): `#shabnam-canvas` is the positioned ancestor, so its
+   padding-box top-left is the one origin both layers use. `#shabnam-main-svg` is absolute
+   inside it and therefore scrolls with `#shabnam-main-html`; `overflow: visible` lets
+   shells and connectors past the visible box paint, and no viewBox keeps one user
+   unit equal to one pixel. */
+#shabnam-main-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* The annotation layer (§4) shares the canvas origin with `#shabnam-main-svg`, so an
+   annotation and a shell agree on where a node is. Only an element that carries
+   `data-anchor` is positioned; anything else the user writes stays in flow.
+
+   The translate is part of the anchor contract: the anchor point is the
+   annotation's own centre, so `data-anchor="lake"` centres it on that node
+   without anyone having to measure the annotation. */
+#shabnam-annotation-html {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#shabnam-annotation-html [data-anchor] {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+/* ---------------------------------------------------------------- editors */
+
+#shabnam-editors {
+  grid-area: editors;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  border-left: 1px solid #d6dbe0;
+  background: #ffffff;
+  min-width: 0;
+}
+
+#shabnam-tab-strip {
+  display: flex;
+  border-bottom: 1px solid #d6dbe0;
+}
+
+.tab {
+  flex: 1;
+  padding: 0.5rem 0.25rem;
+  font: inherit;
+  cursor: pointer;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: #f4f6f8;
+  color: #52606d;
+}
+
+.tab.active {
+  background: #ffffff;
+  color: #1565c0;
+  border-bottom-color: #1565c0;
+}
+
+.editor {
+  grid-row: 2;
+  grid-column: 1;
+  padding: 0.75rem;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  tab-size: 2;
+  border: 0;
+  resize: none;
+  outline: none;
+}
+
+.hidden {
+  display: none;
+}
