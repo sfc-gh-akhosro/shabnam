@@ -40,15 +40,17 @@ Canvas skeleton — the named sinks each worker fills:
 
 ```html
 <div id="shabnam-canvas">
-  <div id="shabnam-main-html"><!-- layout + node HTML --></div>
+  <div id="shabnam-main-html"><!-- layout + node HTML (zero inline styles) --></div>
   <svg id="shabnam-main-svg">
+    <g id="shabnam-clusters"></g>
     <g id="shabnam-node-shells"></g>
     <g id="shabnam-connectors"></g>
   </svg>
   <div id="shabnam-annotation-html"></div>
-  <style id="shabnam-base-css"></style>
-  <style id="shabnam-my-style"></style>
-  <script id="shabnam-my-js"></script>
+  <style id="shabnam-theme-css"></style>
+  <style id="shabnam-derived-css"></style>
+  <style id="shabnam-style-css"></style>
+  <script id="shabnam-action-js"></script>
 </div>
 ```
 
@@ -57,6 +59,11 @@ so the page's own ids and the diagram's ids share one space — and a diagram wi
 a node called `connectors` had its edge markup written into that node's `<div>`.
 The prefix is the wall between the two namespaces. It is plumbing: Base CSS never
 references a sink id, and neither should a theme.
+
+The CSS cascade uses a clean **multi-sink separation**:
+1. `#shabnam-theme-css` — Canonical theme tokens, utility classes (`.paper`, `.glass`, `.warning`, etc.), base layout rules (`.diagram`, `.column`, `.node`, `.edge`), and animation keyframes.
+2. `#shabnam-derived-css` — Graphviz `:root` variables, attribute overrides, and position-derived quantized `#id` margins emitted by `CssBagger`.
+3. `#shabnam-style-css` — User-authored CSS with `@apply` composition expanded by `expandCss`.
 
 Nodes have **two layers**: an HTML layer (`shape →` markup, in flow, measurable) and an SVG layer that draws a **shell** around the measured box, with icon and caption inside the shell.
 
@@ -223,9 +230,13 @@ element nobody draws is inert, and inert output is worse than absent output.
 
 Classes first. `#id` last, and rare. The valuable output of this worker is not pretty CSS — it is that **every node already carries the right classes**, so hand-written My Style is trivial.
 
+**Position Margins in `derived.css`**: When nodes across ranks have vertical (or horizontal) offsets in Graphviz's layout, `CssBagger` computes quantized slot steps from `pos` coordinates and emits explicit `#id` rules in `derived.css` (e.g. `#node_id { margin-top: calc(N * (var(--vertical-gap) + 2.5em)); }`). This preserves node alignment across columns while keeping all styling inspectable and editable in CSS.
+
 ### 3.3 `LayoutFramer` + `NodeShaper` — the HTML layer
 
 Columns come from `x` / `y` plus `rankdir` (group on x if LR/RL, else y). Inside a column, sort on the other axis.
+
+**Zero inline styles**: The generated HTML markup contains **no inline `style="..."` attributes or JavaScript**. All structure is expressed purely through DOM elements (`<div id="lake" class="node ...">`) and styled exclusively via stylesheets.
 
 Graphviz positions are floats, so grouping uses a **tolerance of 2 points** — rank separation is at least 36 points, so this is unambiguous, and exact float equality would scatter one rank across several columns. Never write a test that chases the last decimal of a `pos`.
 
@@ -264,7 +275,7 @@ The subgraph class is the styling surface that matters. `#id` is left over for o
 
 Once the browser has painted `#shabnam-main-html`, `Measurer` reads the real geometry into `Box[]`. Then:
 
-- **`NodeSheller`** draws a shell around each box. Shell files live in `svg/`; `SHELL_SVG` maps `shell=` to a file, defaulting to `svg/box.svg`. Icon comes from `icon/` when `icon=` is set. Caption is `caption=`, falling back to `label`.
+- **`NodeSheller`** draws visual cluster bounding boxes (`clusters(...)`) under `#shabnam-clusters` around measured member nodes of `subgraph cluster_...` with cluster labels, and draws shells around each node box (`shells(...)`). Shell files live in `svg/`; `SHELL_SVG` maps `shell=` to a file, defaulting to `svg/box.svg`. Icon comes from `icon/` when `icon=` is set. Caption is `caption=`, falling back to `label`.
 - **`EdgeDrawer`** draws connectors from **measured** box coordinates — never Graphviz `_draw_` paths — so edges keep following our boxes after CSS changes a gap, a font, or a width.
 
 Measured geometry is the single source of truth for size and position. The model deliberately does **not** carry Graphviz's `width` / `height`; two sources of size would guarantee that someone eventually uses the wrong one.
@@ -586,6 +597,7 @@ interface LayoutFramer {
 
 interface NodeSheller {
   shells(boxes: Box[], model: DiagramModel): string   // SHELL_SVG + icon/
+  clusters(boxes: Box[], model: DiagramModel): string // SVG bounding boxes around member nodes
 }
 
 interface EdgeDrawer {

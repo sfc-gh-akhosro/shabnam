@@ -1,4 +1,4 @@
-# Current task
+# Shabnam
 
 Nothing is in progress. The section below is orientation; the section after it is
 the menu. Read `AGENTS.md`, then `app-architecture.md`, then `coding-rules.md`
@@ -83,23 +83,15 @@ model headlessly when you need to see it without a browser.
 
 ## Next — make it useful
 
-The framework is down. The direction from here is **user-facing richness**, not
-more plumbing:
+The framework and visual styling grid are down. The direction from here:
 
-1. **`shape=record` and a table shape, both styleable** (R2). A `SHAPE_HTML`
-   entry that reads the already-resolved `label` and splits on `|` and `{}`.
-   Emphatically *not* a DOT parser (§3.5). The single largest change to how a
-   diagram looks.
-2. **A library of predefined effects and animations** to pick from in CSS —
-   hovers, glows, dashes, transitions, entrances. This is what makes the "it is
-   real HTML" claim pay off, and it is mostly CSS authoring rather than code.
-3. **More shells** (R3). The claim that adding one is "a file plus one
-   `SHELL_SVG` entry plus its import" has never been tested. Test it.
-4. **V5 needs a decision first if 1–3 are to be themeable.** Base CSS emits
-   `#id` rules, which outrank anything a user writes in My Style. Options: keep
-   and document, demote to classes, or emit them only when no class rule could
-   carry the value. Ask before building on top of it.
-5. **S3** is the only user-visible silent loss left: a declaration CSSOM does not
-   recognise is dropped on Redraw without naming itself.
+1. **A library of predefined effects and animations** to pick from in CSS —
+   hovers, glows, dashes, transitions, entrances.
+2. **More shells** (R3) in `svg/`.
+3. **S3** warning diagnostics when an unrecognized CSS declaration drops.
 
-Still out of scope: a layout engine, edge routing, a sixth tab.
+
+
+
+
+

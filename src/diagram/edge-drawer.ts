@@ -6,35 +6,120 @@
 import type * as T from "../types.ts";
 import { SHELL_PAD } from "./node-sheller.ts";
 
-// Anchoring, simple and consistent: an edge leaves and arrives at the midpoint of
-// the two facing shell edges, picked on whichever axis separates the boxes more.
-// No routing, no overlap avoidance — a straight line between facing sides.
-//
-// `markerUnits="userSpaceOnUse"` is deliberate. The default scales the marker by
-// the line's stroke-width, so the fixture's `penwidth=3` edge grew an arrowhead
-// three times everyone else's — seen in the browser once DOT `penwidth` started
-// reaching the connectors. One arrow size, whatever the line weight.
 const ARROW = `<defs><marker id="shabnam-arrow" class="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" /></marker></defs>`;
+
+export function getCssConnectorMode(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const canvas = document.getElementById("shabnam-canvas");
+  if (!canvas) return undefined;
+  const style = getComputedStyle(canvas);
+  const val =
+    style.getPropertyValue("--connector-style") ||
+    style.getPropertyValue("--connector-type");
+  const trimmed = val ? val.trim().replace(/^['"]|['"]$/g, "").toLowerCase() : "";
+  return trimmed || undefined;
+}
 
 export class EdgeDrawer implements T.EdgeDrawer {
   draw(boxes: T.Box[], model: T.DiagramModel): string {
     const byId = new Map(boxes.map((box) => [box.id, box]));
-    const lines = model.edges.map((edge) =>
-      line(edge, byId.get(edge.from)!, byId.get(edge.to)!),
-    );
-    return ARROW + lines.join("");
+    const cssMode = getCssConnectorMode();
+    const defaultMode = cssMode ?? model.attrs.get("splines") ?? "spline";
+
+    const paths = model.edges.map((edge) => {
+      const from = byId.get(edge.from)!;
+      const to = byId.get(edge.to)!;
+      const mode = edge.attrs.get("splines") ?? defaultMode;
+      return edgePath(edge, from, to, mode);
+    });
+
+    return ARROW + paths.join("");
   }
 }
 
-function line(edge: T.Edge, from: T.Box, to: T.Box): string {
+function edgePath(edge: T.Edge, from: T.Box, to: T.Box, mode: string): string {
   const [tail, head] = anchors(from, to);
   const classes = ["edge", ...edge.classes].join(" ");
+  const d = route(tail, head, mode);
 
   return (
-    `<line id="${edge.id}" class="${classes}"` +
-    ` x1="${round(tail.x)}" y1="${round(tail.y)}"` +
-    ` x2="${round(head.x)}" y2="${round(head.y)}"` +
+    `<path id="${edge.id}" class="${classes}"` +
+    ` d="${d}"` +
     ` marker-end="url(#shabnam-arrow)" />`
+  );
+}
+
+function route(tail: T.Point, head: T.Point, mode: string): string {
+  switch (mode) {
+    case "ortho":
+    case "step":
+    case "polyline":
+      return orthoPath(tail, head);
+    case "line":
+    case "straight":
+      return `M ${round(tail.x)} ${round(tail.y)} L ${round(head.x)} ${round(head.y)}`;
+    case "spline":
+    case "curved":
+    default:
+      return splinePath(tail, head);
+  }
+}
+
+function splinePath(tail: T.Point, head: T.Point): string {
+  const dx = head.x - tail.x;
+  const dy = head.y - tail.y;
+
+  if (Math.abs(dx) < 1 || Math.abs(dy) < 1) {
+    return `M ${round(tail.x)} ${round(tail.y)} L ${round(head.x)} ${round(head.y)}`;
+  }
+
+  const isHorizontal = Math.abs(dx) >= Math.abs(dy);
+  const cp1 = isHorizontal
+    ? { x: tail.x + dx * 0.5, y: tail.y }
+    : { x: tail.x, y: tail.y + dy * 0.5 };
+  const cp2 = isHorizontal
+    ? { x: head.x - dx * 0.5, y: head.y }
+    : { x: head.x, y: head.y - dy * 0.5 };
+
+  return (
+    `M ${round(tail.x)} ${round(tail.y)}` +
+    ` C ${round(cp1.x)} ${round(cp1.y)}, ${round(cp2.x)} ${round(cp2.y)}, ${round(head.x)} ${round(head.y)}`
+  );
+}
+
+function orthoPath(tail: T.Point, head: T.Point): string {
+  const dx = head.x - tail.x;
+  const dy = head.y - tail.y;
+
+  if (Math.abs(dx) < 1 || Math.abs(dy) < 1) {
+    return `M ${round(tail.x)} ${round(tail.y)} L ${round(head.x)} ${round(head.y)}`;
+  }
+
+  const isHorizontal = Math.abs(dx) >= Math.abs(dy);
+  const r = Math.min(6, Math.abs(dx) / 2, Math.abs(dy) / 2);
+  const signX = dx >= 0 ? 1 : -1;
+  const signY = dy >= 0 ? 1 : -1;
+
+  if (isHorizontal) {
+    const midX = tail.x + dx / 2;
+    return (
+      `M ${round(tail.x)} ${round(tail.y)}` +
+      ` L ${round(midX - signX * r)} ${round(tail.y)}` +
+      ` Q ${round(midX)} ${round(tail.y)}, ${round(midX)} ${round(tail.y + signY * r)}` +
+      ` L ${round(midX)} ${round(head.y - signY * r)}` +
+      ` Q ${round(midX)} ${round(head.y)}, ${round(midX + signX * r)} ${round(head.y)}` +
+      ` L ${round(head.x)} ${round(head.y)}`
+    );
+  }
+
+  const midY = tail.y + dy / 2;
+  return (
+    `M ${round(tail.x)} ${round(tail.y)}` +
+    ` L ${round(tail.x)} ${round(midY - signY * r)}` +
+    ` Q ${round(tail.x)} ${round(midY)}, ${round(tail.x + signX * r)} ${round(midY)}` +
+    ` L ${round(head.x - signX * r)} ${round(midY)}` +
+    ` Q ${round(head.x)} ${round(midY)}, ${round(head.x)} ${round(midY + signY * r)}` +
+    ` L ${round(head.x)} ${round(head.y)}`
   );
 }
 

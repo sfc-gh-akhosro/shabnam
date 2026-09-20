@@ -1,0 +1,275 @@
+/* Shabnam Theme — Derived Visuals & Smart Effects
+   All palette shades are derived from 3 :root colors.
+   Rules apply only to generic classes, never #id selectors or diagram-specific names. */
+
+:root {
+  --primary-color: #0b3d91;
+  --secondary-color: #1565c0;
+  --accent-color: #ff8f00;
+
+  --main-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --title-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --base-font-size: 13px;
+
+  --horizontal-gap: 2em;
+  --vertical-gap: 2em;
+  --connector-style: spline;
+
+  --raised-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --flat-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* ---------------------------------------------------------------- Core Classes / Mixins */
+
+.paper {
+  background: color-mix(in srgb, var(--primary-color) 4%, white);
+  border: 1px solid color-mix(in srgb, var(--secondary-color) 40%, white);
+  box-shadow: var(--flat-shadow);
+}
+
+.glass {
+  background: color-mix(in srgb, var(--primary-color) 8%, rgba(255, 255, 255, 0.7));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
+  box-shadow: var(--raised-shadow);
+}
+
+.warning {
+  background: color-mix(in srgb, var(--accent-color) 12%, white);
+  border: 1px solid var(--accent-color);
+  color: color-mix(in srgb, var(--accent-color) 85%, black);
+}
+
+.tag {
+  display: inline-block;
+  padding: 0.15em 0.5em;
+  font-size: 0.85em;
+  font-weight: 600;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--primary-color) 10%, white);
+  color: var(--primary-color);
+}
+
+.annotation {
+  padding: 0.35em 0.7em;
+  font-size: 0.85em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--secondary-color) 15%, white);
+  border: 1px solid color-mix(in srgb, var(--secondary-color) 45%, white);
+  box-shadow: var(--flat-shadow);
+}
+
+.button {
+  padding: 0.4em 0.8em;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--primary-color);
+  color: white;
+  border: 0;
+  box-shadow: var(--flat-shadow);
+}
+
+.raised {
+  box-shadow: var(--raised-shadow);
+}
+
+.outlined {
+  border: 1.5px solid var(--secondary-color);
+  background: transparent;
+}
+
+.flat {
+  box-shadow: none;
+  border: 1px solid color-mix(in srgb, var(--secondary-color) 25%, white);
+}
+
+/* ---------------------------------------------------------------- Effects & Animations */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(0.98); }
+}
+
+.pulse {
+  animation: pulse 2.5s infinite ease-in-out;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.float {
+  animation: float 3s infinite ease-in-out;
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 4px color-mix(in srgb, var(--accent-color) 40%, transparent); }
+  50% { box-shadow: 0 0 14px color-mix(in srgb, var(--accent-color) 80%, transparent); }
+}
+
+.glow {
+  animation: glow 2s infinite ease-in-out;
+}
+
+@keyframes dash-flow {
+  to { stroke-dashoffset: -20; }
+}
+
+.flow {
+  stroke-dasharray: 6 4;
+  animation: dash-flow 1s linear infinite;
+}
+
+.lift:hover,
+.node:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--raised-shadow);
+}
+
+/* ---------------------------------------------------------------- Structure & Nodes */
+
+.diagram {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(2 * var(--horizontal-gap));
+  padding: calc(2 * var(--horizontal-gap));
+  background: color-mix(in srgb, var(--primary-color) 3%, #fafafa);
+  font-family: var(--main-font);
+  font-size: var(--base-font-size);
+  color: color-mix(in srgb, var(--primary-color) 90%, black);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--vertical-gap));
+}
+
+.node {
+  @apply .paper;
+  border-radius: 6px;
+  padding: 0.5em 0.75em;
+  min-width: 9em;
+  box-sizing: border-box;
+  color: color-mix(in srgb, var(--primary-color) 90%, black);
+  font-family: var(--main-font);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.label {
+  white-space: pre-line;
+}
+
+.cluster-box {
+  fill: none;
+  stroke: color-mix(in srgb, var(--secondary-color) 35%, white);
+  stroke-width: 1.5px;
+  stroke-dasharray: 6 4;
+  rx: 8px;
+}
+
+.cluster-label {
+  font-family: var(--title-font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  fill: color-mix(in srgb, var(--secondary-color) 80%, black);
+}
+
+.shell {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent-color) 50%, white);
+  stroke-width: 1.5px;
+  stroke-dasharray: 4 3;
+}
+
+.edge {
+  fill: none;
+  stroke: var(--accent-color);
+  stroke-width: 1.5px;
+}
+
+.caption {
+  font-family: var(--title-font);
+  font-weight: 600;
+  fill: color-mix(in srgb, var(--primary-color) 90%, black);
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.arrow {
+  fill: var(--accent-color);
+}
+
+.icon {
+  width: 1.25em;
+  height: 1.25em;
+  vertical-align: -0.2em;
+  display: inline-block;
+  object-fit: contain;
+  margin-right: 0.35em;
+}
+
+#shabnam-annotation-html [data-anchor] {
+  padding: 0.25em 0.6em;
+  border-radius: 4px;
+  background: var(--accent-color);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 500;
+  box-shadow: var(--flat-shadow);
+}
+
+.col {
+  display: flex;
+  flex-direction: row;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------------------------------------------------------------- Record Shape */
+
+.record {
+  padding: 0;
+  overflow: hidden;
+}
+
+.record .cell {
+  padding: 0.5em 0.75em;
+}
+
+.record.row > .cell:first-child,
+.record.col > .cell:first-child {
+  background: color-mix(in srgb, var(--primary-color) 12%, white);
+  font-weight: 600;
+  color: color-mix(in srgb, var(--primary-color) 90%, black);
+}
+
+.record.row > .cell:not(:last-child),
+.record.row > .fields:not(:last-child) {
+  border-bottom: 1px solid color-mix(in srgb, var(--secondary-color) 20%, white);
+}
+
+.record.col > .cell:not(:last-child),
+.record.col > .fields:not(:last-child) {
+  border-right: 1px solid color-mix(in srgb, var(--secondary-color) 20%, white);
+}
+
+.fields.row > .cell:not(:last-child),
+.fields.row > .fields:not(:last-child) {
+  border-right: 1px solid color-mix(in srgb, var(--secondary-color) 20%, white);
+}
+
+.fields.col > .cell:not(:last-child),
+.fields.col > .fields:not(:last-child) {
+  border-bottom: 1px solid color-mix(in srgb, var(--secondary-color) 20%, white);
+}

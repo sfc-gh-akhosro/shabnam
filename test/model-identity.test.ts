@@ -28,25 +28,18 @@ test("a subgraph keeps its DOT name, `cluster_` included", () => {
   // Stripping `cluster_` would make the CSS class something the DOT never says,
   // and `cluster_a` would become the one-letter `.a` (§3.1).
   expect(fixture.clusters.map((cluster) => cluster.name)).toEqual([
-    "subgraph_1",
-    "cluster_a",
-    "cluster_b",
-    "subgraph_2",
-    "subgraph_3",
-    "subgraph_4",
+    "cluster_sources",
+    "cluster_platform",
     "cluster_consumer",
   ]);
 });
 
 test("a subgraph name becomes a class on its member nodes", () => {
   const lake = fixture.nodes.find((node) => node.id === "lake")!;
-  expect(lake.classes).toEqual(["subgraph_1", "cluster_a"]);
+  expect(lake.classes).toEqual(["cluster_sources"]);
 
-  // An anonymous subgraph is numbered by appearance and is a cluster like any
-  // other: example-1's first one carries `fillcolor` for six nodes, and dropping
-  // it would cost six `#id` rules.
-  const engine = fixture.nodes.find((node) => node.id === "engine")!;
-  expect(engine.classes).toEqual(["subgraph_2"]);
+  const portal = fixture.nodes.find((node) => node.id === "portal")!;
+  expect(portal.classes).toEqual(["cluster_consumer"]);
 });
 
 test("an edge points at node ids, and parallel edges are suffixed", async () => {

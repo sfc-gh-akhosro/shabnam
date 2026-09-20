@@ -26,6 +26,14 @@
 
 ---
 
+## Trust in default (Do Nothing)
+
+I trust a lot that "doing nothing (trusting default)" will do the job "good enough". We go further only when we need and consciously decide about it. This rule (trust in default) does not mean we are careless (especially for critical decision points), it just means "hey, let's do nothing to see what happens, maybe it is good enough".
+
+We are extremely against over-control and micro-management of every element and arrangement, especially when it comes to something as complicated and crazy as DOM (where technically you never fully grasp its interwoven effects on other components when a little upstream tweak changes; the default arrangement behaves "civilized" and many custom changes might behave erratic, unpredictable, or unexpected).
+
+---
+
 ## Type-driven TypeScript (Go / Rust)
 
 - `interface` — methods only. No data fields. A class implements an interface.

@@ -185,23 +185,9 @@ wasm will not move.
 
 ## Model debt
 
-### M1. `Cluster.isInvis` and `Cluster.label` are bagged and never read
+### M1. ~~`Cluster.isInvis` and `Cluster.label` are bagged and never read~~ — **closed by implementation**
 
-§10 mandates the field, and iteration 4 decided no cluster is drawn at all — so
-`style=invis` is satisfied by drawing nothing, not by a branch. The field is
-honest data with no consumer.
-
-`coding-rules.md` forbids dead code; §10 mandates the field. The conflict resolves
-the moment D3 is decided: if the diagram or a cluster ever gets an element,
-`isInvis` becomes the thing that decides whether to draw it.
-
-`Cluster.label` is in the same position for the same reason: the label a cluster
-carries has nowhere to be drawn while no cluster has an element. Iteration 6
-closed D3 by deciding there *is* no cluster element, which makes both fields
-dead in the strict sense — they are kept because §10 names them and because a
-cluster element is the obvious next feature, not because anything reads them.
-
-**Cost to close:** delete both fields, or draw a cluster. One condition either way.
+Both fields are now actively consumed by `NodeSheller.clusters(...)`: `Cluster.isInvis` suppresses drawing invisible clusters (`style=invis`), and `Cluster.label` renders as `.cluster-label` text atop the cluster box.
 
 ### M3. Graphviz node lists are declaration-scoped, so a late cluster can be empty
 

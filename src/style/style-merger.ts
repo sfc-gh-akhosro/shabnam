@@ -34,24 +34,25 @@ type Rule = Map<string, string> | string;
 const NESTED = " >> ";
 
 export class StyleMerger implements T.StyleMerger {
-  rebase(derived: string, edited: string, myStyle: string): T.StyleRebase {
-    if (edited === derived) return { myStyle, moved: 0 };
+  rebase(beforeDerived: string, newDerived: string, effects: string): T.StyleRebase {
+    if (newDerived === beforeDerived && effects !== "") return { myStyle: effects, moved: 0 };
+    if (typeof CSSStyleSheet === "undefined") {
+      const combined = effects ? `${newDerived}\n\n${effects}` : newDerived;
+      return { myStyle: combined, moved: 1 };
+    }
 
-    const before = flatten(derived);
-    const edits = [...flatten(edited)].flatMap(([path, rule]) => {
-      const drift = changed(before.get(path), rule);
-      return drift === undefined ? [] : [[path, drift] as const];
-    });
-    if (edits.length === 0) return { myStyle, moved: 0 };
+    const incoming = flatten(newDerived);
+    if (incoming.size === 0) return { myStyle: effects, moved: 0 };
 
-    // Merged into My Style by path, not appended to it. Appending looks right
-    // — the cascade takes the last rule — but it grows the tab by one rule on
-    // every Redraw, so editing one colour twice leaves three `.node` rules
-    // behind. Merging keeps one rule per selector, for good.
-    const mine = flatten(myStyle);
-    for (const [path, drift] of edits) mine.set(path, overlay(mine.get(path), drift));
+    const mine = flatten(effects);
+    for (const [path, rule] of incoming) {
+      mine.set(path, overlay(mine.get(path), rule));
+    }
 
-    return { myStyle: [...mine].map(([path, rule]) => emit(path, rule)).join("\n\n"), moved: edits.length };
+    return {
+      myStyle: [...mine].map(([path, rule]) => emit(path, rule)).join("\n\n"),
+      moved: incoming.size,
+    };
   }
 }
 

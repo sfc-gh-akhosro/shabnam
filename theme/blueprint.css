@@ -15,11 +15,29 @@
   --vertical-gap: 1.5em;
 }
 
+.diagram {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--horizontal-gap);
+  padding: var(--horizontal-gap);
+  font-family: var(--main-font);
+  font-size: var(--base-font-size);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vertical-gap);
+}
+
 .node {
   background-color: #f8fbff;
   border-color: var(--secondary-color);
   border-width: 2px;
   border-radius: 2px;
+  padding: 0.5em 0.75em;
+  min-width: 9em;
+  box-sizing: border-box;
   box-shadow: var(--flat-shadow);
   color: #0b1f33;
 }

@@ -229,6 +229,16 @@ One process note, because it cost this session real time: the browser verificati
   twice. A group contributes its children only; `@keyframes` stays a leaf and is
   carried verbatim.
 
+## Iteration 8 — Visual Clusters, Smart Connectors, 1:1 Workbench Parity & CodeJar
+
+### Built & Shipped
+- **Visual Subgraph Cluster Boxes (`NodeSheller.clusters`)**: `subgraph cluster_...` definitions are measured from member nodes and rendered as SVG bounding boxes with padding, rounded corners, and uppercase `.cluster-label` text under `<g id="shabnam-clusters">`.
+- **Smart Connector Routing (`EdgeDrawer`)**: SVG `<path>` connector paths supporting `spline` (cubic Bézier), `ortho` (rounded step), and `line` (straight) modes, controlled via `--connector-style` / `--connector-type`, graph `splines=`, or per-edge `splines=`.
+- **1:1 Workbench Parity**: Removed legacy hidden `derived-css` and `effects-css` sinks. Derived CSS is rebased directly into `style.css` via `StyleMerger.rebase` so all `:root` variables, `#node { margin-top: ... }` slot margins, and overrides are visible and editable in `style.css`.
+- **Compact Visual 5-Element Style Grid**: Replaced raw textarea with an interactive 5-column grid (`[ ✕ ] [ Target ] [ Property ] [ Value ] [ + ]`) using native `<datalist>` autocomplete, native `<input type="color">` swatch, and positional blank row insertion.
+- **CodeJar Micro-Editor**: Integrated zero-dependency CodeJar with token-based syntax highlighting for `theme.css` (editable), `diagram.dot`, `action.js`, `annotation.html`, and Raw CSS mode.
+- **Simplified Gap Spacing**: Set `--horizontal-gap: 2em;` and `--vertical-gap: 2em;` in `:root`, with container rules using `calc(2 * var(--gap))`.
+
 ---
 
 ## Closed debts — kept for the reasoning

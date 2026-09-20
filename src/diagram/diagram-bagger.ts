@@ -42,7 +42,21 @@ const STYLE_KEYS = [
   "fontsize",
   "penwidth",
   "style",
+  "splines",
 ];
+
+// Size is the one pair we cannot take at face value. Graphviz reports `width`
+// and `height` on every node whether the author said anything or not — `0.75 x
+// 0.5` when nothing was said, and otherwise its own text measurement, in its own
+// font at its own size. Carrying that would put Graphviz's metrics in our CSS,
+// and geometry is the Measurer's (§3.4).
+//
+// `fixedsize` is the one field that appears only when the author asked for it, so
+// it is the gate: an authored size travels, a computed one does not. It arrives as
+// a string, so `"false"` is truthy and has to be named — these two are the values
+// that mean fixed.
+const SIZE_KEYS = ["width", "height"];
+const FIXED = new Set(["true", "shape"]);
 
 export class DiagramBagger implements T.DiagramBagger {
   // sanitized id → the DOT name that claimed it, so a collapse throws (§3.1)
@@ -74,7 +88,7 @@ export class DiagramBagger implements T.DiagramBagger {
         id: this.id(object.name),
         classes: classes.get(gvid) ?? [],
         shape: String(object.shape ?? "box"),
-        shell: String(object.shell ?? "box"),
+        shell: String(object.shell ?? ""),
         icon: String(object.icon ?? ""),
         label,
         caption: String(object.caption ?? label),
@@ -202,6 +216,11 @@ function attrsOf(object: { [key: string]: unknown }): Map<string, string> {
   const attrs = new Map<string, string>();
 
   for (const key of STYLE_KEYS) {
+    if (object[key] !== undefined) attrs.set(key, String(object[key]));
+  }
+  if (!FIXED.has(String(object["fixedsize"]))) return attrs;
+
+  for (const key of SIZE_KEYS) {
     if (object[key] !== undefined) attrs.set(key, String(object[key]));
   }
   return attrs;

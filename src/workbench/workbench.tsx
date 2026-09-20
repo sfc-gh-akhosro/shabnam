@@ -11,29 +11,24 @@ import { Sinker } from "./sinker.ts";
 import { TAB_IDS, Tabs } from "./tabs.tsx";
 import { download, Themer } from "./themer.ts";
 
-// The logo travels as markup, like the shells and the icons do (§3.4), so it is
-// in the toolbar and inside every export with no path to resolve and nothing to
-// fetch. It is used as a data URI rather than inlined: the file carries its own
-// `<style>` block, and inlining it would leak `:root` variables and its `.graph`
-// / `.bg` class rules into the page.
+import defaultTheme from "../../theme/theme.css" with { type: "text" };
 import logo from "../../icon/shabnam-logo.svg";
 
 const LOGO_URI = `data:image/svg+xml,${encodeURIComponent(logo)}`;
 
 const STARTER_DOT = `digraph starter {
   rankdir=LR
-  node [shape=box style=filled fillcolor="#BBDEFB" color="#1565C0"]
 
   subgraph cluster_source {
     label = "Source"
-    blobs [label="Blobs" icon="bucket.svg" caption="Object Store"]
+    blobs [label="![bucket](bucket.svg) Blobs" caption="Object Store"]
   }
 
-  core [label="Platform Core" icon="star.svg"]
-  app [label="App"]
+  core [label="![star](star.svg) Platform Core"]
+  app  [label="App"]
 
   blobs -> core
-  core -> app [penwidth=3 color="#C62828"]
+  core -> app
 }
 `;
 
@@ -44,18 +39,26 @@ const STARTER_HTML = `<div data-anchor="core" data-offset="0,52">
 `;
 
 const STARTER_TEXT: TabText = {
+  theme: defaultTheme,
   dot: STARTER_DOT,
-  "base-css": "",
-  "my-style": "",
-  html: STARTER_HTML,
-  js: "",
+  style: "",
+  action: "",
+  annotation: STARTER_HTML,
 };
 
 // An exported page carries its five texts as a seed, which is what makes the
 // export open on the same picture it left with (§4).
 function starterText(): TabText {
   const seed = document.getElementById("shabnam-seed");
-  return seed === null ? STARTER_TEXT : (JSON.parse(seed.textContent!) as TabText);
+  if (seed === null) return STARTER_TEXT;
+  const parsed = JSON.parse(seed.textContent!);
+  return {
+    theme: parsed.theme ?? defaultTheme,
+    dot: parsed.dot ?? STARTER_DOT,
+    style: parsed.style ?? parsed.effects ?? "",
+    action: parsed.action ?? "",
+    annotation: parsed.annotation ?? STARTER_HTML,
+  };
 }
 
 export function Workbench() {
@@ -69,11 +72,9 @@ export function Workbench() {
   let dotPicker!: HTMLInputElement;
   let themePicker!: HTMLInputElement;
 
-  // The store is the one home for tab text (iteration 1), so the two style
-  // sinks follow it. Both land on every keystroke, which is what makes Base CSS
-  // and My Style alike editable without a Redraw.
-  createEffect(() => sinker.inject("base-css", text["base-css"]));
-  createEffect(() => sinker.inject("my-style", text["my-style"]));
+  // Sinks follow the store text. Both land on every change.
+  createEffect(() => sinker.inject("theme-css", text.theme));
+  createEffect(() => sinker.inject("style-css", text.style));
 
   const redraw = () => redrawer.redraw(text.dot);
 
@@ -95,7 +96,7 @@ export function Workbench() {
     "load-dot": () => dotPicker.click(),
     "save-dot": () => download("diagram.dot", themer.saveDot(), "text/vnd.graphviz"),
     "load-theme": () => themePicker.click(),
-    "save-theme": () => download("my-style.css", themer.save(), "text/css"),
+    "save-theme": () => download("style.css", themer.save(), "text/css"),
     "save-png": async () => download("diagram.png", await themer.exportPng(), "image/png"),
     "export-html": async () => download("shabnam.html", await themer.exportHtml(), "text/html"),
     "tab-1": () => setActive(TAB_IDS[0]!),
@@ -170,13 +171,14 @@ export function Workbench() {
       <div id="shabnam-canvas">
         <div id="shabnam-main-html" />
         <svg id="shabnam-main-svg">
+          <g id="shabnam-clusters" />
           <g id="shabnam-node-shells" />
           <g id="shabnam-connectors" />
         </svg>
         <div id="shabnam-annotation-html" />
-        <style id="shabnam-base-css" />
-        <style id="shabnam-my-style" />
-        <script id="shabnam-my-js" />
+        <style id="shabnam-theme-css" />
+        <style id="shabnam-style-css" />
+        <script id="shabnam-action-js" />
       </div>
 
       <Tabs text={text} setText={setText} active={active()} setActive={setActive} />

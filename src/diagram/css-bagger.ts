@@ -3,21 +3,14 @@
 // the most common value wins, ties break on the lexicographically smallest, and
 // identical input therefore produces byte-identical output.
 //
-// Two rules from §3.2 shape everything below. **Naming is DOT naming**: node
-// `lake` is `#lake`, subgraph `cluster_a` is `.cluster_a`, edge `lake -> runtime` is
-// `#bq_runtime`, and selectors are as short as still identifies the thing —
-// `.column` and `.diagram .column` are the same place, so the short one wins,
-// and `.shell` needs no `#shabnam-node-shells` in front of it either. **No
-// colour is invented**: every colour here came from a DOT attribute or from a
-// `:root` variable, so counting the colours in the DOT and counting them here
-// gives the same answer.
+// When a DOT diagram is bare-bone (no presentation overrides), derived CSS
+// produces ONLY the `:root` variables block, leaving all presentation and
+// structure to theme.css.
 
 import type * as T from "../types.ts";
+import { AXES, bucket, calculateStep } from "./layout-framer.ts";
 
-// Graphviz attribute → CSS property, for the HTML layer. Unmapped attributes are
-// skipped, `style` among them — it is a value-to-declaration case, not this pass
-// (§3.2). This map's insertion order is also the declaration order, which is
-// what makes the output stable.
+// Graphviz attribute → CSS property, for the HTML layer.
 const ATTR_CSS: T.AttrCss = new Map([
   ["bgcolor", "background-color"],
   ["fillcolor", "background-color"],
@@ -25,10 +18,11 @@ const ATTR_CSS: T.AttrCss = new Map([
   ["fontname", "font-family"],
   ["fontsize", "font-size"],
   ["penwidth", "border-width"],
+  ["width", "width"],
+  ["height", "height"],
 ]);
 
-// The same bags, translated for the SVG layer. A `<line>` has no border, so DOT
-// colour and `penwidth` reach the connectors and the shells only through here.
+// The same bags, translated for the SVG layer.
 const ATTR_SVG: T.AttrCss = new Map([
   ["color", "stroke"],
   ["penwidth", "stroke-width"],
@@ -38,63 +32,59 @@ const ATTR_SVG: T.AttrCss = new Map([
 const ATTR_UNIT = new Map([
   ["fontsize", "pt"],
   ["penwidth", "pt"],
+  ["width", "in"],
+  ["height", "in"],
 ]);
 
-// The keys whose CSS property inherits down the DOM. A node sitting in a
-// `.diagram` that already says `font-family: Helvetica` does not need to be told
-// again; a background does not inherit, so it does.
+// The keys whose CSS property inherits down the DOM.
 const ATTR_INHERITS = new Set(["fontname", "fontsize"]);
 
-// The declarations that make a column of divs read as a diagram. They are
-// constant, so they are not bagged — but they belong to the same selectors the
-// bags do, and emitting a selector twice is the redundancy §3.2 forbids. So a
-// selector's structure is looked up here and its bag is appended to it.
-const STRUCTURE = new Map([
-  [".diagram", ["display: flex", "align-items: flex-start", "gap: var(--horizontal-gap)", "padding: var(--horizontal-gap)", "font-family: var(--main-font)", "font-size: var(--base-font-size)"]],
-  [".node", ["border-style: solid", "border-width: 1px", "border-radius: 4px", "padding: 0.5em 0.75em", "min-width: 9em"]],
-  [".shell", ["fill: none", "stroke-dasharray: 4 3"]],
-  [".edge", ["fill: none"]],
-]);
+// The `:root` variables extracted from the DOT model on each Redraw.
+function preamble(model: T.DiagramModel, nodeBag: Bag, edgeBag: Bag): string {
+  const primaryColor =
+    model.attrs.get("bgcolor") ??
+    model.attrs.get("fillcolor") ??
+    nodeBag.get("fillcolor") ??
+    nodeBag.get("bgcolor") ??
+    "blue";
 
-// The `:root` contract of §3.2 and the rules that carry no styling decision at
-// all. Derived output — every Redraw rewrites it — so none of it belongs in My
-// Style, which the user owns.
-const PREAMBLE = `:root {
-  --primary-color: blue;
-  --secondary-color: green;
-  --accent-color: orange;
+  const secondaryColor =
+    nodeBag.get("color") ??
+    model.nodes.find((n) => n.attrs.has("color"))?.attrs.get("color") ??
+    "green";
 
-  --main-font: sans-serif;
-  --title-font: sans-serif;
+  const accentColor =
+    edgeBag.get("color") ??
+    model.edges.find((e) => e.attrs.has("color"))?.attrs.get("color") ??
+    "orange";
+
+  const mainFont =
+    nodeBag.get("fontname") ??
+    model.nodes.find((n) => n.attrs.has("fontname"))?.attrs.get("fontname") ??
+    "sans-serif";
+
+  const titleFont =
+    model.attrs.get("fontname") ??
+    model.clusters.find((c) => c.attrs.has("fontname"))?.attrs.get("fontname") ??
+    mainFont;
+
+  return `:root {
+  --primary-color: ${primaryColor};
+  --secondary-color: ${secondaryColor};
+  --accent-color: ${accentColor};
+
+  --main-font: ${mainFont};
+  --title-font: ${titleFont};
   --base-font-size: 14px;
 
-  --horizontal-gap: 1em;
-  --vertical-gap: 1em;
+  --horizontal-gap: 2em;
+  --vertical-gap: 2em;
+  --connector-style: ${model.attrs.get("splines") ?? "spline"};
 
   --raised-shadow: 0 6px 12px lightgrey;
   --flat-shadow: 0 0 2px lightgrey;
+}`;
 }
-
-.column {
-  display: flex;
-  flex-direction: column;
-  gap: var(--vertical-gap);
-}
-
-.label {
-  white-space: pre-line;
-}
-
-.caption {
-  font-family: var(--title-font);
-  font-size: 10px;
-}
-
-.arrow {
-  /* One shared marker, so it takes the colour of the line that referenced it. */
-  fill: context-stroke;
-}
-`;
 
 type Bag = Map<string, string>;
 
@@ -106,40 +96,35 @@ export class CssBagger implements T.CssBagger {
     const clusterBags = new Map<string, Bag>();
     const granted = new Map<string, Bag>();
 
-    return [
-      PREAMBLE,
-      // Graph-level attrs land on the wrapper. `bgcolor` is a real background on
-      // a real div, so unlike a cluster's it is not inert.
-      ...rules(".diagram", graphBag, 0),
-      // `.node` drops what it would inherit from `.diagram` anyway, but the full
-      // bag travels onward: a subgraph has to know the effective value, or it
-      // will "discover" the dropped one and restate it under its own name.
-      ...rules(".node", inheriting(nodeBag, graphBag), 0),
-      ...roots(model).flatMap((c) => this.cluster(c, model, nodeBag, clusterBags, granted, 0)),
-      ...this.nodeOverrides(model, nodeBag, clusterBags),
-      "",
-      // The shells take the nodes' own outline: the HTML box draws the border it
-      // was given, and the shell is the same pen one step out.
-      ...rules(".shell", nodeBag, 0, [], ATTR_SVG),
-      ...rules(".edge", edgeBag, 0, [], ATTR_SVG),
-      ...model.edges.flatMap((edge) =>
-        rules(`#${edge.id}`, differing(edge.attrs, edgeBag), 0, [], ATTR_SVG),
-      ),
-    ].join("\n");
+    const graphRules = rules(".diagram", graphBag, 0);
+    const nodeRules = rules(".node", inheriting(nodeBag, graphBag), 0);
+    const clusterRules = roots(model).flatMap((c) =>
+      this.cluster(c, model, nodeBag, clusterBags, granted, 0),
+    );
+    const nodeOverrideRules = this.nodeOverrides(model, nodeBag, clusterBags);
+    const positionRules = this.nodePositionMargins(model);
+    const edgeRules = rules(".edge", edgeBag, 0, [], ATTR_SVG);
+    const edgeOverrideRules = model.edges.flatMap((edge) =>
+      rules(`#${edge.id}`, differing(edge.attrs, edgeBag), 0, [], ATTR_SVG),
+    );
+
+    const explicitRules = [
+      ...graphRules,
+      ...nodeRules,
+      ...clusterRules,
+      ...nodeOverrideRules,
+      ...positionRules,
+      ...edgeRules,
+      ...edgeOverrideRules,
+    ];
+
+    if (explicitRules.length === 0) {
+      return preamble(model, nodeBag, edgeBag);
+    }
+
+    return [preamble(model, nodeBag, edgeBag), "", ...explicitRules].join("\n");
   }
 
-  // A subgraph block is emitted when all its members share a value that differs
-  // from what they already inherit. Nested subgraphs inherit that in turn, which
-  // is why the bag travels down the recursion.
-  //
-  // Subgraphs overlap, too: example-1's `cluster_a` members all sit in the
-  // anonymous block that already filled them, so "what they already have" is
-  // `inherited` *plus* whatever every member was granted by an earlier block.
-  // Without that, the same colour is stated twice under two different names.
-  //
-  // A cluster gets no element of its own: the SVG layer paints above
-  // `#shabnam-main-html`, so a cluster background drawn there would cover its own
-  // members. Hence member rules only, and no `.graph` block anywhere.
   private cluster(
     cluster: T.Cluster,
     model: T.DiagramModel,
@@ -154,42 +139,80 @@ export class CssBagger implements T.CssBagger {
     bags.set(cluster.name, own);
     for (const node of members) granted.set(node.id, merge(granted.get(node.id) ?? new Map(), own));
 
+    if (own.size === 0 && cluster.clusters.length === 0) {
+      return [];
+    }
+
     const inner = [
       ...rules("&.node", own, depth + 1),
       ...cluster.clusters.flatMap((name) =>
         this.cluster(clusterOf(model, name), model, merge(inherited, own), bags, granted, depth + 1),
       ),
     ];
-    // A subgraph class lands on the node element itself (§3.3), so inside a
-    // subgraph block `.node` has to be `&.node` — a descendant selector would
-    // wait forever for a wrapper element that the HTML layer does not have.
+    if (inner.length === 0) return [];
     const selector = depth === 0 ? `.${cluster.name}` : `&.${cluster.name}`;
     return rules(selector, new Map(), depth, inner);
   }
 
-  // An `#id` rule is emitted only when that one node still differs after the
-  // class rules apply. Classes first, `#id` last, and rare (§3.2). Edges get no
-  // rule in this space: they are `<line>` elements, and a border on a line is
-  // output that does nothing.
   private nodeOverrides(model: T.DiagramModel, nodeBag: Bag, bags: Map<string, Bag>): string[] {
     return model.nodes.flatMap((node) => {
       const inherited = node.classes.reduce((bag, cls) => merge(bag, bags.get(cls)!), nodeBag);
       return rules(`#${node.id}`, differing(node.attrs, inherited), 0);
     });
   }
+
+  private nodePositionMargins(model: T.DiagramModel): string[] {
+    const axes = AXES.get(model.rankdir) ?? AXES.get("TB")!;
+    const columns = bucket(model.nodes, axes);
+    for (const column of columns) {
+      column.sort((a, b) => (axes.within(a) - axes.within(b)) * axes.inside);
+    }
+
+    const step = calculateStep(model.nodes, axes);
+    const isHorizontal = model.rankdir === "LR" || model.rankdir === "RL";
+
+    const topAnchor = isHorizontal
+      ? Math.max(...model.nodes.map((n) => n.y))
+      : Math.min(...model.nodes.map((n) => n.x));
+
+    const marginRules: string[] = [];
+
+    for (const column of columns) {
+      for (let i = 0; i < column.length; i++) {
+        const node = column[i]!;
+        if (i === 0) {
+          const drop = isHorizontal ? topAnchor - node.y : node.x - topAnchor;
+          const slots = Math.round(drop / step);
+          if (slots > 0) {
+            const prop = isHorizontal ? "margin-top" : "margin-left";
+            const gapVar = isHorizontal ? "var(--vertical-gap)" : "var(--horizontal-gap)";
+            marginRules.push(`#${node.id} {\n  ${prop}: calc(${slots} * (${gapVar} + 2.5em));\n}`);
+          }
+        } else {
+          const prev = column[i - 1]!;
+          const gap = isHorizontal ? prev.y - node.y : node.x - prev.x;
+          const extraSlots = Math.max(0, Math.round(gap / step) - 1);
+          if (extraSlots > 0) {
+            const prop = isHorizontal ? "margin-top" : "margin-left";
+            const gapVar = isHorizontal ? "var(--vertical-gap)" : "var(--horizontal-gap)";
+            marginRules.push(`#${node.id} {\n  ${prop}: calc(${extraSlots} * (${gapVar} + 2.5em));\n}`);
+          }
+        }
+      }
+    }
+
+    return marginRules;
+  }
 }
 
 // -------------------------------------------------------------------- bagging
 
-// A value a node would inherit from the wrapper anyway is not worth restating.
 function inheriting(bag: Bag, graph: Bag): Bag {
   return new Map(
     [...bag].filter(([key, value]) => !(ATTR_INHERITS.has(key) && graph.get(key) === value)),
   );
 }
 
-// The keys every one of these bags agrees on. Used to ask what a subgraph's
-// members already have in common before the subgraph says anything.
 function shared(bags: Bag[]): Bag {
   const first = bags[0];
   if (first === undefined) return new Map();
@@ -199,10 +222,6 @@ function shared(bags: Bag[]): Bag {
   );
 }
 
-// Absence counts as a value. One edge out of eighteen carrying `penwidth=3`
-// makes 3pt the most common *present* value, and hoisting it to `.edge` would
-// thicken every other edge — absence is the majority, so the key is skipped and
-// that one edge gets an `#id` rule instead.
 const ABSENT = "\u0000";
 
 function mode(bags: Bag[]): Bag {
@@ -259,8 +278,6 @@ function compare(a: string, b: string): number {
 
 // ------------------------------------------------------------------ rendering
 
-// Nothing to say, nothing emitted — an empty rule is noise in every diff. A key
-// the registry does not map is skipped, which is how one bag serves two layers.
 function rules(
   selector: string,
   bag: Bag,
@@ -268,23 +285,15 @@ function rules(
   inner: string[] = [],
   registry: T.AttrCss = ATTR_CSS,
 ): string[] {
-  const properties = new Set(
-    [...bag.keys()].filter((key) => registry.has(key)).map((key) => registry.get(key)!),
-  );
-  // A structural declaration the bag also sets would be overwritten on the next
-  // line — two values for one property, one of them dead.
-  const structure = (STRUCTURE.get(selector) ?? [])
-    .filter((text) => !properties.has(text.slice(0, text.indexOf(":"))))
-    .map((text) => `${pad(depth + 1)}${text};`);
   const declarations = [...bag]
     .filter(([key]) => registry.has(key))
     .map(
       ([key, value]) =>
         `${pad(depth + 1)}${registry.get(key)}: ${value}${ATTR_UNIT.get(key) ?? ""};`,
     );
-  if (structure.length === 0 && declarations.length === 0 && inner.length === 0) return [];
+  if (declarations.length === 0 && inner.length === 0) return [];
 
-  return [`${pad(depth)}${selector} {`, ...structure, ...declarations, ...inner, `${pad(depth)}}`];
+  return [`${pad(depth)}${selector} {`, ...declarations, ...inner, `${pad(depth)}}`];
 }
 
 function pad(depth: number): string {
@@ -299,7 +308,6 @@ function clusterOf(model: T.DiagramModel, name: string): T.Cluster {
   return model.clusters.find((cluster) => cluster.name === name)!;
 }
 
-// A cluster is a root unless another cluster claims it as a child.
 function roots(model: T.DiagramModel): T.Cluster[] {
   const nested = new Set(model.clusters.flatMap((cluster) => cluster.clusters));
   return model.clusters.filter((cluster) => !nested.has(cluster.name));

@@ -7,19 +7,19 @@ import { shapeHtml } from "./node-shaper.ts";
 // Ranks are at least 36 points apart, so bucketing within 2 points is
 // unambiguous — and exact float equality would scatter one rank across
 // several columns (§3.3).
-const TOLERANCE = 2;
+export const TOLERANCE = 2;
 
 // rankdir → how a node's position becomes a column key, how columns order, and
 // how nodes order inside one. LR/RL group on x, TB/BT on y; Graphviz's y grows
 // upward, so "first" is the larger y.
-type Axes = {
+export type Axes = {
   key: (node: T.Node) => number;
   columns: number;
   within: (node: T.Node) => number;
   inside: number;
 };
 
-const AXES = new Map<string, Axes>([
+export const AXES = new Map<string, Axes>([
   ["LR", { key: (n) => n.x, columns: 1, within: (n) => n.y, inside: -1 }],
   ["RL", { key: (n) => n.x, columns: -1, within: (n) => n.y, inside: -1 }],
   ["TB", { key: (n) => n.y, columns: -1, within: (n) => n.x, inside: 1 }],
@@ -39,16 +39,35 @@ export class LayoutFramer implements T.LayoutFramer {
 
   frame(model: T.DiagramModel): string {
     const columns = this.columns(model).map(
-      (column) => `<div class="column">${column.map(shapeHtml).join("")}</div>`,
+      (column) => `<div class="column">${column.map((node) => shapeHtml(node)).join("")}</div>`,
     );
-    // `columns` said nothing `diagram` did not — one class, one place (§3.2).
     return `<div class="diagram">${columns.join("")}</div>`;
   }
 }
 
+export function calculateStep(nodes: T.Node[], axes: Axes): number {
+  if (nodes.length <= 1) return 80;
+
+  const deltas: number[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const diff = Math.abs(axes.within(nodes[i]!) - axes.within(nodes[j]!));
+      if (diff > 15) {
+        deltas.push(diff);
+      }
+    }
+  }
+
+  if (deltas.length === 0) return 80;
+  deltas.sort((a, b) => a - b);
+  // Choose smallest significant delta (>= 35) or fallback to median
+  const minDelta = deltas.find((d) => d >= 35) ?? deltas[0]!;
+  return minDelta;
+}
+
 // One pass over position-sorted nodes: a node opens a new column as soon as it
 // is more than the tolerance away from the column it would otherwise join.
-function bucket(nodes: T.Node[], axes: Axes): T.Node[][] {
+export function bucket(nodes: T.Node[], axes: Axes): T.Node[][] {
   const sorted = [...nodes].sort((a, b) => (axes.key(a) - axes.key(b)) * axes.columns);
   const columns: T.Node[][] = [];
   let anchor = Infinity;

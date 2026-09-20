@@ -1,6 +1,7 @@
 // Inject text into a named sink of the canvas skeleton (§1). One of the two
 // places that touch the live page; the other is Measurer.
 
+import { expandCss } from "../style/css-expander.ts";
 import type * as T from "../types.ts";
 
 const asHtml = (element: Element, text: string) => {
@@ -9,6 +10,12 @@ const asHtml = (element: Element, text: string) => {
 
 const asText = (element: Element, text: string) => {
   element.textContent = text;
+};
+
+const asExpandedCss = (element: Element, text: string) => {
+  const themeEl = document.getElementById("shabnam-theme-css");
+  const themeText = themeEl && themeEl !== element ? themeEl.textContent || "" : "";
+  element.textContent = expandCss(text, themeText);
 };
 
 // A `<script>` whose text is written after the parser has moved on does not run.
@@ -27,12 +34,13 @@ const asScript = (element: Element, text: string) => {
 // takes text and has to run it.
 const SINK_WRITE = new Map<string, (element: Element, text: string) => void>([
   ["main-html", asHtml],
+  ["clusters", asHtml],
   ["node-shells", asHtml],
   ["connectors", asHtml],
   ["annotation-html", asHtml],
-  ["base-css", asText],
-  ["my-style", asText],
-  ["my-js", asScript],
+  ["theme-css", asExpandedCss],
+  ["style-css", asExpandedCss],
+  ["action-js", asScript],
   ["status", asText],
 ]);
 

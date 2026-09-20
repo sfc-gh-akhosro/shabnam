@@ -67,7 +67,7 @@ export type Box = {
   height: number;
 };
 
-/** What a rebase did: the new My Style text, and how many rules moved into it
+/** What a rebase did: the new effects text, and how many rules moved into it
  *  — reported in the status line, so a declaration CSSOM dropped is not silent. */
 export type StyleRebase = {
   myStyle: string;
@@ -75,7 +75,7 @@ export type StyleRebase = {
 };
 
 /** The five workbench editors, in tab order (§4). */
-export type TabId = "dot" | "base-css" | "my-style" | "html" | "js";
+export type TabId = "theme" | "dot" | "style" | "action" | "annotation";
 
 /** Tab text, one entry per TabId. The workbench owns the only instance. */
 export type TabText = Record<TabId, string>;
@@ -96,7 +96,7 @@ export interface DiagramBagger {
 }
 
 export interface CssBagger {
-  bag(model: DiagramModel): string; // → #shabnam-base-css
+  bag(model: DiagramModel): string; // → derived.css
 }
 
 export interface LayoutFramer {
@@ -106,6 +106,7 @@ export interface LayoutFramer {
 
 export interface NodeSheller {
   shells(boxes: Box[], model: DiagramModel): string; // SHELL_SVG + icon/
+  clusters(boxes: Box[], model: DiagramModel): string; // SVG bounding boxes around member nodes
 }
 
 export interface EdgeDrawer {
@@ -127,8 +128,8 @@ export interface Annotator {
 export interface Themer {
   loadDot(dot: string): void; // → DOT, and resets the rebase baseline (§4)
   saveDot(): string; // ← DOT
-  load(text: string): void; // → My Style
-  save(): string; // ← My Style
+  load(text: string): void; // → theme / effects
+  save(): string; // ← effects
   // Whole app, standalone. Async because the chrome CSS and the bundle are
   // fetched from the running page rather than baked in at compile time.
   exportHtml(): Promise<string>;
@@ -138,16 +139,13 @@ export interface Themer {
 }
 
 export interface StyleMerger {
-  // The Base CSS tab is derived and editable at once (§4). Whatever the user
-  // changed against `derived` is merged into My Style, which comes back in the
-  // browser's own notation — Redraw is when the tabs and the DOM are made to
-  // agree. The tab itself goes back to the freshly derived text.
-  rebase(derived: string, edited: string, myStyle: string): StyleRebase;
+  // Rebase and merge derived.css into effects.css (§4).
+  rebase(derived: string, edited: string, effects: string): StyleRebase;
 }
 
 export interface Redrawer {
   redraw(dot: string): Promise<void>; // the sequence in §5
-  discardEdits(): void; // forget pending Base CSS edits — Load DOT starts afresh
+  discardEdits(): void; // forget pending edits — Load DOT starts afresh
 }
 
 // ---------------------------------------------------------------------------

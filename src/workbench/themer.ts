@@ -34,11 +34,11 @@ export class Themer implements T.Themer {
   }
 
   load(css: string): void {
-    this.setTab("my-style", css);
+    this.setTab("theme", css);
   }
 
   save(): string {
-    return this.text["my-style"];
+    return this.text.style || this.text.theme;
   }
 
   async exportHtml(): Promise<string> {
@@ -55,7 +55,7 @@ export class Themer implements T.Themer {
     const canvas = document.getElementById("shabnam-canvas")!;
     const frame = framing(canvas);
     const chrome = await asset("shabnam-css");
-    const svg = snapshot(canvas, frame, [chrome, this.text["base-css"], this.text["my-style"]]);
+    const svg = snapshot(canvas, frame, [chrome, this.text.theme, this.text.style]);
     return raster(svg, frame.crop);
   }
 }

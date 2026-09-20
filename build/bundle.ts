@@ -24,6 +24,10 @@ const solidPlugin: BunPlugin = {
       });
       return { contents: out!.code!, loader: "js" };
     });
+    build.onLoad({ filter: /\.css$/ }, async ({ path }) => {
+      const source = await Bun.file(path).text();
+      return { contents: source, loader: "text" };
+    });
   },
 };
 
@@ -34,8 +38,8 @@ export function bundleConfig(minify: boolean): BuildConfig {
     format: "esm",
     minify,
     plugins: [solidPlugin],
-    // Shells in svg/ and logos in icon/ are imported as text, so the registries
-    // in node-sheller.ts hold markup and an export stays one self-contained file.
-    loader: { ".svg": "text" },
+    // Shells, icons, and themes are imported as text, so an export stays one
+    // self-contained file with no network fetch needed.
+    loader: { ".svg": "text", ".css": "text" },
   };
 }

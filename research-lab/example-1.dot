@@ -1,116 +1,50 @@
 digraph platform {
     rankdir=LR
-    splines=ortho;
-    nodesep=1
-    ranksep=1
-    concentrate=true;
 
-    graph [fontname="Helvetica", bgcolor="transparent", pad=0.4 style=dashed]
-    node  [fontname="Helvetica", fontsize=11, style="filled,rounded", shape=box,
-           fillcolor="#BBDEFB", color="#1565C0" labelfloat=true]
-    edge  [fontname="Helvetica", fontsize=14, color="#555555", arrowsize=0.7]
+    // -------------------------------------------------- Sources
+    subgraph cluster_sources {
+        label = "Sources"
 
-    node [width=2 height=1.3 fixedsize=true]
-
-
-    // An anonymous block that exists only to set a fill on six nodes. Numbered
-    // `subgraph_1`, and worth a class of its own: dropping it would cost six
-    // `#id` rules saying the same thing.
-    {
-        node [fillcolor="#ddffdd"]
-
-        runtime
-        lake
-        vault
-        portal
-        blobs
-        apps
-
+        blobs [shape=record icon="database.svg" caption="Object Store" label="{Blobs | {Tables | Data | Metadata}}"]
+        lake  [shape=record icon="cloud.svg" label="{Data Lake | {Batch | Columnar | Vectors}}"]
+        vault [shape=record label="{Key Vault | {Issue | Rotate | Revoke | Audit}}"]
     }
 
+    // -------------------------------------------------- Platform Core
+    subgraph cluster_platform {
+        label = "Platform Core"
 
-    // Invisible, and its members are already filled by the block above — so it
-    // has nothing left to say and no rule is emitted for it.
-    subgraph cluster_a {
-        style=invis
-
-        vault lake blobs
-        rank=same;
+        runtime    [shape=record label="Managed Catalog"]
+        core       [shape=record icon="cloud.svg" caption="Platform Core" label="{Platform Core | {Security | Governance}}"]
+        engine     [shape=record label="{Query Services | {Batch | Stream | Cached}}"]
+        context    [shape=record label="{Semantic Context | {Models | Metrics | Search | Functions}}"]
     }
 
-    subgraph cluster_b {
-        style=invis
+    // -------------------------------------------------- Consumer Services
+    subgraph cluster_consumer {
+        label = "Consumer Services"
 
-        runtime core
-        rank=same;
+        portal     [shape=record label="{Partner Portal | {Agents | MCP | Assistant}}"]
+        runners    [shape=record icon="python.svg" label="{Container Services | {Notebook | Batch | Python | SQL}}"]
+        connectors [shape=record label="{Data Exchange | {SDK | Streams | Transforms}}"]
+        apps       [shape=record label="{Client Apps | {Dashboards | Serverless | Pipelines | ML Apps}}"]
+        bots       [shape=record label="{Assistants | {Chat | Gateway | Console}}"]
+        ml         [shape=record icon="python.svg" label="{Machine Learning | {Feature Store | Train | Inference}}"]
     }
 
-    subgraph {
-        engine connectors context
-
-        rank=same;
-    }
-
-    subgraph {
-        runners apps portal bots ml
-        rank=same
-    }
-
-
-    blobs [shape=record icon="database.svg" caption="Object Store" label="{Blobs | {Tables | Data | Metadata}}"]
-    lake [shape=record icon="cloud.svg" label="{Data \n Lake | {Batch | Columnar | Vectors}}"]
-    runtime [shape=record label="Managed \n Runtime Catalog "]
-
-    vault [shape=record label="{Key \n Vault | {Issue | Rotate | Revoke | Audit}}"]
-
-    core [shape=record icon="cloud.svg" caption="Platform Core" label="{Platform \n Core | {Security | Governance}}" fontsize=12]
-    engine [shape=record label="{Query \n Services | {batch | stream | cached}}"]
-
-
-    context [shape=record label="{Semantic \n Context | {Models | Metrics | Search | Functions }}"]
-    bots   [shape=record label="{Assistants | {Chat | Gateway | Console}}"]
-    runners [shape=record icon="python.svg" label="{Container \n Services | {Notebook | Batch | Python | SQL}}"]
-    connectors [shape=record label="{Data \n Exchange | { SDK | Streams | Transforms}}"]
-
-    apps[shape=record label="{Client \n Apps | {Dashboards | Serverless | Pipelines | ML Apps }}"]
-    portal [shape=record label="{Partner \n Portal | {Agents | MCP | Assistant}}"]
-
-    ml [shape=record icon="python.svg" label="{Machine \n Learning | {Feature Store | Train | Inference}}"]
-
-    connectors -> apps
-
-    // `{core}` is an anonymous subgraph too — created by the edge set, not by a
-    // block. It becomes `subgraph_4`.
-    blobs -> {core}
-
+    // -------------------------------------------------- Connections
+    blobs -> core
     lake -> runtime [dir=both]
-
-    // The only penwidth=3 edge in the file: absence is the majority, so the
-    // class rule stays thin and this one id pays for itself.
-    core -> runtime [dir=both xlabel="bidirectional sync"  constraint=false penwidth=3]
-
-    core -> engine [weight=100]
+    core -> runtime [dir=both xlabel="sync"]
+    core -> engine
+    core -> context
 
     engine -> runners
     engine -> ml
     engine -> connectors
 
-    core -> context
+    connectors -> apps
     context -> bots
-    bots -> portal [weight=0]
-
-    vault -> bots [weight=0]
-
-
-    // Declared last, so Graphviz has already claimed all three members for the
-    // subgraphs above and reports this one with no nodes (M3, S1).
-    subgraph cluster_consumer {
-        label = "Consumer Services"
-
-        portal
-        runners
-        bots
-    }
-
-
+    bots -> portal
+    vault -> bots
 }

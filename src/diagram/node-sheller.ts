@@ -55,6 +55,72 @@ export class NodeSheller implements T.NodeSheller {
       ...pairs.map(([box, node]) => caption(box, node)),
     ].join("");
   }
+
+  clusters(boxes: T.Box[], model: T.DiagramModel): string {
+    const boxMap = new Map(boxes.map((b) => [b.id, b]));
+    const visualClusters = model.clusters.filter(
+      (cluster) => cluster.name.startsWith("cluster") && !cluster.isInvis,
+    );
+
+    return visualClusters
+      .map((cluster) => renderCluster(cluster, model, boxMap))
+      .join("");
+  }
+}
+
+const CLUSTER_PAD_X = 16;
+const CLUSTER_PAD_BOTTOM = 16;
+const CLUSTER_PAD_TOP_LABEL = 28;
+const CLUSTER_PAD_TOP_NOLABEL = 16;
+
+function renderCluster(
+  cluster: T.Cluster,
+  model: T.DiagramModel,
+  boxMap: Map<string, T.Box>,
+): string {
+  const memberIds = clusterNodeIds(cluster, model);
+  const memberBoxes = memberIds
+    .map((id) => boxMap.get(id))
+    .filter((b): b is T.Box => b !== undefined);
+
+  if (memberBoxes.length === 0) return "";
+
+  const minLeft = Math.min(...memberBoxes.map((b) => b.left));
+  const minTop = Math.min(...memberBoxes.map((b) => b.top));
+  const maxRight = Math.max(...memberBoxes.map((b) => b.left + b.width));
+  const maxBottom = Math.max(...memberBoxes.map((b) => b.top + b.height));
+
+  const hasLabel = Boolean(cluster.label && cluster.label.trim().length > 0);
+  const padTop = hasLabel ? CLUSTER_PAD_TOP_LABEL : CLUSTER_PAD_TOP_NOLABEL;
+
+  const x = minLeft - CLUSTER_PAD_X;
+  const y = minTop - padTop;
+  const width = maxRight - minLeft + CLUSTER_PAD_X * 2;
+  const height = maxBottom - minTop + padTop + CLUSTER_PAD_BOTTOM;
+
+  const labelMarkup = hasLabel
+    ? `<text class="cluster-label" x="${round(x + 12)}" y="${round(y + 17)}">${escape(cluster.label)}</text>`
+    : "";
+
+  return (
+    `<g id="${cluster.name}" class="cluster ${cluster.name}" data-cluster="${cluster.name}">` +
+    `<rect class="cluster-box" x="${round(x)}" y="${round(y)}" width="${round(width)}" height="${round(height)}" rx="8" ry="8" />` +
+    labelMarkup +
+    `</g>`
+  );
+}
+
+function clusterNodeIds(cluster: T.Cluster, model: T.DiagramModel): string[] {
+  const ids = new Set<string>(cluster.nodes);
+  for (const childName of cluster.clusters) {
+    const child = model.clusters.find((c) => c.name === childName);
+    if (child) {
+      for (const id of clusterNodeIds(child, model)) {
+        ids.add(id);
+      }
+    }
+  }
+  return [...ids];
 }
 
 // The shell stands off the measured box by SHELL_PAD on every side.
@@ -69,15 +135,20 @@ function shellRect(box: T.Box): Record<string, number> {
 
 function shell(box: T.Box, node: T.Node): string {
   const rect = shellRect(box);
-  const template = SHELL_SVG.get(node.shell) ?? SHELL_SVG.get("box")!;
+  const template = node.shell && node.shell !== "none" ? (SHELL_SVG.get(node.shell) ?? SHELL_SVG.get("box")) : undefined;
+  const shellMarkup = template ? fill(template, rect) : "";
+  const badgeMarkup = badge(node, rect);
+
+  if (!shellMarkup && !badgeMarkup) return "";
+
   // Subgraph classes only. A grouping class no CSS selects is noise on the
   // element (§3.1) — `#shabnam-node-shells > g` already reaches every one of these.
   const classes = node.classes.join(" ");
 
   return (
     `<g class="${classes}" data-node="${node.id}">` +
-    fill(template, rect) +
-    badge(node, rect) +
+    shellMarkup +
+    badgeMarkup +
     `</g>`
   );
 }
