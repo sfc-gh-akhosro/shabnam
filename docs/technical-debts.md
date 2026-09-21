@@ -252,17 +252,16 @@ membership lists is how we end up with a second DOT reader.
 
 **Cost to close:** a browser-run harness, when regression tests earn their place.
 
-### S3. Completer lists are static, not the live canvas
+### S6. Completer parked in `temp/completer/` until CodeJar is judged
 
-Selector lists should come from painted ids/classes (skip `shabnam-*`) plus last-model names. Today they are a fixed set plus model when a redraw has happened.
+The homemade inlined CodeJar is gone; editors use `codejar` from npm. The
+current-line classifier (`complete.ts`, tests, `Slot` types) lives in
+untracked `temp/completer/`. A *loose* completer is wanted later — after we
+see CodeJar's own capabilities. Do not put `suggestions` back on `Workbench`
+without a conversation. Do not re-inline an editor.
 
-**Cost to close:** small — `suggestions` already takes the last model; scrape the canvas next.
-
-### S4. Completer classifies the line, not the caret
-
-A mid-line edit can land in the wrong slot. Current-line-only was the locked design.
-
-**Cost to close:** look at the prefix before the caret only (already mostly true).
+**Cost to close:** a thin popup on top of CodeJar, or leave it in `temp/`.
+S3 (static lists) and S4 (line vs caret) travel with that draft.
 
 ### S5. Concurrent redraws can interleave
 

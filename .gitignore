@@ -41,6 +41,7 @@
 !/current-task.md
 !/package.json
 !/tsconfig.json
+!/bunfig.toml
 !/bun.lock
 !/.gitignore
 

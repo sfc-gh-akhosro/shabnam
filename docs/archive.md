@@ -10,6 +10,26 @@ here — they live in `docs/technical-debts.md`.
 
 **Status: iterations 1–7 all done, each verified in a browser.**
 
+## Session — CodeJar, park completer, radio strip
+
+What shipped after the facade/CodeJar workbench commit (`b6dc348`):
+
+- Real `codejar` package. Homemade caret/innerHTML editor gone. Highlight lives
+  in `highlight.ts` so tests do not import `window`.
+- Completer parked, not deleted: untracked `temp/completer/`. `Slot` /
+  `suggestions` off `Workbench`. `bun test` scoped to `test/` (`bunfig.toml`).
+- Coding window: `tabs.tsx` is a radio strip (equal buttons, inset
+  `--raised-shadow` on the active one). Workbench owns one CodeJar.
+- Law files state **to-be**. Code still as-is on Css algebra and
+  `Engine.redraw(themeSheet)`.
+
+What turned out wrong: treating Completer as delete-and-forget; treating
+pretty-print as CodeJar's job; five hidden CodeJars as “tabs.”
+
+Next session is B — see `current-task.md`.
+
+---
+
 > **On the names below.** Iterations 1-7 were developed against a fixture that
 > modelled a specific Snowflake/GCP integration, so the notes quote node ids like
 > `bq`, `gcs` and `horizon`, and icons named after products. When the project

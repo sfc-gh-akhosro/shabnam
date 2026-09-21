@@ -68,16 +68,6 @@ export type TabText = Record<TabId, string>;
 
 export type SetTab = (tab: TabId, text: string) => void;
 
-/** Completer slot on the current line. */
-export type SlotKind = "selector" | "marker" | "property" | "value";
-
-export type Slot = {
-  kind: SlotKind;
-  items: string[];
-  input?: "text" | "color";
-  prefix: string;
-};
-
 // ---------------------------------------------------------------------------
 // interfaces — methods only. Packages implement these, not every file.
 // ---------------------------------------------------------------------------
@@ -105,7 +95,6 @@ export interface Workbench {
   inject(sink: string, text: string): void;
   measure(): Box[];
   place(boxes: Box[]): void;
-  suggestions(tab: TabId, line: string): Slot;
 }
 
 export interface Files {

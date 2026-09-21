@@ -91,9 +91,9 @@ dist/          build output
 docs/           documentations, project management files, some reports.
 ```
 
-Root files: `.gitignore`, `app-architecture.md`, `coding-rules.md`, `AGENTS.md`, `CLAUDE.md`, `package.json`, lockfile.
+Root files: `.gitignore`, `app-architecture.md`, `coding-rules.md`, `AGENTS.md`, `CLAUDE.md`, `package.json`, `tsconfig.json`, `bunfig.toml`, lockfile.
 
-Not source: `input/`, `output/`, `local/`, `temp/`, `etc/`, leftover `dot-parser.ts`. Experiments go in `research-lab/`, not in `src/`.
+Not source: `input/`, `output/`, `local/`, `temp/`, `etc/`, leftover `dot-parser.ts`. Experiments go in `research-lab/`, not in `src/`. Parked drafts that are not the fiddle (the loose completer) live in untracked `temp/`.
 
 `.gitignore` is the canary. A file that should not be tracked will not be. Do not weaken the ignore to sneak a file in — move the file or change the rule on purpose.
 
@@ -101,11 +101,15 @@ Not source: `input/`, `output/`, `local/`, `temp/`, `etc/`, leftover `dot-parser
 
 ## What not to do in this repo
 
-- Do not add a **new major library** — a new runtime dependency that changes the design — without writing it into `app-architecture.md` §0 first. See Dependencies below for what does not need asking.
+- Do not add a **new major library** — a new runtime dependency that changes the design — without writing it into `app-architecture.md` §0 first. A library means we accept its whole tree. See Dependencies below.
+- Do not hand-roll a library that is already on §0 (or should be) to avoid that conversation. CodeJar is the tab window; we do not own the caret.
+- Do not write a code editor, a formatter-on-type, or autocomplete on `Workbench`. A loose completer may come back after the CodeJar experiment — park drafts in untracked `temp/`, not in `src/`.
+- Do not confuse `SetTab` (tabs) with `inject` (sinks). CodeJar paints tabs. It does not pretty-print. `Css` serializes the style tab (merge buffer).
+- Css algebra is `minus(style, lastDerived)` then `plus(style, derived)`. Do not concat CSS strings. Missing CSSOM throws.
 - Do not add a config tab, a second Graphviz grammar, or “while we’re here” refactors.
 - Do not write tests that chase float precision or other noise as if they were the product.
 - Do not implement every `shape=` in the first pass. `box` is enough until we say otherwise.
-- Do not change root files (espcially `.gitignore`, `app-architecture.md`, `coding-rules.md`) or root folders without review and user discussion and approval.
+- Do not change root files (especially `.gitignore`, `app-architecture.md`, `coding-rules.md`) or root folders without review and user discussion and approval.
 
 
 ## Dependencies
@@ -120,7 +124,7 @@ Installing is not the same as choosing. §0 of `app-architecture.md` already cho
 
 **Ask first:**
 
-- A new **runtime** dependency that is not implied by §0 — a second UI library, a layout engine, a CSS framework, a state manager, a parser of any kind. That is a design decision wearing an install command, and it goes into §0 first.
+- A new **runtime** dependency that is not implied by §0 — a second UI library, a layout engine, a CSS framework, a state manager, a parser, an IDE kit. That is a design decision wearing an install command, and it goes into §0 first. Same conversation to **remove or rescope** (CodeJar is an experiment).
 
 When in doubt, the test is: would a reader of §0 be surprised to find this in `package.json`? If no, install it and move on. If yes, stop and say so.
 
@@ -163,5 +167,5 @@ AND
 - they are inside (cen be nested too) our allowed root directories: src, svg, icon, test, build, theme, docs, research-lab, dist
 
 Also allow some exceptions:
-- root files: AGENTS.md, Claude.md, package.json, app-architecture.md, coding-rules.md, .gitignore, current-task.md
+- root files: AGENTS.md, CLAUDE.md, package.json, tsconfig.json, bunfig.toml, app-architecture.md, coding-rules.md, .gitignore, current-task.md
 - some specific files that we might whitelist like demo files and etc.

@@ -1,10 +1,9 @@
-// Workbench runtime: redraw, sinks, measure, place, suggestions.
+// Workbench runtime: redraw, sinks, measure, place.
 
 import { Css } from "../css/css.ts";
 import { Diagram } from "../diagram/diagram.ts";
 import { Vizer } from "../diagram/vizer.ts";
 import type * as T from "../types.ts";
-import { suggestions as slotOf } from "./complete.ts";
 
 const asHtml = (element: Element, text: string) => {
   element.innerHTML = text;
@@ -107,10 +106,6 @@ export class Engine implements T.Workbench {
       mark.style.left = `${at.x + offset.x}px`;
       mark.style.top = `${at.y + offset.y}px`;
     }
-  }
-
-  suggestions(tab: T.TabId, line: string): T.Slot {
-    return slotOf(tab, line, this.model);
   }
 
   private async parse(dot: string) {

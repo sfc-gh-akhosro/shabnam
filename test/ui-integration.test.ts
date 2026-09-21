@@ -158,7 +158,7 @@ describe("UI & Workbench Integration Suite", () => {
 
   test("Syntax highlighters tokenize JS, HTML, CSS, and DOT correctly", async () => {
     const { highlightJs, highlightHtml, highlightCss, highlightDot } = await import(
-      "../src/workbench/editor.tsx"
+      "../src/workbench/highlight.ts"
     );
 
     const js = highlightJs("const x = 42; // note");

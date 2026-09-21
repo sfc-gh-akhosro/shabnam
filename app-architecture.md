@@ -8,11 +8,11 @@ This file is the blueprint. It describes the app we are building from scratch. W
 
 ## 0. Stack
 
-Bun (ESM packaging only) + viz.js + TypeScript + SolidJS + HTML + CSS.
+Bun (ESM packaging only) + viz.js + TypeScript + SolidJS + HTML + CSS + CodeJar (**experiment**).
 
-Any change or adding a major library, tech, or tool must be discussed and added here first.
+A library means we accept its whole dependency tree. Adding, removing, or rescoping anything on this list is a conversation that lands here first.
 
-**The stack is a lock, not carved stone.** "Discussed first" means *bring it up*, not *do without*. If a feature is genuinely better served by a library — a real parser instead of a hand-rolled scanner, a real AST instead of string surgery — say so, make the case, and we amend this section. Hand-rolling something a mature library does properly, in order to avoid a conversation, is the worse outcome: it is more code, less correct, and ours to maintain forever. What stays forbidden is a library that changes the *design* — a second DOT reader, a second layout engine, a second UI framework — and that ban is about the design, not about the dependency count.
+**The stack is a lock, not carved stone.** "Discussed first" means *bring it up*, not *do without*. If a feature is genuinely better served by a library — a real parser instead of a hand-rolled scanner, a real AST instead of string surgery — say so, make the case, and we amend this section. Hand-rolling something a mature library does properly, in order to avoid a conversation, is the worse outcome: it is more code, less correct, and ours to maintain forever. CodeJar is the tab window (read, write, highlight, caret). It is not an IDE and it does not pretty-print. What stays forbidden is a library that changes the *design* — a second DOT reader, a second layout engine, a second UI framework — and that ban is about the design, not about the dependency count.
 
 Type-driven TypeScript, following Go / Rust:
 
@@ -26,11 +26,11 @@ Soft limits of **7** are in §9. Organization idea, not a wall. Break occasional
 
 ## 1. What the product is
 
-Shabnam turns a Graphviz DOT file into a single HTML page that you can restyle and annotate.
+Shabnam is **DOT semantics** + **viz.js parse and layout** + **CSS / HTML / JS** for look and interaction + **ready themes and effects** + **a fiddle** + **portable** (HTML now; SVG later). The end-user object is a **dotFiddler** (name still open): one page, five tabs, one canvas, export that runs without us.
 
 The user authors a diagram in DOT — the same language already used for architecture diagrams. Shabnam does **not** try to be Graphviz. It hands the DOT to Graphviz to get **one JSON**. Then we **traverse that JSON once** into our own model, and from the model we build:
 
-1. **Derived CSS** — almost empty if DOT has no style; `Css.plus` folds it into `style.css`
+1. **Derived CSS** — almost empty if DOT has no style; `Css.plus(style, derived)` is the algebra
 2. **Layout HTML** — columns of node HTML
 3. **SVG layer** — shells and connectors, drawn around the *measured* boxes
 
@@ -61,11 +61,11 @@ references a sink id, and neither should a theme.
 
 The CSS cascade is two sinks:
 1. `#shabnam-theme-css` — `theme/theme.css` (locked base, always first) plus the selected overlay from `theme/*.css`. Structural defaults (`.diagram`, `.column`, `.node`), tokens, mixins, keyframes.
-2. `#shabnam-style-css` — `style.css` tab text: derived CSS plus user entries (`Css.plus`), `@apply` expanded against the theme. There is no derived sink.
+2. `#shabnam-style-css` — compiled style: `Css.expand(Css.plus(Css.minus(style, lastDerived), derived), theme)`. There is no derived sink. `@apply` expands at inject, not in the tab.
 
 Nodes have **two layers**: an HTML layer (`shape →` markup, in flow, measurable) and an SVG layer that draws a **shell** around the measured box, with icon and caption inside the shell.
 
-The product is a **JSFiddle-style workbench**: one page, one canvas, editor tabs that inject into the sinks. Everything runs in the browser. There is never a second grammar.
+The product is a **dotFiddler**: one page, one canvas, five tabs, export that runs without us. There is never a second grammar.
 
 If a proposed change requires reading DOT as a string — tokenize, recursive descent, `parseAst`, `parseStatements`, regex over statements — it is out of scope. Stop and come back to this document.
 
@@ -102,7 +102,8 @@ DOT text
   │
   ├─ Diagram.frame ───────► mainHtml         columns + node HTML
   ├─ Diagram.derived ─────► derived.css      almost empty if DOT has no style
-  ├─ Css.plus(derived, style) ► style.css tab + #shabnam-style-css
+  ├─ Css.minus(style, lastDerived) then Css.plus(style, derived)
+  │                        ► style.css tab (merge buffer; Css serializes)
   │
   │      ── inject, let the browser paint ──
   │
@@ -297,23 +298,27 @@ Custom keys we care about (`icon`, `shell`, `caption`) are fields on the viz obj
 
 Tabs, in this order: **diagram.dot · theme.css · style.css · annotation.html · action.js**
 
-Every tab is the same CodeJar editor (syntax highlight, wrap ~40em, current-line completer).
+`SetTab` writes a **tab** (load, seed, user edit, or a deliberate machine write). `inject` writes a **sink**. Those are different directions.
+
+The coding window is **one CodeJar**. `tabs.tsx` is a radio strip — five equal buttons, no editor, no store. Workbench owns `active` and paints the selected string. CodeJar highlights, keeps the caret, indents. It does not format CSS and it is not an IDE.
+
+`redraw` is sync with the DOT tab — the full draw. Other tabs do not need Graphviz (style re-merges and injects; theme re-injects; annotation places; action injects last). The UI may still use one Redraw button that always runs the DOT path.
 
 | Tab | Sink | Who writes it |
 |---|---|---|
 | diagram.dot | source for `renderJSON` | User. Seeded with a starter diagram. |
 | theme.css | `#shabnam-theme-css` | Locked `theme/theme.css` first, then the selected overlay from `theme/*.css`. The base file is viewable, never overwritten. |
-| style.css | `#shabnam-style-css` | `Css.plus(derived, style)` on Redraw. User types in the same file. `:root` first. |
+| style.css | `#shabnam-style-css` | After redraw: `SetTab("style", Css.plus(style, derived))`. `Css` serializes (readable). User types in the same file. |
 | annotation.html | `#shabnam-annotation-html` | User. Cartesian `data-anchor` / `data-offset`. |
 | action.js | `#shabnam-action-js` | User. Runs last. |
 
 `@apply` is expanded on inject (`Css.expand`) against the theme sink.
 
-**Redraw is when the tabs and the DOM are made to agree.** `style.css` is one file: `Css.plus(derived, style)` flattens both through CSSOM, overlays by selector, and emits `:root` first. Comments and formatting are not a contract. Load DOT clears the style tab so dead `#id` rules do not stick.
+**Style tab is a merge buffer.** `Css.plus(style, derived)` overlays derived onto the author's sheet (same selector+prop, derived wins only where the author did not set the prop — author's keys win). `Css.minus(style, lastDerived)` runs first so a previous bag does not accumulate. `Css` owns newlines in that write. Load DOT clears the style tab so dead `#id` rules do not stick.
 
 `theme/theme.css` is locked. Save / overwrite throws. Other `theme/*.css` files are overlays; the sink is base then overlay.
 
-Every editor is the same CodeJar: wrap ~40em, current-line four-slot completer (selector → marker → property → value).
+Autocomplete is not part of the fiddle. Do not put `suggestions` on `Workbench`.
 
 **File verbs and shortcuts.** `Cmd` on macOS, `Ctrl` elsewhere; the four the browser claims are `preventDefault`ed. The bindings are a `Map` registry (§0).
 
@@ -345,7 +350,8 @@ dot text
   → Vizer.render(dot)                         → json
   → Diagram.bag(json)                         → model
   → Diagram.derived(model)                    → derived css
-  → Css.plus(derived, style)                  → style.css tab + #shabnam-style-css
+  → Css.minus(style, lastDerived) then Css.plus(style, derived)
+  → SetTab style.css + inject #shabnam-style-css
   → inject theme.css (base + overlay)
   → Diagram.frame(model)                      → #shabnam-main-html
   → [ browser paints ]
@@ -395,7 +401,9 @@ Closed. Do not reopen in code without updating this file.
 | Anonymous subgraphs | `.subgraph_<n>` by appearance order |
 | Cluster `.graph` blocks | None. No cluster element is drawn, so the block would be inert. |
 | Subgraph selectors | `&.node` / `&.edge` — the class is on the node element, not a wrapper |
-| style.css | `Css.plus(derived, style)`. `:root` first. Load DOT clears the tab. |
+| style.css | Merge buffer. `minus(lastDerived)` then `plus(style, derived)`. `Css` serializes. Load DOT clears the tab. |
+| Css algebra | `plus(style, derived)`, `minus(style, take)`, `expand` at inject. CSSOM only. |
+| Tab vs sink | `SetTab` writes tabs. `inject` writes sinks. CodeJar paints tabs. |
 | Who parses CSS | **CSSOM.** Missing `CSSStyleSheet` throws. `css/` holds no regex parser. |
 | Theme catalog | All files live in `theme/`. `theme/theme.css` is locked. Overlays add/overwrite. |
 | Cascade | locked base, then selected overlay, then style.css |
@@ -413,6 +421,7 @@ Closed. Do not reopen in code without updating this file.
 | Workbench tabs | diagram.dot, theme.css, style.css, annotation.html, action.js |
 | Shortcuts | A `Map` registry in `workbench/keys.ts`, not a switch |
 | PNG export | `foreignObject` → `<canvas>` → `toBlob`. No rasterizer dependency. |
+| Tab editor | CodeJar, experiment. One instance. Radio strip selects the string. Not an IDE. Not a formatter. |
 | UI library | SolidJS. Skeleton is JSX, not a string. |
 | viz.js in the page | Inlined. Redraw calls it every run. |
 | `try` / `catch` | Exactly one, around `Vizer.render` |
@@ -454,14 +463,14 @@ src/
     edge-drawer.ts    boxes + edges → connector SVG
 
   css/              CSS in, CSS out. CSSOM only — never the page (§3).
-    css.ts            Css.plus / Css.expand
+    css.ts            Css.plus / Css.minus / Css.expand
     expander.ts       @apply / @mixin
 
   workbench/        the only package that touches the live DOM (≤ 7 files)
-    workbench.tsx     SolidJS shell: canvas + tabs
-    tabs.tsx          five CodeJar tabs
-    editor.tsx        CodeJar + highlighter + completer popup
-    complete.ts       four-slot current-line suggestions
+    workbench.tsx     SolidJS shell: canvas + radio strip + one CodeJar
+    tabs.tsx          five equal buttons. No editor. Workbench owns the window.
+    editor.tsx        real CodeJar (caret is the library's)
+    highlight.ts      string in, span HTML out
     engine.ts         Workbench: redraw / inject / measure / place
     files.ts          Files: DOT, theme catalog, export
     keys.ts           KEY_COMMAND registry
@@ -505,8 +514,6 @@ The types.ts should closely follow this sesions (but with more proper signiture 
 ```ts
 type VizJson = unknown
 type TabId = "dot" | "theme" | "style" | "annotation" | "action"
-type SlotKind = "selector" | "marker" | "property" | "value"
-type Slot = { kind: SlotKind; items: string[]; input?: "text" | "color"; prefix: string }
 
 interface Vizer { render(dot: string): Promise<VizJson> }
 
@@ -520,7 +527,8 @@ interface Diagram {
 }
 
 interface Css {
-  plus(derived: string, style: string): string
+  plus(style: string, derived: string): string
+  minus(style: string, take: string): string
   expand(css: string, theme: string): string
 }
 
@@ -529,7 +537,6 @@ interface Workbench {
   inject(sink: string, text: string): void
   measure(): Box[]
   place(boxes: Box[]): void
-  suggestions(tab: TabId, line: string): Slot
 }
 
 interface Files {

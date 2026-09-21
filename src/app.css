@@ -119,7 +119,7 @@ body {
 #shabnam-editors {
   grid-area: editors;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   border-left: 1px solid #d6dbe0;
   background: #ffffff;
   min-width: 0;
@@ -127,29 +127,32 @@ body {
 
 #shabnam-tab-strip {
   display: flex;
-  border-bottom: 1px solid #d6dbe0;
+  gap: 0;
 }
 
 .tab {
-  flex: 1;
-  padding: 0.5rem 0.25rem;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.4em 0.2em;
   font: inherit;
   cursor: pointer;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: #f4f6f8;
+  border: 1px solid #d6dbe0;
+  border-radius: 0;
+  background: #ffffff;
   color: #52606d;
 }
 
+.tab + .tab {
+  border-left: 0;
+}
+
 .tab.active {
-  background: #ffffff;
-  color: #1565c0;
-  border-bottom-color: #1565c0;
+  color: #1f2933;
+  box-shadow: inset var(--raised-shadow, 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04));
 }
 
 .editor {
-  grid-row: 2;
-  grid-column: 1;
+  min-height: 0;
   padding: 0.5rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
@@ -165,6 +168,7 @@ body {
 }
 
 .codejar-editor {
+  min-height: 0;
   outline: none;
   white-space: pre-wrap;
   word-break: break-word;
@@ -175,7 +179,6 @@ body {
   font-size: 12px;
   line-height: 1.45;
   padding: 0.5rem;
-  box-sizing: border-box;
 }
 
 .hl-keyword { color: #8b5cf6; font-weight: 600; }
@@ -191,64 +194,15 @@ body {
 .hl-selector { color: #6366f1; font-weight: 600; }
 .hl-operator { color: #f43f5e; font-weight: 700; }
 
-.theme-container {
-  grid-row: 2;
-  grid-column: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  width: 100%;
-}
-
-.theme-container .editor {
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-  width: 100%;
-}
-
-.pane {
-  grid-row: 2;
-  grid-column: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.pane .editor, .theme-container .editor {
-  flex: 1;
-  min-height: 0;
-  max-width: 40em;
-}
-
 .editor-wrap {
-  position: relative;
-  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-.complete {
-  position: absolute;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  max-height: 12em;
-  overflow: auto;
-  background: #fff;
-  border: 1px solid #d6dbe0;
+.editor-wrap .codejar-editor {
+  flex: 1;
 }
-
-.complete button {
-  text-align: left;
-  border: 0;
-  background: none;
-  font: inherit;
-}
-
-.complete button.picked { background: #e8eef7; }
 
 .theme-bar {
   display: flex;

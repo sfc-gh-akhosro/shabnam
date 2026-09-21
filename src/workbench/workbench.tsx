@@ -1,9 +1,10 @@
 // SolidJS shell: canvas skeleton plus the five editors.
 
-import { createSignal, onCleanup, onMount } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import type { TabId, TabText } from "../types.ts";
 import { Engine } from "./engine.ts";
+import { Editor, highlightCss, highlightDot, highlightHtml, highlightJs } from "./editor.tsx";
 import { BASE_THEME, BASE_THEME_NAME, download, Files, themeSheet } from "./files.ts";
 import { type Command, commandOf } from "./keys.ts";
 import { TAB_IDS, Tabs } from "./tabs.tsx";
@@ -172,18 +173,40 @@ export function Workbench() {
         <script id="shabnam-action-js" />
       </div>
 
-      <Tabs
-        text={text}
-        setText={setText}
-        active={active()}
-        setActive={setActive}
-        themes={themes()}
-        selectedTheme={selectedTheme()}
-        onSelectTheme={onSelectTheme}
-        suggest={(tab, line) => engine.suggestions(tab, line)}
-      />
+      <div id="shabnam-editors">
+        <Tabs active={active()} setActive={setActive} />
+        <div class="theme-bar" classList={{ hidden: active() !== "theme" }}>
+          <label for="theme-picker">Theme:</label>
+          <select
+            id="theme-picker"
+            class="theme-select"
+            value={selectedTheme()}
+            onChange={(e) => onSelectTheme(e.currentTarget.value)}
+          >
+            <For each={themes()}>{(name) => <option value={name}>{name}</option>}</For>
+          </select>
+        </div>
+        <Show when={active()} keyed>
+          {(tab) => (
+            <Editor
+              tab={tab}
+              value={text[tab]}
+              onInput={(v) => setText(tab, v)}
+              highlight={highlightOf(tab)}
+              readOnly={tab === "theme" && selectedTheme() === BASE_THEME_NAME}
+            />
+          )}
+        </Show>
+      </div>
     </div>
   );
+}
+
+function highlightOf(tab: TabId) {
+  if (tab === "dot") return highlightDot;
+  if (tab === "annotation") return highlightHtml;
+  if (tab === "action") return highlightJs;
+  return highlightCss;
 }
 
 function favicon(): void {
