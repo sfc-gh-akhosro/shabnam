@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { expandCss } from "../src/style/css-expander.ts";
+import { expandCss } from "../src/css/expander.ts";
 
 describe("CSS expander composition", () => {
   test("expands @apply with a class definition", () => {

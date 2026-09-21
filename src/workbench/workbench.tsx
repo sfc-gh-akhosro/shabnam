@@ -1,17 +1,13 @@
-// The SolidJS shell: the canvas skeleton (§1) plus the five editors (§4).
-// This component is the one owner of tab text; every other worker reads and
-// writes it through the accessor pair handed out here.
+// SolidJS shell: canvas skeleton plus the five editors.
 
-import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { createSignal, onCleanup, onMount } from "solid-js";
 import { createStore } from "solid-js/store";
-import { Redrawer } from "../redrawer.ts";
 import type { TabId, TabText } from "../types.ts";
+import { Engine } from "./engine.ts";
+import { BASE_THEME, BASE_THEME_NAME, download, Files, themeSheet } from "./files.ts";
 import { type Command, commandOf } from "./keys.ts";
-import { Sinker } from "./sinker.ts";
 import { TAB_IDS, Tabs } from "./tabs.tsx";
-import { download, Themer } from "./themer.ts";
 
-import defaultTheme from "../../theme/theme.css" with { type: "text" };
 import logo from "../../icon/shabnam-logo.svg";
 
 const LOGO_URI = `data:image/svg+xml,${encodeURIComponent(logo)}`;
@@ -32,28 +28,25 @@ const STARTER_DOT = `digraph starter {
 }
 `;
 
-// The anchor is the node's DOT name, because that is its id (§3.1).
 const STARTER_HTML = `<div data-anchor="core" data-offset="0,52">
   the one place DOT cannot reach
 </div>
 `;
 
 const STARTER_TEXT: TabText = {
-  theme: defaultTheme,
+  theme: BASE_THEME,
   dot: STARTER_DOT,
   style: "",
   action: "",
   annotation: STARTER_HTML,
 };
 
-// An exported page carries its five texts as a seed, which is what makes the
-// export open on the same picture it left with (§4).
 function starterText(): TabText {
   const seed = document.getElementById("shabnam-seed");
   if (seed === null) return STARTER_TEXT;
   const parsed = JSON.parse(seed.textContent!);
   return {
-    theme: parsed.theme ?? defaultTheme,
+    theme: parsed.theme ?? BASE_THEME,
     dot: parsed.dot ?? STARTER_DOT,
     style: parsed.style ?? parsed.effects ?? "",
     action: parsed.action ?? "",
@@ -64,41 +57,54 @@ function starterText(): TabText {
 export function Workbench() {
   const [text, setText] = createStore<TabText>(starterText());
   const [active, setActive] = createSignal<TabId>("dot");
-  const sinker = new Sinker();
-  const redrawer = new Redrawer(sinker, text, (tab, value) => setText(tab, value));
-  const themer = new Themer(text, (tab, value) => setText(tab, value), () =>
-    redrawer.discardEdits(),
-  );
+  const [selectedTheme, setSelectedTheme] = createSignal(BASE_THEME_NAME);
+  const [themes, setThemes] = createSignal<string[]>([]);
+  const engine = new Engine(text, (tab, value) => setText(tab, value));
+  const files = new Files(text, (tab, value) => setText(tab, value), () => engine.discardDerived());
   let dotPicker!: HTMLInputElement;
   let themePicker!: HTMLInputElement;
 
-  // Sinks follow the store text. Both land on every change.
-  createEffect(() => sinker.inject("theme-css", text.theme));
-  createEffect(() => sinker.inject("style-css", text.style));
+  const sheet = () => themeSheet(selectedTheme(), text.theme);
+  const redraw = () => engine.redraw(sheet());
 
-  const redraw = () => redrawer.redraw(text.dot);
+  const onSelectTheme = (name: string) => {
+    setSelectedTheme(name);
+    setText("theme", files.loadTheme(name));
+  };
 
   const loadDot = async (input: HTMLInputElement) => {
-    themer.loadDot(await input.files![0]!.text());
+    files.loadDot(await input.files![0]!.text());
     input.value = "";
     redraw();
   };
 
   const loadTheme = async (input: HTMLInputElement) => {
-    themer.load(await input.files![0]!.text());
+    const file = input.files![0]!;
+    const css = await file.text();
+    const name = file.name === BASE_THEME_NAME ? "overlay.css" : file.name;
+    files.saveTheme(name, css);
+    setThemes(files.listThemes());
+    setSelectedTheme(name);
+    setText("theme", css);
     input.value = "";
   };
 
-  // Verb name → what it does (§0: a registry, not a switch). `keys.ts` decides
-  // which chord asks for which verb; this decides what the verb is.
+  const saveTheme = () => {
+    if (selectedTheme() === BASE_THEME_NAME) {
+      engine.inject("status", "theme/theme.css is locked — save as a new overlay");
+      return;
+    }
+    files.saveTheme(selectedTheme(), text.theme);
+  };
+
   const commands: Record<Command, () => void> = {
     redraw,
     "load-dot": () => dotPicker.click(),
-    "save-dot": () => download("diagram.dot", themer.saveDot(), "text/vnd.graphviz"),
+    "save-dot": () => download("diagram.dot", files.saveDot(), "text/vnd.graphviz"),
     "load-theme": () => themePicker.click(),
-    "save-theme": () => download("style.css", themer.save(), "text/css"),
-    "save-png": async () => download("diagram.png", await themer.exportPng(), "image/png"),
-    "export-html": async () => download("shabnam.html", await themer.exportHtml(), "text/html"),
+    "save-theme": saveTheme,
+    "save-png": async () => download("diagram.png", await files.exportPng(), "image/png"),
+    "export-html": async () => download("shabnam.html", await files.exportHtml(), "text/html"),
     "tab-1": () => setActive(TAB_IDS[0]!),
     "tab-2": () => setActive(TAB_IDS[1]!),
     "tab-3": () => setActive(TAB_IDS[2]!),
@@ -106,13 +112,10 @@ export function Workbench() {
     "tab-5": () => setActive(TAB_IDS[4]!),
   };
 
-  // A page that has to be clicked before it shows anything is not standalone.
   onMount(() => {
+    setThemes(files.listThemes());
     favicon();
     redraw();
-
-    // One listener for every shortcut. `Cmd+S` and `Cmd+P` are the browser's own
-    // verbs, and ours mean the same thing one level in, so they are taken over.
     const onKey = (event: KeyboardEvent) => {
       const command = commandOf(event);
       if (command === undefined) return;
@@ -151,20 +154,8 @@ export function Workbench() {
         <button title="Cmd/Ctrl+E" onClick={commands["export-html"]}>
           Export HTML
         </button>
-        <input
-          ref={dotPicker}
-          class="hidden"
-          type="file"
-          accept=".dot,.gv"
-          onChange={(event) => loadDot(event.currentTarget)}
-        />
-        <input
-          ref={themePicker}
-          class="hidden"
-          type="file"
-          accept=".css,text/css"
-          onChange={(event) => loadTheme(event.currentTarget)}
-        />
+        <input ref={dotPicker} class="hidden" type="file" accept=".dot,.gv" onChange={(e) => loadDot(e.currentTarget)} />
+        <input ref={themePicker} class="hidden" type="file" accept=".css,text/css" onChange={(e) => loadTheme(e.currentTarget)} />
         <span id="shabnam-status" />
       </header>
 
@@ -181,12 +172,20 @@ export function Workbench() {
         <script id="shabnam-action-js" />
       </div>
 
-      <Tabs text={text} setText={setText} active={active()} setActive={setActive} />
+      <Tabs
+        text={text}
+        setText={setText}
+        active={active()}
+        setActive={setActive}
+        themes={themes()}
+        selectedTheme={selectedTheme()}
+        onSelectTheme={onSelectTheme}
+        suggest={(tab, line) => engine.suggestions(tab, line)}
+      />
     </div>
   );
 }
 
-// The same file as the toolbar mark, handed to the tab bar.
 function favicon(): void {
   const link = document.createElement("link");
   link.rel = "icon";

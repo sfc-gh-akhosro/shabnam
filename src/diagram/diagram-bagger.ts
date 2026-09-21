@@ -58,7 +58,7 @@ const STYLE_KEYS = [
 const SIZE_KEYS = ["width", "height"];
 const FIXED = new Set(["true", "shape"]);
 
-export class DiagramBagger implements T.DiagramBagger {
+export class DiagramBagger {
   // sanitized id → the DOT name that claimed it, so a collapse throws (§3.1)
   private ids = new Map<string, string>();
 

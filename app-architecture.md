@@ -30,7 +30,7 @@ Shabnam turns a Graphviz DOT file into a single HTML page that you can restyle a
 
 The user authors a diagram in DOT — the same language already used for architecture diagrams. Shabnam does **not** try to be Graphviz. It hands the DOT to Graphviz to get **one JSON**. Then we **traverse that JSON once** into our own model, and from the model we build:
 
-1. **Base CSS** — derived styling, keyed on classes and ids
+1. **Derived CSS** — almost empty if DOT has no style; `Css.plus` folds it into `style.css`
 2. **Layout HTML** — columns of node HTML
 3. **SVG layer** — shells and connectors, drawn around the *measured* boxes
 
@@ -48,7 +48,6 @@ Canvas skeleton — the named sinks each worker fills:
   </svg>
   <div id="shabnam-annotation-html"></div>
   <style id="shabnam-theme-css"></style>
-  <style id="shabnam-derived-css"></style>
   <style id="shabnam-style-css"></style>
   <script id="shabnam-action-js"></script>
 </div>
@@ -57,13 +56,12 @@ Canvas skeleton — the named sinks each worker fills:
 **Every id the app owns is prefixed `shabnam-`.** Node ids are DOT names (§3.1),
 so the page's own ids and the diagram's ids share one space — and a diagram with
 a node called `connectors` had its edge markup written into that node's `<div>`.
-The prefix is the wall between the two namespaces. It is plumbing: Base CSS never
+The prefix is the wall between the two namespaces. It is plumbing: derived CSS never
 references a sink id, and neither should a theme.
 
-The CSS cascade uses a clean **multi-sink separation**:
-1. `#shabnam-theme-css` — Canonical theme tokens, utility classes (`.paper`, `.glass`, `.warning`, etc.), base layout rules (`.diagram`, `.column`, `.node`, `.edge`), and animation keyframes.
-2. `#shabnam-derived-css` — Graphviz `:root` variables, attribute overrides, and position-derived quantized `#id` margins emitted by `CssBagger`.
-3. `#shabnam-style-css` — User-authored CSS with `@apply` composition expanded by `expandCss`.
+The CSS cascade is two sinks:
+1. `#shabnam-theme-css` — `theme/theme.css` (locked base, always first) plus the selected overlay from `theme/*.css`. Structural defaults (`.diagram`, `.column`, `.node`), tokens, mixins, keyframes.
+2. `#shabnam-style-css` — `style.css` tab text: derived CSS plus user entries (`Css.plus`), `@apply` expanded against the theme. There is no derived sink.
 
 Nodes have **two layers**: an HTML layer (`shape →` markup, in flow, measurable) and an SVG layer that draws a **shell** around the measured box, with icon and caption inside the shell.
 
@@ -80,7 +78,7 @@ If a proposed change requires reading DOT as a string — tokenize, recursive de
 | Job | Where it lives in the JSON | We do |
 |---|---|---|
 | Layout | `pos`, `rankdir` | Traverse. Group nodes into columns. |
-| Style / identity | `fillcolor`, `color`, `fontname`, `fontsize`, `penwidth`, `style`, `bgcolor`, `label`, `shape`, subgraph `name`, edge `tail` / `head` | Traverse. Emit Base CSS. Put classes and ids on elements. |
+| Style / identity | `fillcolor`, `color`, `fontname`, `fontsize`, `penwidth`, `style`, `bgcolor`, `label`, `shape`, subgraph `name`, edge `tail` / `head` | Traverse. Emit derived CSS. Put classes and ids on elements. |
 | Custom keys | `icon`, `shell`, `caption` when present on the object | Read the field. Do not re-parse the source. |
 
 There is no third job called "parse DOT ourselves." Defaults are already resolved onto objects. Subgraph names are already on subgraph objects. Cluster membership is the subgraph object's `nodes` index list.
@@ -93,32 +91,33 @@ viz.js is inlined in the page. Redraw calls `renderJSON` again on every run. Tha
 
 ## 3. The shape of the design — one traversal, one model
 
-The whole app is a short pipeline of **workers**. Each worker has one job, one interface, and one class.
+The whole app is a short pipeline behind a few package interfaces.
 
 ```
 DOT text
   │
-  ├─ Vizer ─────────────► VizJson          the only DOT consumer
+  ├─ Vizer.render ────────► VizJson          the only DOT consumer
   │
-  ├─ DiagramBagger ─────► DiagramModel     the only VizJson consumer
+  ├─ Diagram.bag ─────────► DiagramModel     the only VizJson consumer
   │
-  ├─ CssBagger ─────────► baseCss          model → CSS text
-  ├─ LayoutFramer ──────► mainHtml         model → columns + node HTML (via SHAPE_HTML)
+  ├─ Diagram.frame ───────► mainHtml         columns + node HTML
+  ├─ Diagram.derived ─────► derived.css      almost empty if DOT has no style
+  ├─ Css.plus(derived, style) ► style.css tab + #shabnam-style-css
   │
   │      ── inject, let the browser paint ──
   │
-  ├─ Measurer ──────────► Box[]            live DOM → geometry
-  ├─ NodeSheller ───────► shellsSvg        boxes + nodes → SVG (via SHELL_SVG)
-  └─ EdgeDrawer ────────► edgesSvg         boxes + edges → SVG
+  ├─ Workbench.measure ────► Box[]
+  ├─ Diagram.clusters / shells / connectors ► SVG sinks
+  └─ Workbench.place ──────► annotation.html
 ```
 
 Two rules make this hold together:
 
-**One traversal, one model.** `Vizer` is the only worker that calls viz.js. `DiagramBagger` is the only worker that touches `VizJson`. Everything downstream works on `DiagramModel`, which is fully typed and ours. Graphviz's shape is quarantined in exactly one file.
+**One traversal, one model.** `Vizer` is the only caller of viz.js. `Diagram.bag` is the only reader of `VizJson`. Everything downstream works on `DiagramModel`. Graphviz's shape is quarantined in one file.
 
-**Pure workers, one DOM owner.** Every worker in `diagram/` is pure: data in, string out. No DOM, no globals, no I/O. Only the workbench touches the live page — it injects strings into sinks and it measures boxes. This is why the pipeline is testable and why Redraw is deterministic.
+**Pure diagram workers, one DOM owner.** Files in `diagram/` are pure: data in, string out. They sit behind the `Diagram` facade. Only the workbench touches the live page.
 
-One named exception: `style/` uses **CSSOM** — `new CSSStyleSheet()` and `replaceSync` — because the browser is our CSS parser and normaliser (§4). It is a browser API, not the page: `style/` never reads the document tree, never touches a sink, and never reads layout. Its sheets are off-document, so nothing is applied and nothing reflows. The cost is honest and worth stating: this worker cannot be tested under `bun`, which has no CSSOM.
+One named exception: `css/` uses **CSSOM** — `new CSSStyleSheet()` and `replaceSync` — because the browser is our CSS parser (`Css.plus`). Off-document sheets; nothing is applied and nothing reflows. If CSSOM is missing, `Css.plus` throws. Do not concatenate strings as a fallback.
 
 Hard rule: if a step is not "call viz", "traverse the JSON", or "emit HTML / CSS / SVG", it does not belong in this app.
 
@@ -146,11 +145,11 @@ No prefix, no namespace, and **no `cluster_` stripping** — `cluster_source` is
 
 Sanitizing an id replaces every character outside `[A-Za-z0-9_-]` with `-`. Two different DOT ids that sanitize to the same string are a **collision: throw**. Silent id collapse produces a malformed page, and a malformed page is much harder to debug than a stack trace.
 
-A corollary, and a test you can apply to any class in the output: **a class that is not a DOT name must be referenced by Base CSS to exist at all.** `node`, `edge`, `column`, `label`, `shell`, `caption`, `badge`, `arrow` earn their place because Base CSS styles them. A grouping class nothing selects is noise on the element and gets deleted.
+A corollary, and a test you can apply to any class in the output: **a class that is not a DOT name must be referenced by theme or style to exist at all.** `node`, `edge`, `column`, `label`, `shell`, `caption`, `badge`, `arrow` earn their place because the theme styles them. A grouping class nothing selects is noise on the element and gets deleted.
 
 ### 3.2 `CssBagger` — derived styling
 
-Consumes the model, emits Base CSS text. Important attrs only — not comprehensive.
+Consumes the model, emits derived CSS text. Important attrs only — not comprehensive. Almost empty if DOT has no presentation.
 
 Attribute-to-property translation is a registry, not scattered logic:
 
@@ -166,11 +165,11 @@ ATTR_CSS: Map<string, string>
 
 Unmapped attributes are skipped. `style` (`filled`, `dashed`, `invis`) is a value-to-declaration case and is handled by its own map when we need it — not in the first pass.
 
-**Base CSS never invents a colour.** Every colour in the output traces to a DOT attribute or to a `:root` variable. If the DOT declares four colours, four is what the reader should find — a hardcoded hex in a structural rule is the worker over-representing its input, and it is the one thing that makes derived CSS untrustworthy.
+**Derived CSS never invents a colour.** Every colour traces to a DOT attribute or a `:root` variable. If the DOT declares four colours, four is what the reader should find.
 
 **Selectors are flat and as short as they can be.** `.diagram .column` and `.column` identify the same place, because there is only one place a column can be, so the shorter one wins. There is no `.diagram { … }` wrapper block, and the SVG layer's `.shell` / `.caption` / `.edge` / `.arrow` carry no sink id in front of them — they are already unique. A subgraph block still nests, because that is what `&` needs.
 
-How a **bag** is chosen: Graphviz has already applied `node [...]` / `edge [...]` defaults onto every object, so we recover the defaults statistically. For each style key, the **most common** value across all nodes becomes `.diagram .node`; likewise for edges. **Absence counts as a value** in that tally — one edge in eighteen carrying `penwidth=3` must not thicken the other seventeen, so when absence wins the key is skipped at class level and that one object gets an `#id` rule. **Ties break on the lexicographically smallest value** — Base CSS must be byte-identical for identical input, or every diff is noise. A subgraph block is emitted when **all** its members share a value that differs from the diagram default. An `#id` rule is emitted only when that one object still differs after class rules apply.
+How a **bag** is chosen: Graphviz has already applied `node [...]` / `edge [...]` defaults onto every object, so we recover the defaults statistically. For each style key, the **most common** value across all nodes becomes `.diagram .node`; likewise for edges. **Absence counts as a value** in that tally — one edge in eighteen carrying `penwidth=3` must not thicken the other seventeen, so when absence wins the key is skipped at class level and that one object gets an `#id` rule. **Ties break on the lexicographically smallest value** — derived CSS must be byte-identical for identical input, or every diff is noise. A subgraph block is emitted when **all** its members share a value that differs from the diagram default. An `#id` rule is emitted only when that one object still differs after class rules apply.
 
 Required nesting:
 
@@ -228,7 +227,7 @@ cluster gets no element: the SVG layer paints above `#shabnam-main-html`, so a c
 background drawn there would cover its own members. A block that styles an
 element nobody draws is inert, and inert output is worse than absent output.
 
-Classes first. `#id` last, and rare. The valuable output of this worker is not pretty CSS — it is that **every node already carries the right classes**, so hand-written My Style is trivial.
+Classes first. `#id` last, and rare. The valuable output is that **every node already carries the right classes**, so hand-written `style.css` is trivial.
 
 **Position Margins in `derived.css`**: When nodes across ranks have vertical (or horizontal) offsets in Graphviz's layout, `CssBagger` computes quantized slot steps from `pos` coordinates and emits explicit `#id` rules in `derived.css` (e.g. `#node_id { margin-top: calc(N * (var(--vertical-gap) + 2.5em)); }`). This preserves node alignment across columns while keeping all styling inspectable and editable in CSS.
 
@@ -296,54 +295,42 @@ Custom keys we care about (`icon`, `shell`, `caption`) are fields on the viz obj
 
 ## 4. Workbench tabs and injection
 
-Tabs, in this order: **DOT · Base CSS · My Style · HTML · JS**
+Tabs, in this order: **diagram.dot · theme.css · style.css · annotation.html · action.js**
+
+Every tab is the same CodeJar editor (syntax highlight, wrap ~40em, current-line completer).
 
 | Tab | Sink | Who writes it |
 |---|---|---|
-| DOT | source for `renderJSON` | User. Seeded with a starter diagram on first load. |
-| Base CSS | `#shabnam-base-css` | `CssBagger`, every Redraw — **and the user, in between.** Editable, applies on every keystroke, and a Redraw *rebases* rather than clobbers: see below. |
-| My Style | `#shabnam-my-style` | User. Load / Save Theme act here only. Redraw only ever *adds* to it, by rebasing Base CSS edits into it. |
-| HTML | `#shabnam-annotation-html` | User. Cartesian `data-anchor` / `data-offset`. |
-| JS | `#shabnam-my-js` | User. Empty starter. |
+| diagram.dot | source for `renderJSON` | User. Seeded with a starter diagram. |
+| theme.css | `#shabnam-theme-css` | Locked `theme/theme.css` first, then the selected overlay from `theme/*.css`. The base file is viewable, never overwritten. |
+| style.css | `#shabnam-style-css` | `Css.plus(derived, style)` on Redraw. User types in the same file. `:root` first. |
+| annotation.html | `#shabnam-annotation-html` | User. Cartesian `data-anchor` / `data-offset`. |
+| action.js | `#shabnam-action-js` | User. Runs last. |
 
-No transformation on inject. The user types CSS / HTML / JS; it lands in the page.
+`@apply` is expanded on inject (`Css.expand`) against the theme sink.
 
-**Redraw is when the tabs and the DOM are made to agree.** That is the principle the next two paragraphs serve. The app is not obliged to preserve how CSS was written — comments carry no function, formatting carries no function, and `RED` and `red` are the same colour. What it must not do is lose something that *does* something, or mistake notation for a change.
+**Redraw is when the tabs and the DOM are made to agree.** `style.css` is one file: `Css.plus(derived, style)` flattens both through CSSOM, overlays by selector, and emits `:root` first. Comments and formatting are not a contract. Load DOT clears the style tab so dead `#id` rules do not stick.
 
-**Rebasing Base CSS edits.** Base CSS is derived, so a Redraw has to rewrite it — but a tab you can type into must not eat what you typed. So Redraw keeps the exact text `CssBagger` produced last time and reads the tab against it:
+`theme/theme.css` is locked. Save / overwrite throws. Other `theme/*.css` files are overlays; the sink is base then overlay.
 
-```
-userEdits   = baseCssTab − lastDerived      // what the user actually changed
-myStyle'    = canonical(myStyle + userEdits)
-baseCssTab' = the freshly derived text
-```
+Every editor is the same CodeJar: wrap ~40em, current-line four-slot completer (selector → marker → property → value).
 
-A rule the DOT legitimately dropped is in `lastDerived` too, so it cancels and never migrates. A rule the user typed is not, so it always survives — as My Style, where the user owns it and no Redraw takes it away. An untouched tab produces no edits and Redraw behaves as if the tab were still read-only. Load DOT clears the baseline: a fresh file starts afresh.
-
-**The browser does the comparing.** Both sides are handed to CSSOM and read back, so every difference that is only notation has already collapsed before we look: whitespace, comments, `RED` against `red`, `#BBDEFB` against `rgb(187, 222, 251)`, and `border-width: 1px` against its four longhands. Those are the false triggers, and suppressing them is the requirement — a hand-written comparison would have to reimplement CSS value semantics to get there, which is why `style/` holds no parser of ours.
-
-The unit of comparison is a rule, keyed by its nesting path, and the unit of *migration* is a declaration — change one property and one property moves. There is one fallback, and it exists for a reason found in the browser: `var()` on a **shorthand** is a pending-substitution value, so `border-color: var(--secondary-color)` enumerates four longhands that each read back as the empty string, and the value survives only in `cssText`. When any property fails to resolve, that rule is compared and carried whole. The same road serves every rule CSSOM does not give declarations for — `@media`, `@keyframes`, `@layer` — so nothing has to be modelled to survive. `research-lab/probe-cssom.ts` is the evidence.
-
-My Style comes back in the browser's own notation, since that is the cheapest way to keep it in step with what the DOM actually holds. The Base CSS tab is **not** round-tripped: it is already the exact string the browser parsed, and canonicalising it would turn the DOT's `#BBDEFB` into `rgb(187, 222, 251)` — working against the one property that makes derived CSS readable, that its values trace to the DOT (§3.2).
-
-Two consequences, neither hidden: a declaration CSSOM does not recognise — a typo, most likely — never appears in the comparison and so does not migrate, which is why the status line reports how many rules moved. And a rule that took the whole-rule fallback carries its structural declarations along, freezing them in My Style; it is visible in the tab and fixable by deleting a line.
-
-**File verbs and shortcuts.** `Cmd` on macOS, `Ctrl` elsewhere; the four the browser claims are `preventDefault`ed. The bindings are a `Map` registry (§0), so adding one is adding an entry.
+**File verbs and shortcuts.** `Cmd` on macOS, `Ctrl` elsewhere; the four the browser claims are `preventDefault`ed. The bindings are a `Map` registry (§0).
 
 | Keys | Verb |
 |---|---|
 | `Cmd+Enter` | Redraw |
 | `Cmd+O` / `Cmd+S` | Load / Save DOT |
-| `⇧Cmd+O` / `⇧Cmd+S` | Load / Save Theme (My Style) |
+| `⇧Cmd+O` / `⇧Cmd+S` | Load / Save Theme overlay |
 | `Cmd+P` | Save PNG |
 | `Cmd+E` | Export HTML |
 | `Cmd+1` … `Cmd+5` | the five tabs |
 
-**Save PNG** rasterizes the canvas with browser APIs only: the HTML and annotation layers go into one `<foreignObject>` with the three stylesheets inlined, the SVG layer follows it, and the result goes `Image` → `<canvas>` → `toBlob`. Icons and shells already travel as data URIs, so nothing is fetched and the canvas is never tainted.
+**Save PNG** rasterizes the canvas with browser APIs only: HTML + annotation in one `<foreignObject>` with stylesheets inlined, SVG after it, then `Image` → `<canvas>` → `toBlob`.
 
-There is no config model and no config tab. Behavior that wants to be configuration goes to `:root` variables or to My JS.
+There is no config model. Behavior that wants to be configuration goes to `:root` or to `action.js`.
 
-**Export** writes the current canvas — skeleton, all five sinks, inlined viz.js — as one standalone HTML file. This is the "HTML out" half of the product.
+**Export** writes the current canvas — skeleton, all sinks, inlined viz.js — as one standalone HTML file.
 
 ---
 
@@ -351,25 +338,26 @@ There is no config model and no config tab. Behavior that wants to be configurat
 
 Everything runs in the browser. `index.ts` mounts the SolidJS workbench into `#root`; the canvas skeleton of §1 is part of the component tree, not a generated string. Offline exploration, batch evaluation, and prototype scripts live in `research-lab/`, never in `src/`.
 
-`Redrawer` is the conductor. It owns the sequence and nothing else:
+`Workbench.redraw` is the conductor:
 
 ```
 dot text
-  → Vizer.render(dot)                       → json
-  → DiagramBagger.bag(json)                 → model
-  → CssBagger.bag(model)                    → derived css
-  → StyleMerger.rebase(...)                 → Base CSS tab + My Style tab (§4)
-  → LayoutFramer.frame(model)               → inject #shabnam-main-html   (SHAPE_HTML inside)
+  → Vizer.render(dot)                         → json
+  → Diagram.bag(json)                         → model
+  → Diagram.derived(model)                    → derived css
+  → Css.plus(derived, style)                  → style.css tab + #shabnam-style-css
+  → inject theme.css (base + overlay)
+  → Diagram.frame(model)                      → #shabnam-main-html
   → [ browser paints ]
-  → Measurer.measure()                      → boxes
-  → NodeSheller.shells(boxes, model)        ┐
-  → EdgeDrawer.draw(boxes, model)           ┴ inject #main-svg
-  → My Style / HTML / JS untouched
+  → Workbench.measure()                       → boxes
+  → Diagram.clusters / shells / connectors    → SVG sinks
+  → Workbench.place()                         → annotation.html
+  → action.js last
 ```
 
 Must complete in well under a second on a normal diagram.
 
-**The one sanctioned catch.** `Vizer.render` is wrapped in a single `try` / `catch`, and nowhere else in the app. A workbench sees malformed DOT between every keystroke — that is the normal state, not an exceptional one — and an uncaught throw would take down the page along with the user's unsaved My Style, HTML, and JS. The catch shows the Graphviz message in a status line and leaves the last good picture standing. Everything downstream of a successful parse still follows the rule: **throw or let it throw.**
+**The one sanctioned catch.** `Vizer.render` is wrapped in a single `try` / `catch`, and nowhere else. Malformed DOT is the normal between-keystroke state. The catch shows the Graphviz message and leaves the last good picture standing. Everything downstream of a successful parse still follows: **throw or let it throw.**
 
 ---
 
@@ -380,7 +368,7 @@ Fresh start. Do these in order, stop after each for review.
 1. **Skeleton.** Bun + SolidJS + TypeScript scaffold. `index.ts` mounts the workbench into `#root`. Five tabs, the canvas with all five sinks, the Redraw button, the starter DOT. Nothing renders yet.
 2. **`Vizer` + `DiagramBagger`.** DOT in, `DiagramModel` out, dumped to the console. Namespaced sanitized ids, subgraph classes, numeric `x` / `y`. This is the step that proves we never need a parser.
 3. **`LayoutFramer` + `SHAPE_HTML.box`.** `#shabnam-main-html` filled: boxes in the right columns, correct id and classes. Unstyled is fine.
-4. **`CssBagger`.** Base CSS per §3.2 into `#shabnam-base-css`. Byte-identical output for identical input.
+4. **`Diagram.derived`.** Derived CSS per §3.2 folded into `style.css` by `Css.plus`. Byte-identical for identical input.
 5. **`Measurer` + `NodeSheller` + `EdgeDrawer`.** `svg/box.svg` as the only shell, `icon/` when `icon=` is set, connectors from measured coordinates.
 6. **Polish.** Load / Save Theme, Export HTML, status line for parse errors.
 
@@ -395,24 +383,22 @@ Closed. Do not reopen in code without updating this file.
 | Decision | Choice |
 |---|---|
 | Who reads DOT | Graphviz `renderJSON`, via `Vizer`, only |
-| Who reads `VizJson` | `DiagramBagger`, only. Everyone else uses `DiagramModel`. |
+| Who reads `VizJson` | `Diagram.bag`, only. Everyone else uses `DiagramModel`. |
 | Who lays out columns | Graphviz `pos` + `rankdir`, bucketed within 2pt |
-| Who owns size and position | The `Measurer`. Graphviz `width` / `height` / `_draw_` are unused. |
+| Who owns size and position | `Workbench.measure`. Graphviz `width` / `height` / `_draw_` are unused. |
 | Who draws | Us: HTML (`SHAPE_HTML`) + SVG (`svg/` shells, `icon/`) |
 | Who touches the DOM | The workbench package, only. `diagram/` workers are pure. |
-| How Base CSS is built | `CssBagger` on the model. Flat selectors, shortest that identifies. Classes first, `#id` last. |
+| How derived CSS is built | `Diagram.derived` on the model. Flat selectors, shortest that identifies. Classes first, `#id` last. Almost empty if DOT has no style. |
 | CSS naming | Identical to DOT naming (§3.1). No prefix, no `cluster_` stripping. |
-| A class that is not a DOT name | Exists only if Base CSS selects it |
-| Colour in Base CSS | Only from a DOT attribute or a `:root` variable. Never invented. |
+| A class that is not a DOT name | Exists only if theme or style selects it |
+| Colour in derived CSS | Only from a DOT attribute or a `:root` variable. Never invented. |
 | Anonymous subgraphs | `.subgraph_<n>` by appearance order |
 | Cluster `.graph` blocks | None. No cluster element is drawn, so the block would be inert. |
 | Subgraph selectors | `&.node` / `&.edge` — the class is on the node element, not a wrapper |
-| Base CSS edits | Rebased into My Style on Redraw, against the last derived text (§4) |
-| Who parses CSS | **CSSOM.** The browser is the parser and the normaliser; `style/` holds no parser of ours. |
-| Comparison unit | A rule, keyed by nesting path. Migration unit: a declaration. |
-| `var()` on a shorthand | Reads back empty, so that rule is compared and carried whole. Same road for `@media` / `@keyframes`. |
-| My Style after a rebase | Rewritten in the browser's notation. Comments and formatting go; function does not. |
-| Base CSS tab | Never round-tripped through CSSOM — it would lose the DOT's own value notation |
+| style.css | `Css.plus(derived, style)`. `:root` first. Load DOT clears the tab. |
+| Who parses CSS | **CSSOM.** Missing `CSSStyleSheet` throws. `css/` holds no regex parser. |
+| Theme catalog | All files live in `theme/`. `theme/theme.css` is locked. Overlays add/overwrite. |
+| Cascade | locked base, then selected overlay, then style.css |
 | Attr → CSS property | `ATTR_CSS` registry |
 | Bag ties | Lexicographically smallest value, for determinism |
 | Bag absence | Counts as a value. Absence winning means no class rule for that key. |
@@ -423,8 +409,8 @@ Closed. Do not reopen in code without updating this file.
 | How shells vary | Files in `svg/`, via `SHELL_SVG`. First file: `box.svg` |
 | How icons vary | Files in `icon/` (borrowed) |
 | Custom attrs | Fields on the viz object |
-| Config tab | Never existed. Behavior → `:root` or My JS |
-| Workbench tabs | DOT, Base CSS (editable, rebased), My Style, HTML, JS |
+| Config tab | Never existed. Behavior → `:root` or action.js |
+| Workbench tabs | diagram.dot, theme.css, style.css, annotation.html, action.js |
 | Shortcuts | A `Map` registry in `workbench/keys.ts`, not a switch |
 | PNG export | `foreignObject` → `<canvas>` → `toBlob`. No rasterizer dependency. |
 | UI library | SolidJS. Skeleton is JSX, not a string. |
@@ -455,36 +441,33 @@ Inside `src/`, one package per stage of the design. A package is a subject exper
 ```
 src/
   index.ts          mount the workbench into #root
-  redrawer.ts       the conductor — owns the pipeline sequence
   types.ts          all `type` data + all `interface` traits (not counted in the 7)
 
-  diagram/          pure workers: data in, string out. no DOM.
+  diagram/          Diagram facade + private workers. data in, string out. no DOM.
+    diagram.ts        Diagram        — bag / frame / derived / clusters / shells / connectors
     vizer.ts          Vizer          — the only viz.js caller
-    diagram-bagger.ts DiagramBagger  — the only VizJson reader
-    css-bagger.ts     CssBagger      — model → Base CSS
-    layout-framer.ts  LayoutFramer   — model → columns → #shabnam-main-html
-    node-shaper.ts    SHAPE_HTML     — registry: shape → node HTML
-    node-sheller.ts   NodeSheller    — boxes + nodes → shell SVG
-    edge-drawer.ts    EdgeDrawer     — boxes + edges → connector SVG
+    diagram-bagger.ts the only VizJson reader
+    css-bagger.ts     model → derived CSS
+    layout-framer.ts  model → columns → #shabnam-main-html
+    node-shaper.ts    SHAPE_HTML registry
+    node-sheller.ts   boxes + nodes → shell SVG
+    edge-drawer.ts    boxes + edges → connector SVG
 
-  style/            CSS in, CSS out. CSSOM only — never the page (§3).
-    style-merger.ts   StyleMerger    — rebase Base CSS edits into My Style (§4)
+  css/              CSS in, CSS out. CSSOM only — never the page (§3).
+    css.ts            Css.plus / Css.expand
+    expander.ts       @apply / @mixin
 
-  workbench/        the only package that touches the live DOM
-    workbench.tsx     the SolidJS shell: canvas + tabs
-    tabs.tsx          the five editors
-    sinker.ts         Sinker    — inject text into a named sink
-    measurer.ts       Measurer  — painted #shabnam-main-html → Box[]
-    annotator.ts      Annotator — place `data-anchor` elements
-    themer.ts         Themer    — the file verbs: DOT, Theme, PNG, HTML
-    keys.ts           KEY_COMMAND    — registry: shortcut → verb
+  workbench/        the only package that touches the live DOM (≤ 7 files)
+    workbench.tsx     SolidJS shell: canvas + tabs
+    tabs.tsx          five CodeJar tabs
+    editor.tsx        CodeJar + highlighter + completer popup
+    complete.ts       four-slot current-line suggestions
+    engine.ts         Workbench: redraw / inject / measure / place
+    files.ts          Files: DOT, theme catalog, export
+    keys.ts           KEY_COMMAND registry
 ```
 
-`style/` is its own package rather than an eighth file in `diagram/`, which is at
-its seven. It is the one worker outside `workbench/` that touches a browser API,
-and §3 says why that is allowed and how far it goes.
-
-`diagram/` is at exactly seven workers, which is the intended pressure: the eighth capability should be a new package or a new registry entry, not an eighth file here.
+`css/` is the one package outside `workbench/` that touches a browser API, and §3 says why that is allowed and how far it goes. Missing CSSOM throws.
 
 `node-shaper.ts` is a **registry, not a class** — a `Map` plus a lookup with a `box` fallback. Wrapping a map lookup in a class to satisfy "one class per file" is exactly the second-abstraction-for-one-call smell that `coding-rules.md` forbids. Same applies to `SHELL_SVG` and `ATTR_CSS`, which live with the workers that consult them.
 
@@ -517,137 +500,47 @@ Extension goes to a registry entry first, a new package second, a bigger file ne
 These are the core types, interfaces, and enums and some of their crucial public methods/fields. The implementaion might have more and slighly different.
 The types.ts should closely follow this sesions (but with more proper signiture and details) and the rest of the source code files are basically the implementation of types.ts and relevant issues.
 
-`type` = data. `interface` = methods. `Map` = value → function. All of this lives in `src/types.ts`; every worker below implements exactly one interface.
+`type` = data. `interface` = methods. `Map` = value → function. All of this lives in `src/types.ts`. Interfaces describe packages.
 
 ```ts
-// ---------------------------------------------------------------------------
-// types — data only
-// ---------------------------------------------------------------------------
+type VizJson = unknown
+type TabId = "dot" | "theme" | "style" | "annotation" | "action"
+type SlotKind = "selector" | "marker" | "property" | "value"
+type Slot = { kind: SlotKind; items: string[]; input?: "text" | "color"; prefix: string }
 
-type VizJson = unknown        // opaque. DiagramBagger is the only reader.
+interface Vizer { render(dot: string): Promise<VizJson> }
 
-type Node = {
-  id: string                  // the sanitized DOT name. also the HTML id
-  classes: string[]           // subgraph names
-  shape: string               // key into SHAPE_HTML
-  shell: string               // key into SHELL_SVG, default "box"
-  icon: string                // filename in icon/, or ""
-  label: string
-  caption: string             // caption=, falling back to label
-  x: number                   // from pos, for column grouping only
-  y: number
-  attrs: Map<string, string>  // style keys CssBagger bags
-}
-
-type Edge = {
-  id: string                  // `<from>_<to>`, suffixed when parallel
-  from: string                // node id
-  to: string
-  classes: string[]
-  attrs: Map<string, string>
-}
-
-type Cluster = {
-  name: string                // the DOT subgraph name — the class, and the key
-  label: string
-  isInvis: boolean
-  nodes: string[]             // member node ids
-  clusters: string[]          // nested cluster ids
-  attrs: Map<string, string>
-}
-
-type DiagramModel = {         // the one model. everything downstream reads this.
-  rankdir: string
-  nodes: Node[]
-  edges: Edge[]
-  clusters: Cluster[]
-  attrs: Map<string, string>  // graph-level
-}
-
-type Layout = Node[][]        // columns of nodes
-
-type Box = {                  // measured, the truth about geometry
-  id: string
-  left: number
-  top: number
-  width: number
-  height: number
-}
-
-// ---------------------------------------------------------------------------
-// interfaces — methods only (Go / Rust traits). One class implements each.
-// ---------------------------------------------------------------------------
-
-interface Vizer {
-  render(dot: string): Promise<VizJson>
-}
-
-interface DiagramBagger {
+interface Diagram {
   bag(json: VizJson): DiagramModel
+  frame(model: DiagramModel): string
+  derived(model: DiagramModel): string
+  clusters(boxes: Box[], model: DiagramModel): string
+  shells(boxes: Box[], model: DiagramModel): string
+  connectors(boxes: Box[], model: DiagramModel): string
 }
 
-interface CssBagger {
-  bag(model: DiagramModel): string              // → #shabnam-base-css
+interface Css {
+  plus(derived: string, style: string): string
+  expand(css: string, theme: string): string
 }
 
-interface LayoutFramer {
-  columns(model: DiagramModel): Layout
-  frame(model: DiagramModel): string            // → #shabnam-main-html, SHAPE_HTML inside
-}
-
-interface NodeSheller {
-  shells(boxes: Box[], model: DiagramModel): string   // SHELL_SVG + icon/
-  clusters(boxes: Box[], model: DiagramModel): string // SVG bounding boxes around member nodes
-}
-
-interface EdgeDrawer {
-  draw(boxes: Box[], model: DiagramModel): string     // measured coords only
-}
-
-interface Measurer {
-  measure(): Box[]                              // reads painted #shabnam-main-html
-}
-
-interface Sinker {
+interface Workbench {
+  redraw(): Promise<void>
   inject(sink: string, text: string): void
+  measure(): Box[]
+  place(boxes: Box[]): void
+  suggestions(tab: TabId, line: string): Slot
 }
 
-interface Themer {
-  loadDot(text: string): void                   // → DOT, resets the rebase baseline
-  saveDot(): string                             // ← DOT
-  load(text: string): void                      // → My Style
-  save(): string                                // ← My Style
-  exportHtml(): Promise<string>                 // whole app, standalone
-  exportPng(): Promise<Blob>                    // the canvas, rasterized
+interface Files {
+  loadDot(text: string): void
+  saveDot(): string
+  listThemes(): string[]
+  loadTheme(name: string): string
+  saveTheme(name: string, css: string): void  // throw if name is theme.css
+  exportHtml(): Promise<string>
+  exportPng(): Promise<Blob>
 }
-
-type StyleRebase = {      // what a rebase did
-  myStyle: string         // the new My Style text, in the browser's notation
-  moved: number           // how many rules migrated — for the status line
-}
-
-interface StyleMerger {
-  // The Base CSS tab is editable and derived at once (§4). Whatever the user
-  // changed against `derived` is merged into My Style; the tab goes back to
-  // derived. CSSOM does the parsing and the normalising, so notation-only
-  // differences never read as edits.
-  rebase(derived: string, edited: string, myStyle: string): StyleRebase
-}
-
-interface Redrawer {
-  redraw(dot: string): Promise<void>            // the sequence in §5
-}
-
-// ---------------------------------------------------------------------------
-// registries — enum simulation. No class, no interface.
-// ---------------------------------------------------------------------------
-
-const SHAPE_HTML: Map<string, (node: Node) => string>
-//   "box" → rectangle node HTML.  unknown shape → "box"
-
-const SHELL_SVG: Map<string, string>
-//   "box" → "svg/box.svg".        unknown shell → "box"
-
-const ATTR_CSS: Map<string, string>
-//   graphviz attribute → CSS property (§3.2). unmapped → skipped
 ```
+
+`Node` / `Edge` / `Cluster` / `DiagramModel` / `Box` / `Layout` are unchanged. Registries (`SHAPE_HTML`, `SHELL_SVG`, `ATTR_CSS`) live with the workers that consult them.

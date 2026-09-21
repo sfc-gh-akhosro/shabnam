@@ -5,7 +5,7 @@ import { LayoutFramer } from "../src/diagram/layout-framer.ts";
 import { NodeSheller } from "../src/diagram/node-sheller.ts";
 import { EdgeDrawer } from "../src/diagram/edge-drawer.ts";
 import { Vizer } from "../src/diagram/vizer.ts";
-import { expandCss } from "../src/style/css-expander.ts";
+import { expandCss } from "../src/css/expander.ts";
 import type { TabText } from "../src/types.ts";
 
 import defaultTheme from "../theme/theme.css" with { type: "text" };
@@ -152,49 +152,13 @@ describe("UI & Workbench Integration Suite", () => {
     expect(derivedCss).toMatch(/#[a-z_0-9]+ \{\n\s+margin-top: calc\(\d+ \* \(var\(--vertical-gap\) \+ 2\.5em\)\);/);
   });
 
-  test("StyleMerger rebases derived rules into style.css text", async () => {
-    const vizer = new Vizer();
-    const bagger = new DiagramBagger();
-    const cssBagger = new CssBagger();
-    const { StyleMerger } = await import("../src/style/style-merger.ts");
-    const merger = new StyleMerger();
-
-    const FIXTURE = new URL("../research-lab/example-1.dot", import.meta.url).pathname;
-    const dot = await Bun.file(FIXTURE).text();
-    const json = await vizer.render(dot);
-    const model = bagger.bag(json);
-    const derivedCss = cssBagger.bag(model);
-
-    const rebased = merger.rebase("", derivedCss, ".custom { color: red; }");
-    expect(rebased.myStyle).toContain(":root");
-    expect(rebased.myStyle).toContain(".custom");
-    expect(rebased.myStyle).toContain("margin-top");
-  });
-
-  test("Style rule parser and serializer roundtrip cleanly", async () => {
-    const { parseCssToRules, serializeRulesToCss } = await import("../src/workbench/css-helper.tsx");
-
-    const css = `:root {\n  --connector-style: ortho;\n  --horizontal-gap: 2em;\n}\n\n.node {\n  @apply .glass;\n  color: red;\n}`;
-    const rules = parseCssToRules(css);
-
-    expect(rules.length).toBe(4);
-    expect(rules[0]!.target).toBe(":root");
-    expect(rules[0]!.property).toBe("--connector-style");
-    expect(rules[0]!.value).toBe("ortho");
-
-    expect(rules[2]!.target).toBe(".node");
-    expect(rules[2]!.property).toBe("@apply");
-    expect(rules[2]!.value).toBe(".glass");
-
-    const serialized = serializeRulesToCss(rules);
-    expect(serialized).toContain(":root");
-    expect(serialized).toContain("--connector-style: ortho;");
-    expect(serialized).toContain("@apply .glass;");
+  test.skip("Css.plus needs CSSOM — run in the browser", () => {
+    // Bun has no CSSStyleSheet. Css.plus throws without it by design.
   });
 
   test("Syntax highlighters tokenize JS, HTML, CSS, and DOT correctly", async () => {
     const { highlightJs, highlightHtml, highlightCss, highlightDot } = await import(
-      "../src/workbench/highlighter.ts"
+      "../src/workbench/editor.tsx"
     );
 
     const js = highlightJs("const x = 42; // note");

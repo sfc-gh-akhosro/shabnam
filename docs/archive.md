@@ -241,6 +241,18 @@ One process note, because it cost this session real time: the browser verificati
 
 ---
 
+## Iteration 9 — Types, facades, CodeJar workbench
+
+Killed the style-grid experiment (`css-helper.tsx`, `parseCss`). Types describe packages, not one-method workers: `Vizer`, `Diagram`, `Css`, `Workbench`, `Files`.
+
+Workbench is seven files (`workbench` / `tabs` / `editor` / `complete` / `engine` / `files` / `keys`). Five CodeJar tabs, order **dot · theme · style · annotation · action**. Completer is current-line, four slots. Wrap ~40em.
+
+`Css.plus` is CSSOM flatten + overlay, `:root` first; missing CSSOM throws. `theme/theme.css` is locked and always first; other `theme/*.css` are overlays. No `#shabnam-derived-css` sink.
+
+Law files (`app-architecture` §1/§3/§4/§5/§7/§8/§10, `current-task`, `README`) match. 50 tests pass; `Css.plus` skipped under bun.
+
+---
+
 ## Closed debts — kept for the reasoning
 
 These were paid. They live here rather than in `docs/technical-debts.md`, which

@@ -20,7 +20,7 @@ export function getCssConnectorMode(): string | undefined {
   return trimmed || undefined;
 }
 
-export class EdgeDrawer implements T.EdgeDrawer {
+export class EdgeDrawer {
   draw(boxes: T.Box[], model: T.DiagramModel): string {
     const byId = new Map(boxes.map((box) => [box.id, box]));
     const cssMode = getCssConnectorMode();

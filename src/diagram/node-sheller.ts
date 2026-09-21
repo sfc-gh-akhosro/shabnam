@@ -41,7 +41,7 @@ const ICON_SVG = new Map([
   ["star.svg", star],
 ]);
 
-export class NodeSheller implements T.NodeSheller {
+export class NodeSheller {
   shells(boxes: T.Box[], model: T.DiagramModel): string {
     const nodes = new Map(model.nodes.map((node) => [node.id, node]));
     const pairs = boxes.map((box) => [box, nodes.get(box.id)!] as const);

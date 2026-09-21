@@ -45,8 +45,7 @@ stops there. Iteration 5 had to define the semantics to implement them:
   annotation
 - No `data-anchor` means no positioning — the element stays in flow
 
-**Cost to close:** six lines in §4. The code already behaves this way, and
-`annotator.ts` states it in its header.
+**Cost to close:** six lines in §4. The code already behaves this way (`Workbench.place`).
 
 ---
 
@@ -117,7 +116,7 @@ that re-measures and re-injects the SVG layer would close it, and would be the
 first piece of reactive machinery in the app.
 
 **Cost to close:** small, but it adds a second trigger for the pipeline alongside
-the Redraw button. Weigh against §5's "`Redrawer` is the conductor."
+the Redraw button. Weigh against §5's "`Workbench.redraw` is the conductor."
 
 ### V4. The `icon/` files are placeholder glyphs, not real artwork
 
@@ -247,36 +246,23 @@ declaration scoping, not ours.
 **Cost to close:** nothing we should pay. Second-guessing Graphviz's own
 membership lists is how we end up with a second DOT reader.
 
-### S2. `style/` cannot be tested under `bun`
+### S2. `Css.plus` cannot be tested under `bun`
 
-`bun test` has no CSSOM, so `StyleMerger` is verified in a browser and nowhere
-else. Accepted deliberately: at this stage tests exist to show the thing works
-now, not to guard against regressions. A DOM shim would be worse than no test —
-`happy-dom` almost certainly lacks native nesting and shorthand re-collapse, the
-two behaviours the worker leans on hardest, so green would mean nothing.
+`bun test` has no CSSOM, so `Css.plus` throws there by design. The expander still runs. A DOM shim would be worse than no test.
 
-**Cost to close:** revisit when the feature set freezes and regression tests earn
-their place. Then it is a browser-run harness, not a shim.
+**Cost to close:** a browser-run harness, when regression tests earn their place.
 
-### S3. A declaration CSSOM does not recognise never migrates
+### S3. Completer lists are static, not the live canvas
 
-A typo'd property is dropped at parse time, so it cannot be told apart from one
-that was never written. The user's edit is lost when Redraw rewrites the tab. The
-status line reports how many rules moved, so it is not silent — but it does not
-say which declaration went missing.
+Selector lists should come from painted ids/classes (skip `shabnam-*`) plus last-model names. Today they are a fixed set plus model when a redraw has happened.
 
-**Cost to close:** small. Compare the declaration *count* before and after the
-parse and warn on the difference.
+**Cost to close:** small — `suggestions` already takes the last model; scrape the canvas next.
 
-### S4. A whole-rule migration freezes its structural declarations
+### S4. Completer classifies the line, not the caret
 
-When `var()` on a shorthand forces the whole-rule path, that rule's padding,
-radius and border come along into My Style and stop tracking the preamble. Change
-a structural value later and that one rule will not follow. Visible in the tab,
-fixable by deleting a line.
+A mid-line edit can land in the wrong slot. Current-line-only was the locked design.
 
-**Cost to close:** would need a shorthand-to-longhand table to split the rule,
-which is exactly the hand-maintained CSS knowledge we adopted CSSOM to avoid.
+**Cost to close:** look at the prefix before the caret only (already mostly true).
 
 ### S5. Concurrent redraws can interleave
 

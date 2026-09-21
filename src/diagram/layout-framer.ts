@@ -26,7 +26,7 @@ export const AXES = new Map<string, Axes>([
   ["BT", { key: (n) => n.y, columns: 1, within: (n) => n.x, inside: 1 }],
 ]);
 
-export class LayoutFramer implements T.LayoutFramer {
+export class LayoutFramer {
   columns(model: T.DiagramModel): T.Layout {
     const axes = AXES.get(model.rankdir) ?? AXES.get("TB")!;
     const buckets = bucket(model.nodes, axes);

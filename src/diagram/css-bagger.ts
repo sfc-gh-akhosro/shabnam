@@ -88,7 +88,7 @@ function preamble(model: T.DiagramModel, nodeBag: Bag, edgeBag: Bag): string {
 
 type Bag = Map<string, string>;
 
-export class CssBagger implements T.CssBagger {
+export class CssBagger {
   bag(model: T.DiagramModel): string {
     const graphBag = pick(model.attrs);
     const nodeBag = mode(model.nodes.map((node) => node.attrs));

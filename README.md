@@ -47,18 +47,15 @@ bun test
 
 ## How it works
 
-Five tabs — DOT, Base CSS, My Style, HTML, JS — over a live canvas. Press Redraw and the pipeline runs:
+Five CodeJar tabs — `diagram.dot` · `theme.css` · `style.css` · `annotation.html` · `action.js`. Press Redraw:
 
 ```
-DOT → Vizer → VizJson → DiagramBagger → DiagramModel
-        ├→ CssBagger    → Base CSS   (generated, editable)
-        └→ LayoutFramer → HTML       → Measurer → NodeSheller (shells)
-                                               → EdgeDrawer  (connectors)
+DOT → Vizer → VizJson → Diagram.bag → DiagramModel
+        ├→ Diagram.derived → Css.plus → style.css
+        └→ Diagram.frame   → measure → clusters / shells / connectors
 ```
 
-**Base CSS is generated from the DOT.** Every colour, font and stroke the DOT asked for arrives as a CSS rule you can read and change — and only what the DOT actually said, never a default that was invented for you. **My Style** is yours and is never regenerated.
-
-Base CSS is editable even though it is regenerated, because edits to it are rebased into My Style on Redraw. The diff runs through CSSOM — an off-document `CSSStyleSheet` is the parser — so reformatting, `RED` versus `red`, and shorthand versus longhand do not count as edits. The browser's own serialisation decides what "changed" means.
+`theme/theme.css` is locked and always injected first; other `theme/*.css` files are overlays. `style.css` is derived ⊎ user via CSSOM (`Css.plus`). If DOT has no style, derived is almost empty.
 
 Everything is client-side: no server, no build step at runtime, no telemetry. Graphviz runs in the page via [`@viz-js/viz`](https://github.com/mdaines/viz-js). There is no DOT parser in this codebase and there is not meant to be one — `renderJSON` is the only DOT consumer.
 
@@ -69,7 +66,7 @@ Everything is client-side: no server, no build step at runtime, no telemetry. Gr
 | File verbs | Load/save DOT, load/save theme, export standalone HTML, export PNG |
 | Shortcuts | `↵` redraw · `o`/`s` DOT · `⇧o`/`⇧s` theme · `p` PNG · `e` HTML · `1`–`5` tabs |
 | Drawing | SVG shells behind the HTML, connectors with arrowheads, per-node icons and captions |
-| Theming | `theme/blueprint.css` restyles everything through CSS alone |
+| Theming | `theme/theme.css` locked base; overlays in `theme/*.css` |
 
 ## Reading the code
 
@@ -83,6 +80,6 @@ Everything is client-side: no server, no build step at runtime, no telemetry. Gr
 
 ## Status
 
-Early but working, and verified in a browser against `research-lab/example-1.dot`. Known rough edges are written down rather than hidden — see `docs/technical-debts.md`. The most visible: `shape=record` renders as a box with its `|` and `{}` still showing, the `icon/` files are crude placeholder glyphs, and Base CSS emits `#id` rules that outrank anything you write in My Style.
+Early but working. Fixture: `research-lab/example-1.dot`. Open debts in `docs/technical-debts.md`. The most visible: `shape=record` still renders as a box, `icon/` files are placeholders, and derived `#id` rules outrank a class you type in `style.css`.
 
 The name is Persian for *dew* — the thin layer that makes a shape visible.
