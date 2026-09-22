@@ -152,8 +152,8 @@ describe("UI & Workbench Integration Suite", () => {
     expect(derivedCss).toMatch(/#[a-z_0-9]+ \{\n\s+margin-top: calc\(\d+ \* \(var\(--vertical-gap\) \+ 2\.5em\)\);/);
   });
 
-  test.skip("Css.plus needs CSSOM — run in the browser", () => {
-    // Bun has no CSSStyleSheet. Css.plus throws without it by design.
+  test.skip("Css.plus / Css.minus need CSSOM — run in the browser", () => {
+    // Bun has no CSSStyleSheet. plus/minus throw without it by design.
   });
 
   test("Syntax highlighters tokenize JS, HTML, CSS, and DOT correctly", async () => {

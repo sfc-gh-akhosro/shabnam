@@ -38,7 +38,7 @@ export class Engine implements T.Workbench {
   private vizer = new Vizer();
   private diagram = new Diagram();
   private css = new Css();
-  private derived = "";
+  private lastDerived = "";
   private model: T.DiagramModel | undefined;
 
   constructor(
@@ -47,7 +47,7 @@ export class Engine implements T.Workbench {
   ) {}
 
   discardDerived(): void {
-    this.derived = "";
+    this.lastDerived = "";
   }
 
   lastModel(): T.DiagramModel | undefined {
@@ -62,8 +62,8 @@ export class Engine implements T.Workbench {
     const model = this.diagram.bag(json);
     this.model = model;
     const derived = this.diagram.derived(model);
-    const style = this.css.plus(derived, this.text.style);
-    this.derived = derived;
+    const style = this.css.plus(this.css.minus(this.text.style, this.lastDerived), derived);
+    this.lastDerived = derived;
     this.setTab("style", style);
 
     this.inject("theme-css", this.css.expand(themeSheet, themeSheet));

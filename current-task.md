@@ -165,15 +165,16 @@ fiddle.
 parse(dot) via Vizer
 Diagram.bag → model
 Diagram.derived → derived
-Css.plus(derived, text.style)     // argument order: derived first
-setTab("style", style)            // merge buffer: tab overwritten
+Css.minus(style, lastDerived) then Css.plus(style, derived)
+setTab("style", style)            // merge buffer; Css serializes
 inject theme-css / style-css / main-html / annotation
 raf → measure → clusters / shells / connectors
 place → status → action-js
 ```
 
-`plus` is CSSOM-only. Author's keys win on conflict. Emit is one `cssText` line
-per rule. `minus` does not exist. `expand` is inject-only. Correct.
+`plus` / `minus` are CSSOM-only. Flatten keys on `selectorText` so nested
+`&.node` and a later flat `.cluster.node` are the same rule. Author's keys win.
+Emit is one declaration per line, `:root` first. `expand` is inject-only.
 
 CodeJar is `codejar@4.3.0`. Highlight is `highlight.ts`. `tabs.tsx` is a radio
 strip; workbench owns the one editor. Facades and diagram workers match. Theme
@@ -183,9 +184,9 @@ lock matches. No SVG export.
 
 | Should | Is |
 |---|---|
-| `Css.minus` | Missing |
-| `plus(style, derived)` | `plus(derived, style)` in the type and in `css.ts` |
-| Merge buffer + `Css` serializes | Merge in code; one-line `cssText` |
+| `Css.minus` | Done |
+| `plus(style, derived)` | Done |
+| Merge buffer + `Css` serializes | Done — one declaration per line |
 | `Workbench.redraw()` | `Engine.redraw(themeSheet)` |
 | No completer on `Workbench` | Done — parked in `temp/completer/` |
 | Per-tab sync optional | Always full `redraw` |
@@ -197,33 +198,68 @@ The spine is already the design. The work is correction, not a third rewrite.
 
 # Current task
 
-Next session is **B**. Architecture and coding rules already describe to-be.
-Do not start C or D. Do not reopen the radio strip or the parked completer.
+Living as-is → to-be plan. One session per piece. Each piece leaves the tree
+compiling, tests green, and the next session a one-line handoff. Do not start
+the next piece in the same session. Architecture wins if this plan drifts.
+Update this section when a session finishes.
 
-## B — Css algebra matches the law
+**Done when all of this is false:** `Engine.redraw(themeSheet)` disagreeing
+with `Workbench.redraw()`. Completer-on-Workbench and the Css algebra are
+already false.
 
-Point: architecture §4, §5, §7, §10 (`Css`).
+**Now:** Session **C**. Do not start D. Do not reopen the radio strip or
+the parked completer.
+
+## Session A — park the completer — **done**
+
+**Goal.** Completer is not the fiddle. Keep the draft for a *loose* completer
+later.
+
+**Did.** `complete.ts` / Slot types / tests live in untracked `temp/completer/`.
+Unwired from `types`, `Engine`, `src`. `bun test` scoped to `test/`. Radio strip
++ one CodeJar landed in the same pass (workbench owns the window).
+
+**Handoff.** Types no longer mention slots. Next is B.
+
+## Session B — Css algebra matches the law — **done**
 
 **Goal.** `plus(style, derived)`, `minus(style, take)`, readable emit, Engine
 runs minus then plus so derived bags do not stack.
 
-**Do.** Flip `plus` in `types.ts`, `css.ts`, `Engine`. Implement `minus` (CSSOM:
-drop props `take` asserts on the same selectors). Emit one declaration per line,
-`:root` first — `Css` owns newlines. `Engine` keeps `lastDerived`.
-
-**Done when.** `src/types.ts` `Css` matches §10. Redraw twice does not stack two
-derived bags. Style tab is readable after Redraw. Browser: change a DOT colour,
-redraw twice, author rule still wins, no duplicate `:root` props.
-`bun test && bun run build` green.
-
-**Not this session.** `redraw(themeSheet)`. SVG export. Per-tab sync. Completer.
-CodeJar stay-or-go.
+**Did.** `Css` matches §10. Flatten keys on CSSOM `selectorText` so nested
+`&.node` and a later flat `.cluster.node` are the same rule. `Engine` keeps
+`lastDerived` and does `minus` then `plus`. Emit is one declaration per line,
+`:root` first. Browser: redraw twice does not stack; author `#core { pink }`
+beats DOT `#ddffdd`. `bun test && bun run build` green.
 
 **Handoff.** Css interface is the law. Engine still takes `themeSheet`. Next is
-C (`Engine.redraw()` with no theme argument).
+C.
 
-## Later (not B)
+## Session C — Workbench.redraw matches the type
 
-- **C.** `Engine.redraw()` — no `themeSheet` arg.
-- **D (pick one).** Per-tab sync; `Files.exportSvg`; CodeJar stay-or-go; loose
-  completer from `temp/completer/`.
+**Goal.** `Engine.redraw()` has no theme argument.
+
+**Do.** Engine holds or asks Files for the current theme sheet (locked base +
+selected overlay). Solid shell just calls `redraw()`. Type and call sites
+agree.
+
+**Done when.** `Workbench.redraw(): Promise<void>` is what runs. One Redraw
+button still always takes the DOT path.
+
+**Not this session.** Per-tab sync. SVG export.
+
+**Handoff.** Types, Engine, and shell agree.
+
+## Session D — optional later (own session each, pick one)
+
+Do not batch.
+
+- **Per-tab sync.** Style/theme/annotation/action skip viz.js. Only if someone
+  is hurting. The one-button DOT path stays valid.
+- **SVG export.** `Files.exportSvg` — picture portable, not a second workbench.
+  Add to `Files` and §10 in the same session.
+- **CodeJar stay-or-go.** After A–C, either write “accepted” in §0 or discuss
+  removal. Do not silently replace it.
+- **Loose completer.** After CodeJar is judged, revive `temp/completer/` as a
+  thin layer — not an IDE, not on `Workbench` until we say so. Do not start
+  from a new invention if that draft still fits.

@@ -8,7 +8,31 @@ out wrong. Iterations 1–5 were the original build plan, which lived in
 `current-task.md` until it was done; 6 and 7 came after. Open debts are **not**
 here — they live in `docs/technical-debts.md`.
 
-**Status: iterations 1–7 all done, each verified in a browser.**
+**Status: iterations 1–7 all done, each verified in a browser. Session A and
+Session B of the as-is → to-be plan are done.**
+
+## Session B — Css algebra matches the law
+
+What shipped:
+
+- `Css` matches architecture §10: `plus(style, derived)`, `minus(style, take)`,
+  `expand`. Author keys win. Missing CSSOM still throws.
+- Flatten keys on CSSOM `selectorText`, so nested `&.node` and a later flat
+  `.cluster.node` are the same rule. Without that, `minus` cannot subtract the
+  previous bag.
+- `Engine` keeps `lastDerived` and does `minus` then `plus`. Style tab emit is
+  one declaration per line, `:root` first. `Css` owns the newlines.
+- Browser: redraw twice does not stack. Author `#core { background-color: pink }`
+  beats DOT `#ddffdd`. `bun test && bun run build` green.
+
+What turned out wrong: treating `cssText` as a stable identity for `minus`.
+CSSOM rewrites hex to `rgb()` and nests to a compound selector. Identity is
+the resolved `selectorText` plus the CSSOM-canonical property value.
+
+§7 now names the flatten identity (`selectorText`). Next is C —
+`Engine.redraw(themeSheet)` still disagrees with `Workbench.redraw()`.
+
+---
 
 ## Session — CodeJar, park completer, radio strip
 

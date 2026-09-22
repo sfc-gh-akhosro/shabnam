@@ -246,9 +246,11 @@ declaration scoping, not ours.
 **Cost to close:** nothing we should pay. Second-guessing Graphviz's own
 membership lists is how we end up with a second DOT reader.
 
-### S2. `Css.plus` cannot be tested under `bun`
+### S2. `Css.plus` / `Css.minus` cannot be tested under `bun`
 
-`bun test` has no CSSOM, so `Css.plus` throws there by design. The expander still runs. A DOM shim would be worse than no test.
+`bun test` has no CSSOM, so both throw there by design. Session B verified them
+in the browser. The expander still runs under Bun. A DOM shim would be worse
+than no test.
 
 **Cost to close:** a browser-run harness, when regression tests earn their place.
 

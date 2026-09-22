@@ -86,7 +86,8 @@ export interface Diagram {
 }
 
 export interface Css {
-  plus(derived: string, style: string): string;
+  plus(style: string, derived: string): string;
+  minus(style: string, take: string): string;
   expand(css: string, theme: string): string;
 }
 

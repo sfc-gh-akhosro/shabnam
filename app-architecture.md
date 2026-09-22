@@ -402,7 +402,7 @@ Closed. Do not reopen in code without updating this file.
 | Cluster `.graph` blocks | None. No cluster element is drawn, so the block would be inert. |
 | Subgraph selectors | `&.node` / `&.edge` — the class is on the node element, not a wrapper |
 | style.css | Merge buffer. `minus(lastDerived)` then `plus(style, derived)`. `Css` serializes. Load DOT clears the tab. |
-| Css algebra | `plus(style, derived)`, `minus(style, take)`, `expand` at inject. CSSOM only. |
+| Css algebra | `plus(style, derived)`, `minus(style, take)`, `expand` at inject. CSSOM only. Flatten identity is CSSOM `selectorText`, so nested `&.node` and a later flat `.cluster.node` are the same rule. |
 | Tab vs sink | `SetTab` writes tabs. `inject` writes sinks. CodeJar paints tabs. |
 | Who parses CSS | **CSSOM.** Missing `CSSStyleSheet` throws. `css/` holds no regex parser. |
 | Theme catalog | All files live in `theme/`. `theme/theme.css` is locked. Overlays add/overwrite. |
