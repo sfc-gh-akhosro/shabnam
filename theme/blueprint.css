@@ -2,7 +2,8 @@
    derived and rewritten by every Redraw. Load this from the toolbar to see the
    round trip: the picture changes, the DOT and the Base CSS do not. */
 
-:root {
+:root,
+svg {
   --primary-color: #0b3d91;
   --secondary-color: #1565c0;
   --accent-color: #ff8f00;
@@ -24,13 +25,13 @@
   font-size: var(--base-font-size);
 }
 
-.column {
+.rank {
   display: flex;
   flex-direction: column;
   gap: var(--vertical-gap);
 }
 
-.node {
+.node, .record {
   background-color: #f8fbff;
   border-color: var(--secondary-color);
   border-width: 2px;
@@ -43,16 +44,14 @@
 }
 
 .shell {
+  fill: none;
   stroke: var(--accent-color);
   stroke-dasharray: none;
 }
 
-.caption {
+.label {
   fill: var(--primary-color);
   font-weight: 600;
-  /* Base CSS derives no colour it was not given (§3.2), so a caption that lands
-     on a shell is a theme's problem to solve — a halo the colour of the canvas
-     keeps it readable without reserving space for it. */
   paint-order: stroke;
   stroke: #ffffff;
   stroke-width: 3px;

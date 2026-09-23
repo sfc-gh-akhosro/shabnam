@@ -1,6 +1,6 @@
 // SHAPE_HTML — a registry, not a class (§8). shape → the node's HTML layer.
 // The HTML layer exists to be measured, so it stays in flow and carries the
-// identity: the namespaced id plus `node` plus one class per subgraph (§3.3).
+// identity: DOT id + one type class (`node` / `record`) + one subgraph class (§3.1).
 
 import type * as T from "../types.ts";
 
@@ -86,7 +86,7 @@ function record(node: T.Node): string {
   const fields = walk(label, cursor);
   if (cursor.depth !== 0) throw new Error(`unbalanced {} in record label of ${node.id}`);
 
-  return `<div ${identity(node, ["record", dir])}>${fields}</div>`;
+  return `<div ${identity(node, ["record"])}>${fields}</div>`;
 }
 
 // Cells come from the text *between* separators, so a separator only ever opens
@@ -104,7 +104,7 @@ function walk(rest: string, cursor: Cursor): string {
 // fields, not two, and `me` is the one that grows. Blank beside a brace is
 // notation — the space in `1st | {2nd` — and counts for nothing.
 function cell(raw: string, cursor: Cursor, next: string): string {
-  const [port, label] = splitPort(raw.trim());
+  const [, label] = splitPort(raw.trim());
   const prev = cursor.prev;
   cursor.prev = next;
 
@@ -114,7 +114,7 @@ function cell(raw: string, cursor: Cursor, next: string): string {
   }
   const out = flush(cursor);
   bump(cursor);
-  cursor.pending = { classes: [path(cursor), ...(port === "" ? [] : [port])], span: 1, text: label };
+  cursor.pending = { classes: [path(cursor)], span: 1, text: label };
   return out;
 }
 
@@ -140,7 +140,7 @@ function container(sep: string, cursor: Cursor): string {
   // A group takes an index of its own, or the field after it would reuse one.
   bump(cursor);
   cursor.path.push(0);
-  return `<div class="fields ${cursor.dir}">`;
+  return `<div>`;
 }
 
 function isSlot(prev: string, next: string): boolean {
@@ -156,8 +156,6 @@ function bump(cursor: Cursor): void {
 function grow(cursor: Cursor): void {
   bump(cursor);
   if (cursor.pending === null) return;
-
-  cursor.pending.classes.push(path(cursor));
   cursor.pending.span += 1;
 }
 
@@ -168,7 +166,9 @@ function flush(cursor: Cursor): string {
 
   // `--span` is data; Base CSS turns it into growth, so a theme can still say no.
   const span = cell.span > 1 ? ` style="--span:${cell.span}"` : "";
-  return `<span class="cell ${cell.classes.join(" ")}"${span}>${text(cell.text)}</span>`;
+  const extra = cell.classes.join(" ");
+  const classes = extra === "" ? "cell" : `cell ${extra}`;
+  return `<span class="${classes}"${span}>${text(cell.text)}</span>`;
 }
 
 function path(cursor: Cursor): string {
@@ -216,7 +216,8 @@ const MD = new Map<RegExp, string>([
 // --------------------------------------------------------------------- shared
 
 function identity(node: T.Node, extra: string[] = []): string {
-  const classes = ["node", ...extra, ...node.classes].join(" ");
+  const kind = extra[0] ?? "node";
+  const classes = [kind, ...node.classes].join(" ");
   return `id="${node.id}" class="${classes}"`;
 }
 

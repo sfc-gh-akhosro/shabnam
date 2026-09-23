@@ -29,15 +29,13 @@ test("clusters draw an SVG box enclosing member node bounding boxes", async () =
   const svg = sheller.clusters(boxes, model);
 
   // Group container with cluster id and class
-  expect(svg).toContain('<g id="cluster_sources" class="cluster cluster_sources" data-cluster="cluster_sources">');
+  expect(svg).toContain('<g id="cluster_sources" class="cluster_">');
 
   // Enclosing rect: minLeft=100, maxRight=190, minTop=50, maxBottom=160
   // padX=16 -> x = 100 - 16 = 84, width = (190 - 100) + 32 = 122
   // padTop=28 (has label) -> y = 50 - 28 = 22, height = (160 - 50) + 28 + 16 = 154
-  expect(svg).toContain('<rect class="cluster-box" x="84" y="22" width="122" height="154" rx="8" ry="8" />');
-
-  // Label text with proper position
-  expect(svg).toContain('<text class="cluster-label" x="96" y="39">Data Sources</text>');
+  expect(svg).toContain('<rect x="84" y="22" width="122" height="154" rx="8" ry="8" />');
+  expect(svg).toContain('<text class="label" x="96" y="39">Data Sources</text>');
 });
 
 test("cluster with style=invis is omitted from cluster SVG output", async () => {

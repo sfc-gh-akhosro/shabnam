@@ -2,6 +2,9 @@
 // beside it so dist/ opens from a static server with no rewriting.
 
 import { bundleConfig, ROOT } from "./bundle.ts";
+import { writeThemeCatalog } from "./theme-catalog.ts";
+
+writeThemeCatalog();
 
 const DIST = `${ROOT}dist/`;
 

@@ -24,7 +24,7 @@ test("a cell's class is its path, not a running count", async () => {
   // `._2_1` is the first field inside the second top-level item. Inserting a
   // sibling at one level leaves every other level's selectors alone.
   expect(await html("a | b | c")).toBe(
-    '<div id="n" class="node record row">' +
+    '<div id="n" class="record">' +
       '<span class="cell _1">a</span>' +
       '<span class="cell _2">b</span>' +
       '<span class="cell _3">c</span>' +
@@ -36,9 +36,9 @@ test("a leading { is the node's own axis, and costs no level of path", async () 
   // Records are written `{Head | {A | B}}`. Honouring that brace as a container
   // would push everything to `._1_1` and `._1_2_1` — a level that says nothing.
   expect(await html("{Head | {A | B} | Foot}")).toBe(
-    '<div id="n" class="node record col">' +
+    '<div id="n" class="record">' +
       '<span class="cell _1">Head</span>' +
-      '<div class="fields row">' +
+      "<div>" +
       '<span class="cell _2_1">A</span>' +
       '<span class="cell _2_2">B</span>' +
       "</div>" +
@@ -59,18 +59,18 @@ test("a group takes an index, so the field after it does not reuse one", async (
 
 test("every { flips the axis, however deep", async () => {
   const markup = await html("{Head | {A | {a1 | a2} | B}}");
-  expect(markup).toContain('class="node record col"');
-  expect(markup).toContain('<div class="fields row">');
-  expect(markup).toContain('<div class="fields col">');
+  expect(markup).toContain('class="record"');
+  expect(markup).toContain("<div>");
   expect(markup).toContain('<span class="cell _2_2_1">a1</span>');
   expect(markup).toContain('<span class="cell _2_2_2">a2</span>');
 });
 
 test("an empty slot counts, and grows the field before it", async () => {
   // `{me || you}` is three fields, not two: the empty one spends an index and
-  // hands it to `me`, which is what "twice the size" means in classes and width.
+  // grows `me` via --span. The class stays the first path so the cell still
+  // has one type class plus one path class.
   const markup = await html("{me || you}");
-  expect(markup).toContain('<span class="cell _1 _2" style="--span:2">me</span>');
+  expect(markup).toContain('<span class="cell _1" style="--span:2">me</span>');
   expect(markup).toContain('<span class="cell _3">you</span>');
 });
 
@@ -88,10 +88,11 @@ test("an escaped separator is text, not a split", async () => {
   expect(markup).toContain('<span class="cell _2">plain</span>');
 });
 
-test("a port is a stable name beside the path", async () => {
-  // We cannot honour a port as an edge attachment point — connectors come from
-  // measured boxes (§3.4) — but the author already chose the name, so it stays.
-  expect(await html("<p6> 6th")).toContain('<span class="cell _1 p6">6th</span>');
+test("a port is stripped from the label, not classed", async () => {
+  // Connectors come from measured boxes (§3.4), so a port is not an attachment
+  // point and is not a second class on the cell.
+  expect(await html("<p6> 6th")).toContain('<span class="cell _1">6th</span>');
+  expect(await html("<p6> 6th")).not.toContain("p6");
 });
 
 test("inline markdown reaches both shapes, and the author's angle brackets do not", async () => {

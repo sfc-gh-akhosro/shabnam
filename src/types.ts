@@ -61,12 +61,32 @@ export type Box = {
   height: number;
 };
 
-/** Five workbench editors, tab order: dot · theme · style · annotation · action. */
-export type TabId = "dot" | "theme" | "style" | "annotation" | "action";
+/** Four workbench tabs, in order. `styles` is a rows view, not text. */
+export type TabId = "dot" | "styles" | "annotation" | "action";
 
-export type TabText = Record<TabId, string>;
+/** The three text tabs. The styles tab is not text and is absent on purpose. */
+export type TabText = Record<"dot" | "annotation" | "action", string>;
 
-export type SetTab = (tab: TabId, text: string) => void;
+export type SetTab = (tab: keyof TabText, text: string) => void;
+
+// ---------------------------------------------------------------------------
+// style — one representation: selector → property → value
+// ---------------------------------------------------------------------------
+
+/** Insertion order is row order. */
+export type StyleRules = Map<string, Map<string, string>>;
+
+/** What a style JSON file holds: `{ selector: { property: value } }`. */
+export type StyleFile = Record<string, Record<string, string>>;
+
+export type StyleOrigin = "theme" | "derived" | "user";
+
+export type StyleRow = {
+  selector: string;
+  property: string;
+  value: string;
+  origin: StyleOrigin;
+};
 
 // ---------------------------------------------------------------------------
 // interfaces — methods only. Packages implement these, not every file.
@@ -79,16 +99,26 @@ export interface Vizer {
 export interface Diagram {
   bag(json: VizJson): DiagramModel;
   frame(model: DiagramModel): string;
-  derived(model: DiagramModel): string;
+  derived(model: DiagramModel): StyleRules;
   clusters(boxes: Box[], model: DiagramModel): string;
   shells(boxes: Box[], model: DiagramModel): string;
   connectors(boxes: Box[], model: DiagramModel): string;
 }
 
-export interface Css {
-  plus(style: string, derived: string): string;
-  minus(style: string, take: string): string;
-  expand(css: string, theme: string): string;
+export interface Stylist {
+  /** Writes a user row, shadowing whatever theme or derived says. */
+  addRule(selector: string, property: string, value: string): void;
+  removeRule(selector: string, property: string): void;
+  /** Replaces the derived layer, wholesale. */
+  setDerived(rules: StyleRules): void;
+  /** Drop emptied selectors, re-feed. */
+  cleanup(): void;
+  /** The tab: every layer, origin-tagged, in order. */
+  rows(): StyleRow[];
+  /** User rows → `user-style.json`. */
+  save(): void;
+  /** CSS text. Export HTML and Save PNG only. */
+  serialize(): string;
 }
 
 export interface Workbench {
@@ -101,9 +131,6 @@ export interface Workbench {
 export interface Files {
   loadDot(text: string): void;
   saveDot(): string;
-  listThemes(): string[];
-  loadTheme(name: string): string;
-  saveTheme(name: string, css: string): void;
   exportHtml(): Promise<string>;
   exportPng(): Promise<Blob>;
 }

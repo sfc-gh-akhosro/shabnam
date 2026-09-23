@@ -3,6 +3,9 @@
 // browser reload is the whole reload story.
 
 import { bundleConfig, ROOT } from "./bundle.ts";
+import { writeThemeCatalog } from "./theme-catalog.ts";
+
+writeThemeCatalog();
 
 const PORT = 3000;
 

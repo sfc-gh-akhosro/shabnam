@@ -1,17 +1,13 @@
 // File verbs: DOT load/save, theme catalog, export HTML / PNG.
 
 import type * as T from "../types.ts";
-
-import defaultTheme from "../../theme/theme.css" with { type: "text" };
-import blueprintTheme from "../../theme/blueprint.css" with { type: "text" };
+import { THEMES } from "./theme-catalog.ts";
 
 const PNG_SCALE = 2;
 const PNG_MARGIN = 12;
 
 export const BASE_THEME_NAME = "theme.css";
-export const BASE_THEME = defaultTheme;
-
-const overlays = new Map<string, string>([["blueprint.css", blueprintTheme]]);
+export const BASE_THEME = THEMES.get(BASE_THEME_NAME)!;
 
 export class Files implements T.Files {
   constructor(
@@ -31,22 +27,18 @@ export class Files implements T.Files {
   }
 
   listThemes(): string[] {
-    return [BASE_THEME_NAME, ...overlays.keys()];
+    return [...THEMES.keys()];
   }
 
   loadTheme(name: string): string {
-    if (name === BASE_THEME_NAME) return BASE_THEME;
-    const overlay = overlays.get(name);
-    if (overlay === undefined) throw new Error(`unknown theme: ${name}`);
-    return overlay;
+    const css = THEMES.get(name);
+    if (css === undefined) throw new Error(`unknown theme: ${name}`);
+    return css;
   }
 
   saveTheme(name: string, css: string): void {
-    if (name === BASE_THEME_NAME || name === "theme.css") {
-      throw new Error("theme/theme.css is locked — save as a new overlay");
-    }
-    overlays.set(name, css);
-    download(name, css, "text/css");
+    const file = name === BASE_THEME_NAME ? "my-theme.css" : name;
+    download(file, css, "text/css");
   }
 
   async exportHtml(): Promise<string> {
@@ -57,7 +49,8 @@ export class Files implements T.Files {
   async exportPng(): Promise<Blob> {
     const canvas = document.getElementById("shabnam-canvas")!;
     const frame = framing(canvas);
-    const svg = snapshot(canvas, frame, [await asset("shabnam-css"), BASE_THEME, this.text.theme, this.text.style]);
+    const applied = document.getElementById("shabnam-style-css")!.textContent!;
+    const svg = snapshot(canvas, frame, [await asset("shabnam-css"), applied]);
     return raster(svg, frame.crop);
   }
 }
@@ -69,16 +62,25 @@ export function download(name: string, body: string | Blob, type: string): void 
   URL.revokeObjectURL(url);
 }
 
-export function themeSheet(selected: string, overlayText: string): string {
-  if (selected === BASE_THEME_NAME) return BASE_THEME;
-  return `${BASE_THEME}\n\n${overlayText}`;
+export function themeSheet(name: string, text: string): string {
+  if (name === BASE_THEME_NAME) return text;
+  if (!liveCss(BASE_THEME)) return text;
+  return `${BASE_THEME}\n\n${text}`;
+}
+
+function liveCss(css: string): boolean {
+  return css.replace(/\/\*[\s\S]*?\*\//g, "").trim() !== "";
+}
+
+export function appliedSheet(style: string, sheet: string, css: T.Css): string {
+  return css.plus(css.expand(style, sheet), css.expand(sheet, sheet));
 }
 
 type Framing = { page: { width: number; height: number }; crop: T.Box };
 
 function framing(canvas: HTMLElement): Framing {
   const origin = canvas.getBoundingClientRect();
-  const painted = [...canvas.querySelectorAll(".node, #shabnam-node-shells > g, #shabnam-connectors line, #shabnam-annotation-html *")];
+  const painted = [...canvas.querySelectorAll(".rank > [id], #shabnam-node-shells > g, #shabnam-connectors path, #shabnam-annotation-html *")];
   const boxes = painted.map((element) => element.getBoundingClientRect());
   const left = Math.min(...boxes.map((box) => box.left)) - origin.left + canvas.scrollLeft;
   const top = Math.min(...boxes.map((box) => box.top)) - origin.top + canvas.scrollTop;

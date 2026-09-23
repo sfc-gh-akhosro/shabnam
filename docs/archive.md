@@ -8,8 +8,56 @@ out wrong. Iterations 1–5 were the original build plan, which lived in
 `current-task.md` until it was done; 6 and 7 came after. Open debts are **not**
 here — they live in `docs/technical-debts.md`.
 
-**Status: iterations 1–7 all done, each verified in a browser. Session A and
-Session B of the as-is → to-be plan are done.**
+**Status: iterations 1–7 all done, each verified in a browser. The as-is → to-be
+plan (sessions A–D) is closed. CodeJar is accepted. The plan now running is the
+Stylist rewrite in `current-task.md`.**
+
+## Session 1 — the law learns about the Stylist
+
+What shipped: `app-architecture.md` and `coding-rules.md` amended for the Stylist
+rewrite, before any code moved. §1 loses `#shabnam-theme-css` and gains the three
+rule layers; §3 replaces the `css/` package and its algebra with `stylist/`; §3.2
+has `CssBagger` returning `StyleRules` with **composed flat selectors** instead of
+nested `&.node`; §4 is four tabs with no merge buffer; §7, §8, §10 follow.
+
+What was decided, and is the reason the doc changed before the code:
+
+- **`cssom_id` cannot exist.** `deleteRule(i)` renumbers every later rule, so a
+  stored index is stale after any removal. It was also at the wrong level: with one
+  `CSSStyleRule` per selector, a property is `setProperty` / `removeProperty` and
+  there is no index to keep. The value stays a plain string on disk; the rule handle
+  is runtime-only.
+- **`@apply` stays a property**, in the data and in the JSON, resolved only when
+  feeding CSSOM. Mixins therefore remain keys in the map that nothing puts on an
+  element — the same contract as before, now as data rather than text.
+- **Nesting goes with the text.** A flat map key cannot hold `&`, so a subgraph rule
+  is composed as `.cluster_x.node, .cluster_x.record`.
+
+`README.md` still describes five tabs and `Css.plus` — it documents the code, which
+has not moved yet, so it is synced in session 7, not here.
+
+---
+
+## Session C — Workbench.redraw matches the type
+
+What shipped: `Engine.redraw()` lost its theme argument. Engine builds the sheet
+itself via `themeSheet(this.text.theme)` — locked base, then the theme-tab overlay
+when the tab is not the base. Type, Engine, and the Redraw button finally agree,
+and one Redraw still always takes the DOT path.
+
+Superseded by the Stylist rewrite: `themeSheet`, the locked base, and the overlay
+are all removed in session 6 of the plan that replaced this one. The lasting part
+is the shape — `redraw()` takes no arguments — which the Stylist keeps.
+
+---
+
+## Session D — CodeJar accepted
+
+What shipped: CodeJar is stack, not an experiment. §0 list, §7 “Tab editor”,
+the memo table, and the coding-rules dependency note. Still not an IDE and
+still not a formatter. Completer stays in `temp/completer/` (S6).
+
+---
 
 ## Session B — Css algebra matches the law
 

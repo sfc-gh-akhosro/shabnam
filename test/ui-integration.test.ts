@@ -1,3 +1,4 @@
+import { readdirSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { DiagramBagger } from "../src/diagram/diagram-bagger.ts";
 import { CssBagger } from "../src/diagram/css-bagger.ts";
@@ -7,6 +8,9 @@ import { EdgeDrawer } from "../src/diagram/edge-drawer.ts";
 import { Vizer } from "../src/diagram/vizer.ts";
 import { expandCss } from "../src/css/expander.ts";
 import type { TabText } from "../src/types.ts";
+import { Css } from "../src/css/css.ts";
+import { appliedSheet, BASE_THEME, BASE_THEME_NAME, themeSheet } from "../src/workbench/files.ts";
+import { THEMES } from "../src/workbench/theme-catalog.ts";
 
 import defaultTheme from "../theme/theme.css" with { type: "text" };
 import blueprintTheme from "../theme/blueprint.css" with { type: "text" };
@@ -34,7 +38,25 @@ const RECORD_DOT = `digraph records {
 `;
 
 describe("UI & Workbench Integration Suite", () => {
-  test("Theme CSS contains utility classes, structural rules, and animation keyframes", () => {
+  test("Theme catalog is exactly the filenames in theme/", () => {
+    const onDisk = readdirSync("theme")
+      .filter((name) => name.endsWith(".css"))
+      .sort((a, b) => (a === "theme.css" ? -1 : b === "theme.css" ? 1 : a.localeCompare(b)));
+    expect([...THEMES.keys()]).toEqual(onDisk);
+    expect(THEMES.has("basic.css")).toBe(true);
+    expect(themeSheet(BASE_THEME_NAME, "body { color: red }")).toBe("body { color: red }");
+    expect(themeSheet("basic.css", ".node { padding: 1em }")).toBe(".node { padding: 1em }");
+  });
+
+  test.skip("appliedSheet folds theme + overlay + style into one .node — needs CSSOM", () => {
+    const sheet = themeSheet("basic.css", THEMES.get("basic.css")!);
+    const applied = appliedSheet(".node { color: red }", sheet, new Css());
+    expect(applied.match(/\.node \{/g)?.length).toBe(1);
+    expect(applied.match(/\.diagram \{/g)?.length).toBe(1);
+    expect(applied).toContain("color: red");
+  });
+
+  test("Theme CSS names the mixins and the structural classes", () => {
     expect(defaultTheme).toContain(".paper");
     expect(defaultTheme).toContain(".glass");
     expect(defaultTheme).toContain(".warning");
@@ -51,7 +73,10 @@ describe("UI & Workbench Integration Suite", () => {
     expect(defaultTheme).toContain(".col");
     expect(defaultTheme).toContain(".row");
     expect(defaultTheme).toContain(".cell");
-    expect(defaultTheme).toContain("@keyframes");
+    expect(defaultTheme).toContain(".rank");
+    expect(defaultTheme).toContain(".cluster_");
+    expect(defaultTheme).toContain(".label");
+    expect(defaultTheme).not.toContain(".column");
   });
 
   test("Bare-bone DOT produces clean derived CSS with only :root variables", async () => {
@@ -81,7 +106,7 @@ describe("UI & Workbench Integration Suite", () => {
     expect(derivedCss).not.toContain(".arrow");
   });
 
-  test("CSS expander resolves @apply from theme context into user styles", () => {
+  test("commented-out theme.css is a no-op: @apply of its mixins throws", () => {
     const userStyle = `
 .cluster_source {
   @apply .glass;
@@ -91,10 +116,25 @@ describe("UI & Workbench Integration Suite", () => {
   @apply .paper .raised;
 }
 `;
-    const expanded = expandCss(userStyle, defaultTheme);
+    expect(() => expandCss(userStyle, defaultTheme)).toThrow("@apply .glass: not defined");
+  });
 
-    expect(expanded).toContain("backdrop-filter: blur(8px);");
-    expect(expanded).toContain("box-shadow: var(--raised-shadow);");
+  test("overlay mixins are what @apply sees when the locked base is commented out", () => {
+    const overlay = THEMES.get("basic.css")!;
+    const sheet = themeSheet("basic.css", overlay);
+    const userStyle = `
+.cluster_source {
+  @apply .glass;
+}
+
+.node.special {
+  @apply .paper .raised;
+}
+`;
+    const expanded = expandCss(userStyle, sheet);
+    expect(expanded).toContain("color-mix(in srgb, var(--secondary-color) 10%, transparent)");
+    expect(expanded).toContain("var(--raised-shadow)");
+    expect(expanded).toContain("color-mix(in srgb, var(--primary-color) 10%, white)");
     expect(expanded).not.toContain("@apply");
   });
 
@@ -107,9 +147,9 @@ describe("UI & Workbench Integration Suite", () => {
     const model = bagger.bag(json);
     const html = framer.frame(model);
 
-    expect(html).toContain('class="node record row"');
+    expect(html).toContain('class="record"');
     expect(html).toContain('class="cell _1"');
-    expect(html).toContain('class="fields col"');
+    expect(html).toContain("<div>");
     expect(html).toContain('class="cell _2_1"');
     expect(html).toContain('class="cell _2_2"');
     expect(html).toContain('class="cell _3"');
@@ -129,7 +169,7 @@ describe("UI & Workbench Integration Suite", () => {
     const html = framer.frame(model);
 
     expect(html).toContain('<div class="diagram">');
-    expect(html).toContain('<div class="column">');
+    expect(html).toContain('<div class="rank">');
     expect(html).toContain('id="a" class="node cluster_source"');
     expect(html).toContain('id="b" class="node cluster_source"');
     expect(html).toContain('id="c" class="node"');
@@ -196,5 +236,18 @@ describe("UI & Workbench Integration Suite", () => {
     expect(parsed.style).toBe(".node { @apply .glass; }");
     expect(parsed.action).toBe("console.log('hello');");
     expect(parsed.annotation).toBe("<div>Note</div>");
+  });
+
+  test("overlay last-wins: @apply .node after overlay .node is red, not base paper", () => {
+    const overlay = `
+.node { background-color: red; }
+.record { @apply .node; }
+`;
+    const sheet = themeSheet("basic.css", overlay);
+    const expanded = expandCss(sheet, sheet);
+    const record = expanded.match(/\.record\s*\{[^}]+\}/g)?.at(-1) ?? "";
+    expect(record).toContain("background-color: red");
+    expect(record).not.toContain("@apply");
+    expect(record).not.toContain("var(--paper-background)");
   });
 });

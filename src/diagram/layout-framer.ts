@@ -1,4 +1,4 @@
-// Model → columns → `#shabnam-main-html` (§3.3). Graphviz `pos` decides which column a
+// Model → ranks → `#shabnam-main-html` (§3.3). Graphviz `pos` decides which rank a
 // node is in, and nothing else — size and position are the Measurer's (§3.4).
 
 import type * as T from "../types.ts";
@@ -39,7 +39,7 @@ export class LayoutFramer {
 
   frame(model: T.DiagramModel): string {
     const columns = this.columns(model).map(
-      (column) => `<div class="column">${column.map((node) => shapeHtml(node)).join("")}</div>`,
+      (column) => `<div class="rank">${column.map((node) => shapeHtml(node)).join("")}</div>`,
     );
     return `<div class="diagram">${columns.join("")}</div>`;
   }

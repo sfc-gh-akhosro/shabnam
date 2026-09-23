@@ -52,7 +52,7 @@ test("the most common value becomes the class rule", async () => {
     a; b; c; d;
     e [fillcolor="#ddffdd"]
   }`);
-  expect(sample).toMatch(/\.node \{[^}]*background-color: #BBDEFB/);
+  expect(sample).toMatch(/\.node, \.record \{[^}]*background-color: #BBDEFB/);
 });
 
 test("selectors are DOT names, and as short as still identifies the place", async () => {
@@ -66,7 +66,7 @@ test("selectors are DOT names, and as short as still identifies the place", asyn
   const named = await css(`digraph {
     a; subgraph cluster_source { b [fillcolor=pink style=filled] }
   }`);
-  expect(named).toMatch(/\.cluster_source \{\n\s+&\.node \{\n\s+background-color: pink;/);
+  expect(named).toMatch(/\.cluster_source \{\n\s+&\.node, &\.record \{\n\s+background-color: pink;/);
 });
 
 test("an empty subgraph says nothing", async () => {
@@ -91,7 +91,7 @@ test("an anonymous subgraph collapses multiple #id rules into one class", async 
     }
     d; e; f; g;
   }`);
-  expect(sample).toMatch(/\.subgraph_1 \{\n\s+&\.node \{\n\s+background-color: #ddffdd;/);
+  expect(sample).toMatch(/\.subgraph_1 \{\n\s+&\.node, &\.record \{\n\s+background-color: #ddffdd;/);
   expect(sample.match(/#ddffdd/g)).toHaveLength(1);
 });
 
@@ -121,5 +121,5 @@ test("a node needs no rule for what it inherits from the wrapper", async () => {
     a -> b
   }`);
   expect(sample).toMatch(/\.diagram \{[^}]*font-family: Helvetica/);
-  expect(sample).not.toMatch(/\.node \{[^}]*font-family/);
+  expect(sample).not.toMatch(/\.node, \.record \{[^}]*font-family/);
 });

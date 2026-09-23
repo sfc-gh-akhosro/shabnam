@@ -5,7 +5,7 @@ import { createStore } from "solid-js/store";
 import type { TabId, TabText } from "../types.ts";
 import { Engine } from "./engine.ts";
 import { Editor, highlightCss, highlightDot, highlightHtml, highlightJs } from "./editor.tsx";
-import { BASE_THEME, BASE_THEME_NAME, download, Files, themeSheet } from "./files.ts";
+import { BASE_THEME, BASE_THEME_NAME, download, Files } from "./files.ts";
 import { type Command, commandOf } from "./keys.ts";
 import { TAB_IDS, Tabs } from "./tabs.tsx";
 
@@ -59,18 +59,17 @@ export function Workbench() {
   const [text, setText] = createStore<TabText>(starterText());
   const [active, setActive] = createSignal<TabId>("dot");
   const [selectedTheme, setSelectedTheme] = createSignal(BASE_THEME_NAME);
-  const [themes, setThemes] = createSignal<string[]>([]);
-  const engine = new Engine(text, (tab, value) => setText(tab, value));
+  const engine = new Engine(text, (tab, value) => setText(tab, value), selectedTheme);
   const files = new Files(text, (tab, value) => setText(tab, value), () => engine.discardDerived());
   let dotPicker!: HTMLInputElement;
   let themePicker!: HTMLInputElement;
 
-  const sheet = () => themeSheet(selectedTheme(), text.theme);
-  const redraw = () => engine.redraw(sheet());
+  const redraw = () => engine.redraw();
 
   const onSelectTheme = (name: string) => {
     setSelectedTheme(name);
     setText("theme", files.loadTheme(name));
+    redraw();
   };
 
   const loadDot = async (input: HTMLInputElement) => {
@@ -80,22 +79,15 @@ export function Workbench() {
   };
 
   const loadTheme = async (input: HTMLInputElement) => {
-    const file = input.files![0]!;
-    const css = await file.text();
-    const name = file.name === BASE_THEME_NAME ? "overlay.css" : file.name;
-    files.saveTheme(name, css);
-    setThemes(files.listThemes());
-    setSelectedTheme(name);
+    const css = await input.files![0]!.text();
     setText("theme", css);
     input.value = "";
   };
 
   const saveTheme = () => {
-    if (selectedTheme() === BASE_THEME_NAME) {
-      engine.inject("status", "theme/theme.css is locked — save as a new overlay");
-      return;
-    }
-    files.saveTheme(selectedTheme(), text.theme);
+    const name = prompt("Save theme as", selectedTheme() === BASE_THEME_NAME ? "my-theme.css" : selectedTheme());
+    if (name === null || name === "") return;
+    files.saveTheme(name, text.theme);
   };
 
   const commands: Record<Command, () => void> = {
@@ -114,7 +106,6 @@ export function Workbench() {
   };
 
   onMount(() => {
-    setThemes(files.listThemes());
     favicon();
     redraw();
     const onKey = (event: KeyboardEvent) => {
@@ -183,7 +174,7 @@ export function Workbench() {
             value={selectedTheme()}
             onChange={(e) => onSelectTheme(e.currentTarget.value)}
           >
-            <For each={themes()}>{(name) => <option value={name}>{name}</option>}</For>
+            <For each={files.listThemes()}>{(name) => <option value={name}>{name}</option>}</For>
           </select>
         </div>
         <Show when={active()} keyed>
@@ -193,7 +184,6 @@ export function Workbench() {
               value={text[tab]}
               onInput={(v) => setText(tab, v)}
               highlight={highlightOf(tab)}
-              readOnly={tab === "theme" && selectedTheme() === BASE_THEME_NAME}
             />
           )}
         </Show>

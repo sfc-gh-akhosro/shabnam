@@ -15,12 +15,14 @@ body {
 
 #shabnam-workbench {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-columns: 1fr 26rem;
   grid-template-areas:
     "toolbar toolbar"
     "canvas  editors";
   height: 100vh;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ---------------------------------------------------------------- toolbar */
@@ -118,11 +120,13 @@ body {
 
 #shabnam-editors {
   grid-area: editors;
-  display: grid;
-  grid-template-rows: auto auto 1fr;
+  display: flex;
+  flex-direction: column;
   border-left: 1px solid #d6dbe0;
   background: #ffffff;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 #shabnam-tab-strip {
@@ -195,13 +199,15 @@ body {
 .hl-operator { color: #f43f5e; font-weight: 700; }
 
 .editor-wrap {
+  flex: 1 1 0;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .editor-wrap .codejar-editor {
-  flex: 1;
+  height: 100%;
+  overflow-y: auto;
 }
 
 .theme-bar {

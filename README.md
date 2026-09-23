@@ -55,7 +55,7 @@ DOT → Vizer → VizJson → Diagram.bag → DiagramModel
         └→ Diagram.frame   → measure → clusters / shells / connectors
 ```
 
-`theme/theme.css` is locked and always injected first; other `theme/*.css` files are overlays. `style.css` is derived ⊎ user via CSSOM (`Css.plus`). If DOT has no style, derived is almost empty.
+The theme dropdown is the filenames in `theme/`. Pick loads that file. Paint is `theme.css`, then the selected file, then `style.css`. `style.css` is derived ⊎ user via CSSOM (`Css.plus`). If DOT has no style, derived is almost empty.
 
 Everything is client-side: no server, no build step at runtime, no telemetry. Graphviz runs in the page via [`@viz-js/viz`](https://github.com/mdaines/viz-js). There is no DOT parser in this codebase and there is not meant to be one — `renderJSON` is the only DOT consumer.
 
@@ -66,7 +66,7 @@ Everything is client-side: no server, no build step at runtime, no telemetry. Gr
 | File verbs | Load/save DOT, load/save theme, export standalone HTML, export PNG |
 | Shortcuts | `↵` redraw · `o`/`s` DOT · `⇧o`/`⇧s` theme · `p` PNG · `e` HTML · `1`–`5` tabs |
 | Drawing | SVG shells behind the HTML, connectors with arrowheads, per-node icons and captions |
-| Theming | `theme/theme.css` locked base; overlays in `theme/*.css` |
+| Theming | dropdown = `theme/*.css`; pick loads that file; cascade default then selected then style |
 
 ## Reading the code
 

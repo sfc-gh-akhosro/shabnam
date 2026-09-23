@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Stylist</title>
+  <style>
+    .rows { max-width: 30em; display: flex; gap: 0.5em;
+      flex-direction: column; justify-content: stretch;
+      background-color: lightgray;
+      padding: 1em 0.5em;
+    }
+    
+    header { display: flex; justify-content: space-between; }
+
+
+    .row { display: flex; height: 1.5em; gap: 0.5em; box-shadow: 0 0 6px;} 
+    .val {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+    .row > button {
+      width: 3em;
+    }
+    input {
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module">
+    import { createSignal } from "https://esm.sh/solid-js@1.8.18";
+    import { render } from "https://esm.sh/solid-js@1.8.18/web";
+    import html from "https://esm.sh/solid-js@1.8.18/html";
+
+    const SELECTORS = [":root", ".diagram", ".rank", ".node", ".record", ".shell", ".edge", ".arrow", ".cluster_", ".cell", ".label", ".icon", ".cluster_source", "#lake", "#runtime"];
+    const PROPERTIES = {"@apply":"text","color":"color","background":"color","background-color":"color","border-color":"color","fill":"color","stroke":"color","font-family":"text","font-size":"text","border-width":"text","stroke-width":"text","padding":"text","gap":"text"};
+
+    class Stylist {
+      constructor() {
+        this.rules = [
+          { selector: ".rank .node", property: "color", value: "#ff0000" },
+          { selector: ":root", property: "gap", value: "8px" },
+        ];
+      }
+      addRule(i) {
+        this.rules.splice(i + 1, 0, { selector: "", property: "", value: "" });
+      }
+      removeRule(i) {
+        if (this.rules[i] === undefined) throw new Error(`bad index: ${i}`);
+        this.rules[i] = null;
+      }
+      cleanup() {
+        const last = new Map();
+        for (const r of this.rules) if (r) last.set(r.selector + "\0" + r.property, r);
+        this.rules = this.rules.filter((r) => r && last.get(r.selector + "\0" + r.property) === r);
+      }
+      save() {
+        const a = Object.assign(document.createElement("a"), {
+          href: URL.createObjectURL(new Blob([JSON.stringify(this.rules, null, 2)], { type: "application/json" })),
+          download: "style-rules.json",
+        });
+        a.click();
+      }
+    }
+
+    const stylist = new Stylist();
+    const App = () => {
+      const [rules, setRules] = createSignal(stylist.rules);
+      const sync = () => setRules(stylist.rules.slice());
+      const add = (i) => { stylist.addRule(i); sync(); };
+      const del = (i) => { stylist.removeRule(i); sync(); };
+      const clean = () => { stylist.cleanup(); sync(); };
+      const update = (i, k, v) => {
+        stylist.rules[i] = { ...stylist.rules[i], [k]: v };
+        sync();
+      };
+
+      return html`
+        <div class="rows">
+          <header>
+            <b>Stylist</b>
+            <div>
+              <button onClick=${clean}>Cleanup</button>
+              <button onClick=${() => stylist.save()}>Save</button>
+            </div>
+          </header>
+          <datalist id="sl">${SELECTORS.map((s) => html`<option value=${s} />`)}</datalist>
+          <datalist id="pl">${Object.keys(PROPERTIES).map((p) => html`<option value=${p} />`)}</datalist>
+          ${() => rules().map((rule, i) => rule ? html`
+            <div class="row" id="${i}">
+              <button class="btn" style="color:red" onClick=${() => del(i)}>❌</button>
+              <input class="sel" list="sl" placeholder="selector" value=${rule.selector} onInput=${(e) => update(i, "selector", e.target.value)} />
+              <input class="prop" list="pl" placeholder="property" value=${rule.property} onInput=${(e) => update(i, "property", e.target.value)} />
+              <input class="val" type=${PROPERTIES[rule.property] || "text"} placeholder="value" value=${rule.value} onInput=${(e) => update(i, "value", e.target.value)} />
+              <button class="btn" style="color:green" onClick=${() => add(i)}>➕</button>
+            </div>
+          ` : null)}
+          ${() => !rules().some(Boolean) ? html`<div><button onClick=${() => add(-1)}>+ Add Rule</button></div>` : null}
+        </div>
+      `;
+    };
+
+    render(App, document.getElementById("app"));
+  </script>
+</body>
+</html>

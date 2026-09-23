@@ -254,13 +254,12 @@ than no test.
 
 **Cost to close:** a browser-run harness, when regression tests earn their place.
 
-### S6. Completer parked in `temp/completer/` until CodeJar is judged
+### S6. Completer parked in `temp/completer/`
 
-The homemade inlined CodeJar is gone; editors use `codejar` from npm. The
-current-line classifier (`complete.ts`, tests, `Slot` types) lives in
-untracked `temp/completer/`. A *loose* completer is wanted later — after we
-see CodeJar's own capabilities. Do not put `suggestions` back on `Workbench`
-without a conversation. Do not re-inline an editor.
+CodeJar is accepted. The current-line classifier (`complete.ts`, tests, `Slot`
+types) still lives in untracked `temp/completer/`. A *loose* completer may
+come later. Do not put `suggestions` back on `Workbench` without a
+conversation. Do not re-inline an editor.
 
 **Cost to close:** a thin popup on top of CodeJar, or leave it in `temp/`.
 S3 (static lists) and S4 (line vs caret) travel with that draft.

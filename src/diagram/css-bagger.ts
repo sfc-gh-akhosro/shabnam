@@ -97,7 +97,7 @@ export class CssBagger {
     const granted = new Map<string, Bag>();
 
     const graphRules = rules(".diagram", graphBag, 0);
-    const nodeRules = rules(".node", inheriting(nodeBag, graphBag), 0);
+    const nodeRules = rules(".node, .record", inheriting(nodeBag, graphBag), 0);
     const clusterRules = roots(model).flatMap((c) =>
       this.cluster(c, model, nodeBag, clusterBags, granted, 0),
     );
@@ -144,7 +144,7 @@ export class CssBagger {
     }
 
     const inner = [
-      ...rules("&.node", own, depth + 1),
+      ...rules("&.node, &.record", own, depth + 1),
       ...cluster.clusters.flatMap((name) =>
         this.cluster(clusterOf(model, name), model, merge(inherited, own), bags, granted, depth + 1),
       ),

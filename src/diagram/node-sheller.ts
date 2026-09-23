@@ -99,12 +99,12 @@ function renderCluster(
   const height = maxBottom - minTop + padTop + CLUSTER_PAD_BOTTOM;
 
   const labelMarkup = hasLabel
-    ? `<text class="cluster-label" x="${round(x + 12)}" y="${round(y + 17)}">${escape(cluster.label)}</text>`
+    ? `<text class="label" x="${round(x + 12)}" y="${round(y + 17)}">${escape(cluster.label)}</text>`
     : "";
 
   return (
-    `<g id="${cluster.name}" class="cluster ${cluster.name}" data-cluster="${cluster.name}">` +
-    `<rect class="cluster-box" x="${round(x)}" y="${round(y)}" width="${round(width)}" height="${round(height)}" rx="8" ry="8" />` +
+    `<g id="${cluster.name}" class="cluster_">` +
+    `<rect x="${round(x)}" y="${round(y)}" width="${round(width)}" height="${round(height)}" rx="8" ry="8" />` +
     labelMarkup +
     `</g>`
   );
@@ -143,10 +143,8 @@ function shell(box: T.Box, node: T.Node): string {
 
   // Subgraph classes only. A grouping class no CSS selects is noise on the
   // element (§3.1) — `#shabnam-node-shells > g` already reaches every one of these.
-  const classes = node.classes.join(" ");
-
   return (
-    `<g class="${classes}" data-node="${node.id}">` +
+    `<g data-node="${node.id}">` +
     shellMarkup +
     badgeMarkup +
     `</g>`
@@ -166,7 +164,7 @@ function badge(node: T.Node, rect: Record<string, number>): string {
   const href = `data:image/svg+xml,${encodeURIComponent(markup)}`;
   const x = round(rect.x! - ICON_SIZE / 2);
   const y = round(rect.y! - ICON_SIZE / 2);
-  return `<image class="badge" href="${href}" x="${x}" y="${y}" width="${ICON_SIZE}" height="${ICON_SIZE}" />`;
+  return `<image class="icon" href="${href}" x="${x}" y="${y}" width="${ICON_SIZE}" height="${ICON_SIZE}" />`;
 }
 
 // The HTML layer owns the node's text, so a caption strip is drawn only when the
@@ -178,7 +176,7 @@ function caption(box: T.Box, node: T.Node): string {
   const rect = shellRect(box);
   const x = round(rect.x! + rect.width! / 2);
   const y = round(rect.y! + rect.height! + CAPTION_DROP);
-  return `<text class="caption" x="${x}" y="${y}" text-anchor="middle">${escape(node.caption)}</text>`;
+  return `<text class="label" x="${x}" y="${y}" text-anchor="middle">${escape(node.caption)}</text>`;
 }
 
 function escape(text: string): string {

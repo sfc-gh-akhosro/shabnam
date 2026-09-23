@@ -103,10 +103,10 @@ Not source: `input/`, `output/`, `local/`, `temp/`, `etc/`, leftover `dot-parser
 
 - Do not add a **new major library** — a new runtime dependency that changes the design — without writing it into `app-architecture.md` §0 first. A library means we accept its whole tree. See Dependencies below.
 - Do not hand-roll a library that is already on §0 (or should be) to avoid that conversation. CodeJar is the tab window; we do not own the caret.
-- Do not write a code editor, a formatter-on-type, or autocomplete on `Workbench`. A loose completer may come back after the CodeJar experiment — park drafts in untracked `temp/`, not in `src/`.
-- Do not confuse `SetTab` (tabs) with `inject` (sinks). CodeJar paints tabs. It does not pretty-print. `Css` serializes the style tab (merge buffer).
-- Css algebra is `minus(style, lastDerived)` then `plus(style, derived)`. Do not concat CSS strings. Missing CSSOM throws.
-- Do not add a config tab, a second Graphviz grammar, or “while we’re here” refactors.
+- Do not write a code editor, a formatter-on-type, or autocomplete on `Workbench`. A loose completer may come later — park drafts in untracked `temp/`, not in `src/`.
+- Do not confuse `SetTab` (text tabs) with `inject` (sinks). CodeJar paints the three text tabs. It does not pretty-print. The styles tab is not text: it is a rows view onto the `Stylist`.
+- Style is data. A rule is `selector → property → value`, the `Stylist` feeds it to CSSOM, and `@apply` resolves at feed time. Do not build a CSS string to paint with, do not parse a sheet back, do not reintroduce `plus` / `minus`. `Stylist.serialize()` is for export only.
+- Do not add a config tab, a second Graphviz grammar, a second theme mechanism, or “while we’re here” refactors.
 - Do not write tests that chase float precision or other noise as if they were the product.
 - Do not implement every `shape=` in the first pass. `box` is enough until we say otherwise.
 - Do not change root files (especially `.gitignore`, `app-architecture.md`, `coding-rules.md`) or root folders without review and user discussion and approval.
@@ -124,7 +124,7 @@ Installing is not the same as choosing. §0 of `app-architecture.md` already cho
 
 **Ask first:**
 
-- A new **runtime** dependency that is not implied by §0 — a second UI library, a layout engine, a CSS framework, a state manager, a parser, an IDE kit. That is a design decision wearing an install command, and it goes into §0 first. Same conversation to **remove or rescope** (CodeJar is an experiment).
+- A new **runtime** dependency that is not implied by §0 — a second UI library, a layout engine, a CSS framework, a state manager, a parser, an IDE kit. That is a design decision wearing an install command, and it goes into §0 first. Same conversation to **remove or rescope** anything already on §0.
 
 When in doubt, the test is: would a reader of §0 be surprised to find this in `package.json`? If no, install it and move on. If yes, stop and say so.
 

@@ -4,6 +4,7 @@ import { Css } from "../css/css.ts";
 import { Diagram } from "../diagram/diagram.ts";
 import { Vizer } from "../diagram/vizer.ts";
 import type * as T from "../types.ts";
+import { appliedSheet, themeSheet } from "./files.ts";
 
 const asHtml = (element: Element, text: string) => {
   element.innerHTML = text;
@@ -44,6 +45,7 @@ export class Engine implements T.Workbench {
   constructor(
     private text: T.TabText,
     private setTab: T.SetTab,
+    private selectedTheme: () => string,
   ) {}
 
   discardDerived(): void {
@@ -54,7 +56,7 @@ export class Engine implements T.Workbench {
     return this.model;
   }
 
-  async redraw(themeSheet: string): Promise<void> {
+  async redraw(): Promise<void> {
     const started = performance.now();
     const json = await this.parse(this.text.dot);
     if (json === null) return;
@@ -66,8 +68,9 @@ export class Engine implements T.Workbench {
     this.lastDerived = derived;
     this.setTab("style", style);
 
-    this.inject("theme-css", this.css.expand(themeSheet, themeSheet));
-    this.inject("style-css", this.css.expand(style, themeSheet));
+    const sheet = themeSheet(this.selectedTheme(), this.text.theme);
+    this.inject("theme-css", "");
+    this.inject("style-css", appliedSheet(style, sheet, this.css));
     this.inject("main-html", this.diagram.frame(model));
     this.inject("annotation-html", this.text.annotation);
 
@@ -87,7 +90,7 @@ export class Engine implements T.Workbench {
   }
 
   measure(): T.Box[] {
-    const nodes = document.querySelectorAll<HTMLElement>("#shabnam-main-html .node");
+    const nodes = document.querySelectorAll<HTMLElement>("#shabnam-main-html .rank > [id]");
     return [...nodes].map((node) => ({
       id: node.id,
       left: node.offsetLeft,

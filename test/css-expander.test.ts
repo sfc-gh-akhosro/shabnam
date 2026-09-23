@@ -88,4 +88,37 @@ describe("CSS expander composition", () => {
     expect(output).toContain("font-weight: bold;");
     expect(output).not.toContain("@apply");
   });
+
+  test("later definition wins, so an overlay @apply .node sees overlay .node", () => {
+    const base = `
+.node {
+  @apply .paper;
+}
+.paper { background: white; }
+`;
+    const overlay = `
+.node { background-color: red; }
+.record { @apply .node; }
+`;
+    const output = expandCss(base + overlay, base + overlay);
+    expect(output).toMatch(/\.record \{\s*background-color: red;/);
+    expect(output).not.toContain("@apply");
+    expect(output).not.toContain("@apply .paper");
+  });
+
+  test("a commented-out mixin is not defined", () => {
+    expect(() =>
+      expandCss("/* .paper { background: white; } */\n.record { @apply .paper; }"),
+    ).toThrow("@apply .paper: not defined");
+  });
+
+  test(".record div does not overwrite the .record mixin", () => {
+    const output = expandCss(`
+.record { background: red; }
+.record div { display: flex; }
+.copy { @apply .record; }
+`);
+    expect(output).toMatch(/\.copy \{\s*background: red;/);
+    expect(output).not.toContain("@apply");
+  });
 });
