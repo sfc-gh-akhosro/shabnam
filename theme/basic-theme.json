@@ -1,0 +1,69 @@
+{
+  ":root, svg": {
+    "--theme-color": "white",
+    "--primary-color": "#0b3d91",
+    "--secondary-color": "#1565c0",
+    "--accent-color": "#ff8f00",
+    "--main-font": "sans-serif",
+    "--title-font": "sans-serif",
+    "--base-font-size": "13px",
+    "--vertical-gap": "2em",
+    "--horizontal-gap": "2em",
+    "--connector-style": "spline",
+    "--raised-shadow": "0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)",
+    "--flat-shadow": "0 0 2px",
+    "--vertical-pad": "0.75em",
+    "--horizontal-pad": "0.5em",
+    "--glass-background": "color-mix(in srgb, var(--secondary-color) 10%, transparent)",
+    "--paper-background": "color-mix(in srgb, var(--primary-color) 10%, var(--theme-color))"
+  },
+  ".paper": {
+    "background": "color-mix(in srgb, var(--primary-color) 10%, white)",
+    "box-shadow": "var(--flat-shadow)",
+    "border-radius": "3px"
+  },
+  ".glass": {
+    "background": "color-mix(in srgb, var(--secondary-color) 10%, transparent)",
+    "box-shadow": "var(--raised-shadow)",
+    "fill": "var(--glass-background)"
+  },
+  ".row": {
+    "display": "flex",
+    "flex-flow": "row",
+    "flex": "1 1 0%"
+  },
+  ".col": {
+    "display": "flex",
+    "flex-flow": "column"
+  },
+  ".raised": {
+    "box-shadow": "var(--raised-shadow)"
+  },
+  ".diagram": {
+    "@apply": ".row .glass",
+    "justify-content": "stretch",
+    "gap": "calc(2 * var(--horizontal-gap))",
+    "font-family": "var(--main-font)",
+    "font-size": "var(--base-font-size)"
+  },
+  ".rank": {
+    "@apply": ".col",
+    "justify-content": "space-evenly",
+    "gap": "var(--vertical-gap)"
+  },
+  ".cluster_": {
+    "@apply": ".glass"
+  },
+  ".node": {
+    "@apply": ".paper"
+  },
+  ".record": {
+    "@apply": ".paper .row"
+  },
+  ".cell._1": {
+    "@apply": ".glass"
+  },
+  ".record > div": {
+    "@apply": ".col"
+  }
+}

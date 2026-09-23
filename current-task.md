@@ -202,78 +202,200 @@ bun does not typecheck, so the tests are honest but blind.
 `build/` and `theme/` and so is unaffected by the break. The tree does not compile
 again until session 7 lands.
 
-## Session 3 — decompose basic.css, once
+## Session 3 — decompose basic.css, once — **done**
 
 **Goal.** `theme/basic-theme.json` exists and is committed.
 
-Write `build/decompose-theme.ts`. It reads `theme/basic.css` and writes the nested
-JSON. Two sub-steps, in this order, because they have to be:
+**Did.** `build/decompose-theme.ts`, run once by hand, not wired into
+`bun run build`. `theme/basic-theme.json` is tracked: 13 selectors, `:root, svg`
+one key, the five mixins kept, `@apply` first property in each rule that has one.
 
-1. Lift `@apply` declarations out with a small text pass, recording each as an
-   `@apply` property. CSSOM would silently drop them, so this cannot be skipped.
-2. Hand the remainder to CSSOM and read `selectorText` plus each declaration.
+**Two things the plan did not foresee.**
 
-Keep `:root, svg` as one key — the SVG layer needs those tokens (§3.2). Keep the
-mixin rules (`.paper`, `.glass`, `.row`, `.col`, `.raised`): they are map keys
-nothing puts on an element, and `@apply` resolves against them at feed time.
+1. **CSSOM only exists in a browser** — `bun -e` has no `CSSStyleSheet`, the same
+   limit debt S2 records. So the script serves a one-page harness on `:3100`; the
+   page reads its own `<style>` back and `POST`s the result, and the script writes
+   the JSON and stops. One hand-run, still no CSS parser in the repo.
+2. **Do not enumerate `rule.style`.** Enumeration yields longhands, and a
+   shorthand holding `var()` or `color-mix()` leaves every longhand empty — the
+   first run produced `"background-color": ""` for `.paper` and `"row-gap": ""`
+   for `.diagram`, silently losing the values. The script reports
+   `rule.style.cssText` instead and splits that: browser-normalized output, one
+   `;` per declaration, property before the first `:`.
 
-Run it once by hand. It is **not** wired into `bun run build` — the runtime never
-parses CSS. `theme/basic.css` stays in the repo as the readable source of the JSON.
+**The `@apply` lift** is a text pass that rewrites `@apply .row .glass;` to a
+custom property `--shabnam-apply`, which CSSOM keeps verbatim and in place; the
+name is turned back into `@apply` when the JSON is written. That was simpler than
+tracking rule boundaries in text, and it preserves order for free.
 
-**Done when.** The JSON round-trips to the same declarations the browser computes
-from `basic.css` today, and `git status` shows it tracked.
+**Normalization to expect.** Values are CSSOM's serialization, not the source
+text: `flex-direction: row; flex-wrap: nowrap` came back as `flex-flow: row`, and
+`flex: 1` as `flex: 1 1 0%`. Equivalent, not identical — worth knowing when
+session 5 compares pictures side by side.
 
-## Session 4 — the Stylist
+**Handoff.** `bun test` 51 pass / 2 skip, unchanged. The 18 `tsc` errors from
+session 2 still stand, as planned — this session touched only `build/` and
+`theme/`. Next is session 4, the Stylist, which consumes this JSON.
+
+## Session 4 — the Stylist — **done**
 
 **Goal.** `src/stylist/` exists; `src/css/` is gone.
 
-`stylist.ts` is the class: the three layers, the merge, and the seven methods of
-§10. `sheet.ts` is the CSSOM side — attach to `#shabnam-style-css`, `insertRule`
-per selector, `setProperty` / `removeProperty` per property, `@apply` resolved in
-place so the selector's own later properties win, plus `serialize()` for export.
-An undefined `@apply` name throws. A cycle throws.
+**Did.** `src/stylist/stylist.ts` — the class: three layers, `merged()`, and the
+seven interface methods. `src/stylist/sheet.ts` — `resolve` / `serialize` /
+`applyBound` as pure functions, plus a `Sheet` class holding the CSSOM side.
+`src/css/` deleted, both files.
 
-Delete `src/css/css.ts` and `src/css/expander.ts`. The regex expander does not
-move — the map-based resolution replaces it outright.
+**Three calls the plan left open.**
 
-**Watch.** The sheet is live and on-document, which is a deliberate change from
-the old off-document `new CSSStyleSheet()`. A `<style>` element has no `.sheet`
-until it is in the document, so attach on mount, not in the constructor.
+1. **`feed()` is public on the class, not on the interface.** §8 lists `feed`
+   among the Stylist's methods and §5 has the conductor calling it, but §10 caps
+   the interface at seven and `feed` is not one of them. Public method, documented
+   as the conductor's; the interface is untouched.
+2. **No `attach()`.** An eighth verb for mount was avoidable: `Sheet` looks
+   `#shabnam-style-css` up on first use, which is necessarily after mount, and
+   throws if `.sheet` is null. The gotcha the memory file records is handled in
+   one place instead of a method on the surface.
+3. **`resolve` / `serialize` are pure and exported, and `Sheet` is thin.** That is
+   what makes the interesting half testable headless — see below.
 
-**Done when.** A hand-built `StyleRules` paints a page, `@apply` resolves, and a
-`removeRule` un-paints without disturbing its neighbours.
+**The short path is real, with one correctness branch.** `addRule` /`removeRule`
+do one `setProperty` / `removeProperty`. They fall back to a full `feed()` when
+the property is `@apply`, or when the *selector being edited is named by some
+`@apply`* (`applyBound`) — editing `.paper` has to reach every consumer that
+applied it. `removeRule` also re-sets the property from the merged map when a
+theme or derived layer still holds it, so removing a shadow reverts rather than
+un-paints.
 
-## Session 5 — CssBagger returns a map
+**`theme/basic-theme.json` is imported directly** (`assets.d.ts` gained a `*.json`
+declaration; bun's loader gives the default export). `resolveJsonModule` in
+`tsconfig.json` would have done the same, but that is a root file. The shape is
+asserted at the single import, not in the declaration.
+
+**`save()` has its own three-line `download`.** `workbench/files.ts` has a twin,
+and importing it would drag the PNG plumbing into the stylist's module graph for
+one helper. Collapse them in session 6, when `files.ts` is being cut anyway.
+
+**Tested in a real browser, because there is no other way.** 21 checks in a
+throwaway harness driven by headless Chrome (`--dump-dom`), since the browser
+automation tool was unavailable: theme paints, `@apply` resolved, derived over
+theme, a user row shadowing derived with no re-feed, a user-only property
+un-painting on removal, a shadow reverting to derived, neighbours and rule count
+untouched throughout, a mixin edit reaching its consumers, `rows()` ordered and
+origin-tagged, `cleanup()` dropping an emptied selector. All 21 OK. Harness
+deleted; the headless-Chrome trick is the reusable part.
+
+**`test/stylist.test.ts`** covers the headless half: `@apply` in place, several
+names, nesting, undefined throws, cycle throws, `applyBound`, the shipped theme
+resolving whole, the file round trip, and `serialize`.
+
+**Borrowed from session 8, to keep `bun test` green.** Deleting `src/css/` broke
+two test files. `test/css-expander.test.ts` was deleted outright — its subject is
+gone and `test/stylist.test.ts` covers the behaviour. `test/ui-integration.test.ts`
+lost its `Css` / `expandCss` / `appliedSheet` imports and the five tests that used
+them, two of which were the skipped CSSOM placeholders. **50 pass / 0 skip / 0
+fail** — down from 51/2 because 12 tests left and 9 arrived.
+
+**Still broken, as planned.** 18 `tsc` errors, same buckets (the `css.ts` error is
+now engine's missing-module error). `bun run build` now fails too, on the same
+import — it had been passing, because the file it wanted still existed. Sessions 5,
+6, 7, 8 as written; nothing new is owed.
+
+**Handoff.** The Stylist works and nothing calls it. Session 5 next: `CssBagger`
+returns a map. Session 6 wires the conductor to `setDerived` + `feed` and is what
+makes the app run again.
+
+## Session 5 — CssBagger returns a map — **done**
 
 **Goal.** `Diagram.derived(model): StyleRules`.
 
-Drop `rules()`, `pad()`, and every string join in `css-bagger.ts`. The cluster
-recursion **composes** its selector (`.cluster_x.node, .cluster_x.record`,
-nested as `.cluster_x.inner.node`) instead of emitting `&`. `preamble()` becomes
-a `:root, svg` entry — note it is `:root` alone today, which is a latent bug for
-SVG tokens that this session fixes on the way past.
+**Did.** `css-bagger.ts` returns `StyleRules`. `rules()` and `pad()` are gone,
+replaced by `put()` (translate a bag into one map entry, create nothing for an
+empty bag) and `own()` (get-or-create, because node overrides and position
+margins both speak about `#id` and the second must not clobber the first). The
+cluster recursion composes a flat path — `.cluster_outer.cluster_inner.node,
+.cluster_outer.cluster_inner.record` — so `&` is gone and the empty wrapper rule
+the old nesting needed is gone with it. `preamble()` returns a bag, keyed
+`:root, svg`. `diagram.ts` signature updated.
 
-**Watch.** This is where a visual regression will hide. Determinism still matters:
-identical input, identical map, same insertion order.
+**Two incidental cleanups.** The margin loop's duplicated if/else became
+`slotsBefore()`, and `property` / `gapVar` are computed once instead of per node.
 
-**Done when.** The starter diagram and `research-lab/example-1.dot` produce the
-same picture as before, checked side by side in a browser.
+**Verified declaration-identical, not eyeballed.** The app does not compile until
+session 6, so a side-by-side in the browser was not available. Instead a
+throwaway script imported the old bagger from `git show HEAD:` alongside the new
+one, flattened the old text (`&` composed against its parent), and diffed
+selector | property | value across `example-1.dot`, a nested-cluster case, a bare
+digraph, and an `rankdir=LR` fan. **All four identical, and in the same order** —
+the only difference is the `:root` → `:root, svg` key, which is the latent-bug fix
+this session was told to make. Script deleted.
 
-## Session 6 — strip the old plumbing
+**Borrowed from session 8 again, to keep `bun test` green.** `test/base-css.test.ts`
+is rewritten against the map (it was all substring matching), plus two new tests:
+tokens land on `:root, svg` and not `:root`, and a nested subgraph composes flat.
+`test/ui-integration.test.ts` lost its two text assertions on the derived output
+for map equivalents. **52 pass / 0 fail.**
+
+**Still broken, as planned.** 18 `tsc` errors. `diagram.ts` left the list;
+`engine.ts` gained one in its place (`StyleRules` not assignable to `string` at
+the `lastDerived` assignment). Sessions 6, 7, 8 as written.
+
+**Handoff.** Session 6 next, and it is the one that makes the app run again:
+redraw becomes bag → `setDerived` → `feed` → frame → measure → SVG, and
+`inject("style-css", …)` must die before it wipes the Stylist's rules.
+
+## Session 6 — strip the old plumbing — **done**
 
 **Goal.** Nothing left that moves CSS as text.
 
-Delete `Css` use, `lastDerived`, `discardDerived`, `themeSheet`, `appliedSheet`,
-`BASE_THEME`, `BASE_THEME_NAME`, `src/workbench/theme-catalog.ts`,
-`build/theme-catalog.ts`, and `listThemes` / `loadTheme` / `saveTheme`. Redraw
-becomes bag → `setDerived` → `feed` → frame → measure → SVG. `exportPng` and
-`exportHtml` take `stylist.serialize()` where they read `textContent`; the export
-seed carries the styles JSON.
+**Did.** All of the named deletions, plus the two sinks: `theme-css` and
+`style-css` are both out of `SINK_WRITE`, so `inject` can no longer reach the
+Stylist's sheet, and `#shabnam-theme-css` is gone from the canvas skeleton (§1).
+Redraw is bag → `setDerived` → `feed` → frame → measure → SVG. `exportPng` takes
+`stylist.serialize()`; `exportHtml` seeds `{ dot, action, annotation, styles }`.
+**The tree compiles again — 0 `tsc` errors** — and `bun test` is 51 pass / 0 fail.
 
-**Watch.** `inject("style-css", …)` must go. It writes `textContent`, which would
-wipe every rule the Stylist inserted.
+**Four calls the plan left open.**
 
-**Done when.** No file imports `css/`, and export still paints standalone.
+1. **`loadDot` does not drop the derived layer, and `discardDerived` simply died.**
+   The redraw that follows a load replaces the layer wholesale, so a discard verb
+   would be a second way to say the same thing. §4's "dead `#id` rules cannot
+   stick because nothing accumulated them" is now true by construction, not by a
+   call.
+2. **The export seed's user rows come from `rows()`, not a new getter.** `save()`
+   downloads and the interface is capped at seven, so `files.ts` has a
+   `userFile(rows)` that keeps `origin === "user"`. Restoring is the same shape in
+   reverse: the workbench replays the seed through `addRule` in `onMount` —
+   `Sheet` needs the element in the document, so it cannot be done at construction.
+3. **Session 7's tab work was borrowed, because compiling required it.**
+   `tabs.tsx` is four labels, `keys.ts` lost `load-theme` / `save-theme` /
+   `tab-5`, and `⇧O` / `⇧S` are gone — they were never in §4's table. The styles
+   tab renders **nothing** until `rows.tsx` lands: `textTab()` returns `undefined`
+   for it and the `Show` collapses. `highlightCss` stays in `highlight.ts`, still
+   exported and still tested; session 7 removes it.
+   A **Save Styles** button now carries `stylist.save()`, so the verb has a caller.
+4. **`theme/theme.css` and `theme/blueprint.css` deleted.** With the catalog gone
+   nothing read them, and §8 says `theme/` holds `basic.css` and its decomposed
+   JSON. `basic.css` stays as the source `build/decompose-theme.ts` reads.
+
+**Verified in a real browser, the session-4 way** (headless Chrome `--dump-dom`,
+the browser tool being unavailable again). Live page: 13 rules on the sheet — the
+theme, with the derived tokens merged into its `:root, svg` key, which is why the
+count is 13 and not 14 — `textContent` empty, no `@apply` left in any `cssText`,
+`#shabnam-theme-css` absent, 3 nodes, 3 connectors, shells and the cluster rect
+drawn, the annotation placed, four tab labels. Then Export HTML was driven through
+its real `Cmd+E` path, the blob captured, and the file reloaded standalone: same
+13 rules, same picture, seed keys exactly `dot` / `action` / `annotation` /
+`styles`. Harnesses deleted.
+
+**One pre-existing caveat, found not caused.** An exported file does **not** run
+from `file://` — the page imports the app as a blob URL module, which an opaque
+origin blocks. Over any HTTP server it paints. Untouched by this session; worth a
+debt entry if we care.
+
+**Handoff.** Session 7 next: `src/stylist/rows.tsx`, the tab that is currently
+blank, and the `README.md` sync. Session 8 is only whatever session 7 breaks —
+the seed literal it was holding is already fixed.
 
 ## Session 7 — four tabs and the rows UI
 
@@ -283,8 +405,12 @@ wipe every rule the Stylist inserted.
 `research-lab/stylist/index.html` — native `input list=` for selector and
 property so a compound selector like `.rank .node` can be typed, a value input
 whose `type` follows the property, `×` to remove, `+` to insert. Rows are grouped
-by origin. `tabs.tsx` drops to four; `keys.ts` loses `load-theme`, `save-theme`,
-`tab-5`; the theme `<select>`, the theme file picker, and `highlightCss` come out.
+by origin. It goes where the styles tab currently renders nothing.
+
+**Already done in session 6:** `tabs.tsx` is four, `keys.ts` is trimmed, and the
+theme `<select>` / file picker are gone. What is left here is `rows.tsx` itself,
+removing `highlightCss` from `highlight.ts` and `editor.tsx`, and deciding whether
+Save Styles keeps its toolbar button or moves into the tab.
 
 Sync `README.md` in this session — by now the code has actually moved.
 
@@ -296,10 +422,12 @@ user rows only.
 
 **Goal.** Tests assert the map, not the text.
 
-`test/base-css.test.ts` and `test/css-expander.test.ts` currently assert CSS
-substrings, so they are rewritten rather than patched: map entries for the bagger,
-map-based `@apply` for the expansion. Check `test/ui-integration.test.ts` for the
-`Css` and `appliedSheet` imports it will have lost.
+`test/base-css.test.ts` and `test/css-expander.test.ts` were the two that asserted
+CSS substrings, and both are already dealt with: the expander test was deleted in
+session 4, the bagger test rewritten against the map in session 5.
+`test/ui-integration.test.ts` has likewise already lost its `Css` / `appliedSheet`
+imports and its two derived-text assertions. What is left here is whatever the tab
+work in session 7 breaks, plus the seed literal that still carries `theme`.
 
 Debt S2 in `docs/technical-debts.md` says `Css.plus` / `minus` cannot be tested
 under `bun` for want of CSSOM. The same limit applies to the feed, so keep the

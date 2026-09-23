@@ -11,29 +11,23 @@ export type Command =
   | "redraw"
   | "load-dot"
   | "save-dot"
-  | "load-theme"
-  | "save-theme"
   | "save-png"
   | "export-html"
   | "tab-1"
   | "tab-2"
   | "tab-3"
-  | "tab-4"
-  | "tab-5";
+  | "tab-4";
 
 const KEY_COMMAND = new Map<string, Command>([
   ["enter", "redraw"],
   ["o", "load-dot"],
   ["s", "save-dot"],
-  ["⇧o", "load-theme"],
-  ["⇧s", "save-theme"],
   ["p", "save-png"],
   ["e", "export-html"],
   ["1", "tab-1"],
   ["2", "tab-2"],
   ["3", "tab-3"],
   ["4", "tab-4"],
-  ["5", "tab-5"],
 ]);
 
 /** The verb this event asks for, or undefined if it asks for nothing. */

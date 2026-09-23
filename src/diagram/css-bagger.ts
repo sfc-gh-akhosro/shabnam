@@ -1,11 +1,16 @@
-// Model → Base CSS (§3.2). Graphviz has already resolved `node [...]` /
+// Model → derived StyleRules (§3.2). Graphviz has already resolved `node [...]` /
 // `edge [...]` defaults onto every object, so we recover them statistically:
 // the most common value wins, ties break on the lexicographically smallest, and
-// identical input therefore produces byte-identical output.
+// identical input therefore produces an identical map in an identical insertion
+// order.
 //
-// When a DOT diagram is bare-bone (no presentation overrides), derived CSS
-// produces ONLY the `:root` variables block, leaving all presentation and
-// structure to theme.css.
+// When a DOT diagram is bare-bone (no presentation overrides), the derived layer
+// holds ONLY the `:root, svg` token block, leaving all presentation and
+// structure to the theme.
+//
+// Nothing here builds CSS text. Selectors are composed flat — a cluster member
+// is `.cluster_x.node, .cluster_x.record` — because CSSOM has no nesting and the
+// Stylist keeps one rule per selector.
 
 import type * as T from "../types.ts";
 import { AXES, bucket, calculateStep } from "./layout-framer.ts";
@@ -39,8 +44,12 @@ const ATTR_UNIT = new Map([
 // The keys whose CSS property inherits down the DOM.
 const ATTR_INHERITS = new Set(["fontname", "fontsize"]);
 
-// The `:root` variables extracted from the DOT model on each Redraw.
-function preamble(model: T.DiagramModel, nodeBag: Bag, edgeBag: Bag): string {
+// The token block extracted from the DOT model on each Redraw. `svg` joins
+// `:root` because the SVG layer is a sibling document fragment and custom
+// properties set on `:root` alone do not reach it.
+const TOKENS = ":root, svg";
+
+function preamble(model: T.DiagramModel, nodeBag: Bag, edgeBag: Bag): Bag {
   const primaryColor =
     model.attrs.get("bgcolor") ??
     model.attrs.get("fillcolor") ??
@@ -68,100 +77,84 @@ function preamble(model: T.DiagramModel, nodeBag: Bag, edgeBag: Bag): string {
     model.clusters.find((c) => c.attrs.has("fontname"))?.attrs.get("fontname") ??
     mainFont;
 
-  return `:root {
-  --primary-color: ${primaryColor};
-  --secondary-color: ${secondaryColor};
-  --accent-color: ${accentColor};
-
-  --main-font: ${mainFont};
-  --title-font: ${titleFont};
-  --base-font-size: 14px;
-
-  --horizontal-gap: 2em;
-  --vertical-gap: 2em;
-  --connector-style: ${model.attrs.get("splines") ?? "spline"};
-
-  --raised-shadow: 0 6px 12px lightgrey;
-  --flat-shadow: 0 0 2px lightgrey;
-}`;
+  return new Map([
+    ["--primary-color", primaryColor],
+    ["--secondary-color", secondaryColor],
+    ["--accent-color", accentColor],
+    ["--main-font", mainFont],
+    ["--title-font", titleFont],
+    ["--base-font-size", "14px"],
+    ["--horizontal-gap", "2em"],
+    ["--vertical-gap", "2em"],
+    ["--connector-style", model.attrs.get("splines") ?? "spline"],
+    ["--raised-shadow", "0 6px 12px lightgrey"],
+    ["--flat-shadow", "0 0 2px lightgrey"],
+  ]);
 }
 
 type Bag = Map<string, string>;
 
 export class CssBagger {
-  bag(model: T.DiagramModel): string {
+  bag(model: T.DiagramModel): T.StyleRules {
+    const out: T.StyleRules = new Map();
     const graphBag = pick(model.attrs);
     const nodeBag = mode(model.nodes.map((node) => node.attrs));
     const edgeBag = mode(model.edges.map((edge) => edge.attrs));
     const clusterBags = new Map<string, Bag>();
     const granted = new Map<string, Bag>();
 
-    const graphRules = rules(".diagram", graphBag, 0);
-    const nodeRules = rules(".node, .record", inheriting(nodeBag, graphBag), 0);
-    const clusterRules = roots(model).flatMap((c) =>
-      this.cluster(c, model, nodeBag, clusterBags, granted, 0),
-    );
-    const nodeOverrideRules = this.nodeOverrides(model, nodeBag, clusterBags);
-    const positionRules = this.nodePositionMargins(model);
-    const edgeRules = rules(".edge", edgeBag, 0, [], ATTR_SVG);
-    const edgeOverrideRules = model.edges.flatMap((edge) =>
-      rules(`#${edge.id}`, differing(edge.attrs, edgeBag), 0, [], ATTR_SVG),
-    );
+    own(out, TOKENS, preamble(model, nodeBag, edgeBag));
 
-    const explicitRules = [
-      ...graphRules,
-      ...nodeRules,
-      ...clusterRules,
-      ...nodeOverrideRules,
-      ...positionRules,
-      ...edgeRules,
-      ...edgeOverrideRules,
-    ];
-
-    if (explicitRules.length === 0) {
-      return preamble(model, nodeBag, edgeBag);
+    put(out, ".diagram", graphBag);
+    put(out, ".node, .record", inheriting(nodeBag, graphBag));
+    for (const cluster of roots(model)) {
+      this.cluster(out, cluster, model, nodeBag, clusterBags, granted, "");
+    }
+    this.nodeOverrides(out, model, nodeBag, clusterBags);
+    this.nodePositionMargins(out, model);
+    put(out, ".edge", edgeBag, ATTR_SVG);
+    for (const edge of model.edges) {
+      put(out, `#${edge.id}`, differing(edge.attrs, edgeBag), ATTR_SVG);
     }
 
-    return [preamble(model, nodeBag, edgeBag), "", ...explicitRules].join("\n");
+    return out;
   }
 
   private cluster(
+    out: T.StyleRules,
     cluster: T.Cluster,
     model: T.DiagramModel,
     inherited: Bag,
     bags: Map<string, Bag>,
     granted: Map<string, Bag>,
-    depth: number,
-  ): string[] {
+    prefix: string,
+  ): void {
     const members = cluster.nodes.map((id) => nodeOf(model, id));
     const held = merge(inherited, shared(members.map((node) => granted.get(node.id) ?? new Map())));
     const own = unanimous(members.map((node) => node.attrs), held);
     bags.set(cluster.name, own);
     for (const node of members) granted.set(node.id, merge(granted.get(node.id) ?? new Map(), own));
 
-    if (own.size === 0 && cluster.clusters.length === 0) {
-      return [];
+    const path = `${prefix}.${cluster.name}`;
+    put(out, `${path}.node, ${path}.record`, own);
+    for (const name of cluster.clusters) {
+      this.cluster(out, clusterOf(model, name), model, merge(inherited, own), bags, granted, path);
     }
-
-    const inner = [
-      ...rules("&.node, &.record", own, depth + 1),
-      ...cluster.clusters.flatMap((name) =>
-        this.cluster(clusterOf(model, name), model, merge(inherited, own), bags, granted, depth + 1),
-      ),
-    ];
-    if (inner.length === 0) return [];
-    const selector = depth === 0 ? `.${cluster.name}` : `&.${cluster.name}`;
-    return rules(selector, new Map(), depth, inner);
   }
 
-  private nodeOverrides(model: T.DiagramModel, nodeBag: Bag, bags: Map<string, Bag>): string[] {
-    return model.nodes.flatMap((node) => {
+  private nodeOverrides(
+    out: T.StyleRules,
+    model: T.DiagramModel,
+    nodeBag: Bag,
+    bags: Map<string, Bag>,
+  ): void {
+    for (const node of model.nodes) {
       const inherited = node.classes.reduce((bag, cls) => merge(bag, bags.get(cls)!), nodeBag);
-      return rules(`#${node.id}`, differing(node.attrs, inherited), 0);
-    });
+      put(out, `#${node.id}`, differing(node.attrs, inherited));
+    }
   }
 
-  private nodePositionMargins(model: T.DiagramModel): string[] {
+  private nodePositionMargins(out: T.StyleRules, model: T.DiagramModel): void {
     const axes = AXES.get(model.rankdir) ?? AXES.get("TB")!;
     const columns = bucket(model.nodes, axes);
     for (const column of columns) {
@@ -170,39 +163,42 @@ export class CssBagger {
 
     const step = calculateStep(model.nodes, axes);
     const isHorizontal = model.rankdir === "LR" || model.rankdir === "RL";
+    const property = isHorizontal ? "margin-top" : "margin-left";
+    const gapVar = isHorizontal ? "var(--vertical-gap)" : "var(--horizontal-gap)";
 
     const topAnchor = isHorizontal
       ? Math.max(...model.nodes.map((n) => n.y))
       : Math.min(...model.nodes.map((n) => n.x));
 
-    const marginRules: string[] = [];
-
     for (const column of columns) {
       for (let i = 0; i < column.length; i++) {
         const node = column[i]!;
-        if (i === 0) {
-          const drop = isHorizontal ? topAnchor - node.y : node.x - topAnchor;
-          const slots = Math.round(drop / step);
-          if (slots > 0) {
-            const prop = isHorizontal ? "margin-top" : "margin-left";
-            const gapVar = isHorizontal ? "var(--vertical-gap)" : "var(--horizontal-gap)";
-            marginRules.push(`#${node.id} {\n  ${prop}: calc(${slots} * (${gapVar} + 2.5em));\n}`);
-          }
-        } else {
-          const prev = column[i - 1]!;
-          const gap = isHorizontal ? prev.y - node.y : node.x - prev.x;
-          const extraSlots = Math.max(0, Math.round(gap / step) - 1);
-          if (extraSlots > 0) {
-            const prop = isHorizontal ? "margin-top" : "margin-left";
-            const gapVar = isHorizontal ? "var(--vertical-gap)" : "var(--horizontal-gap)";
-            marginRules.push(`#${node.id} {\n  ${prop}: calc(${extraSlots} * (${gapVar} + 2.5em));\n}`);
-          }
+        const slots = slotsBefore(column, i, topAnchor, step, isHorizontal);
+        if (slots > 0) {
+          own(out, `#${node.id}`).set(property, `calc(${slots} * (${gapVar} + 2.5em))`);
         }
       }
     }
-
-    return marginRules;
   }
+}
+
+// How many empty rank slots sit between a node and whatever precedes it — the
+// top anchor for the first of a column, its neighbour for the rest.
+function slotsBefore(
+  column: T.Node[],
+  i: number,
+  topAnchor: number,
+  step: number,
+  isHorizontal: boolean,
+): number {
+  const node = column[i]!;
+  if (i === 0) {
+    const drop = isHorizontal ? topAnchor - node.y : node.x - topAnchor;
+    return Math.max(0, Math.round(drop / step));
+  }
+  const prev = column[i - 1]!;
+  const gap = isHorizontal ? prev.y - node.y : node.x - prev.x;
+  return Math.max(0, Math.round(gap / step) - 1);
 }
 
 // -------------------------------------------------------------------- bagging
@@ -276,28 +272,30 @@ function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-// ------------------------------------------------------------------ rendering
+// ----------------------------------------------------------------- collecting
 
-function rules(
+// Translates a bag of Graphviz attributes into one map entry. A selector that
+// would say nothing is never created, so an empty subgraph leaves no trace.
+function put(
+  out: T.StyleRules,
   selector: string,
   bag: Bag,
-  depth: number,
-  inner: string[] = [],
   registry: T.AttrCss = ATTR_CSS,
-): string[] {
-  const declarations = [...bag]
-    .filter(([key]) => registry.has(key))
-    .map(
-      ([key, value]) =>
-        `${pad(depth + 1)}${registry.get(key)}: ${value}${ATTR_UNIT.get(key) ?? ""};`,
-    );
-  if (declarations.length === 0 && inner.length === 0) return [];
+): void {
+  const declarations = [...bag].filter(([key]) => registry.has(key));
+  if (declarations.length === 0) return;
 
-  return [`${pad(depth)}${selector} {`, ...declarations, ...inner, `${pad(depth)}}`];
+  const properties = own(out, selector);
+  for (const [key, value] of declarations) {
+    properties.set(registry.get(key)!, `${value}${ATTR_UNIT.get(key) ?? ""}`);
+  }
 }
 
-function pad(depth: number): string {
-  return "  ".repeat(depth);
+// Get-or-create, because two passes can both have something to say about `#id`.
+function own(out: T.StyleRules, selector: string, seed?: Bag): Bag {
+  const properties = out.get(selector) ?? seed ?? new Map<string, string>();
+  out.set(selector, properties);
+  return properties;
 }
 
 function nodeOf(model: T.DiagramModel, id: string): T.Node {

@@ -1,11 +1,14 @@
-// SolidJS shell: canvas skeleton plus the five editors.
+// SolidJS shell: canvas skeleton, the radio strip, and one CodeJar for the
+// three text tabs. The styles tab is not text — it is a rows view onto the
+// `Stylist`, and `rows.tsx` fills it in the next session.
 
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
-import type { TabId, TabText } from "../types.ts";
+import { Stylist } from "../stylist/stylist.ts";
+import type { StyleFile, TabId, TabText } from "../types.ts";
 import { Engine } from "./engine.ts";
-import { Editor, highlightCss, highlightDot, highlightHtml, highlightJs } from "./editor.tsx";
-import { BASE_THEME, BASE_THEME_NAME, download, Files } from "./files.ts";
+import { Editor, highlightDot, highlightHtml, highlightJs } from "./editor.tsx";
+import { download, Files } from "./files.ts";
 import { type Command, commandOf } from "./keys.ts";
 import { TAB_IDS, Tabs } from "./tabs.tsx";
 
@@ -35,42 +38,41 @@ const STARTER_HTML = `<div data-anchor="core" data-offset="0,52">
 `;
 
 const STARTER_TEXT: TabText = {
-  theme: BASE_THEME,
   dot: STARTER_DOT,
-  style: "",
   action: "",
   annotation: STARTER_HTML,
 };
 
-function starterText(): TabText {
+const HIGHLIGHT: Record<keyof TabText, (code: string) => string> = {
+  dot: highlightDot,
+  annotation: highlightHtml,
+  action: highlightJs,
+};
+
+function seeded(): { text: TabText; styles: StyleFile } {
   const seed = document.getElementById("shabnam-seed");
-  if (seed === null) return STARTER_TEXT;
+  if (seed === null) return { text: STARTER_TEXT, styles: {} };
   const parsed = JSON.parse(seed.textContent!);
   return {
-    theme: parsed.theme ?? BASE_THEME,
-    dot: parsed.dot ?? STARTER_DOT,
-    style: parsed.style ?? parsed.effects ?? "",
-    action: parsed.action ?? "",
-    annotation: parsed.annotation ?? STARTER_HTML,
+    text: {
+      dot: parsed.dot ?? STARTER_DOT,
+      action: parsed.action ?? "",
+      annotation: parsed.annotation ?? STARTER_HTML,
+    },
+    styles: parsed.styles ?? {},
   };
 }
 
 export function Workbench() {
-  const [text, setText] = createStore<TabText>(starterText());
+  const seed = seeded();
+  const [text, setText] = createStore<TabText>(seed.text);
   const [active, setActive] = createSignal<TabId>("dot");
-  const [selectedTheme, setSelectedTheme] = createSignal(BASE_THEME_NAME);
-  const engine = new Engine(text, (tab, value) => setText(tab, value), selectedTheme);
-  const files = new Files(text, (tab, value) => setText(tab, value), () => engine.discardDerived());
+  const stylist = new Stylist();
+  const engine = new Engine(text, stylist);
+  const files = new Files(text, (tab, value) => setText(tab, value), stylist);
   let dotPicker!: HTMLInputElement;
-  let themePicker!: HTMLInputElement;
 
   const redraw = () => engine.redraw();
-
-  const onSelectTheme = (name: string) => {
-    setSelectedTheme(name);
-    setText("theme", files.loadTheme(name));
-    redraw();
-  };
 
   const loadDot = async (input: HTMLInputElement) => {
     files.loadDot(await input.files![0]!.text());
@@ -78,35 +80,23 @@ export function Workbench() {
     redraw();
   };
 
-  const loadTheme = async (input: HTMLInputElement) => {
-    const css = await input.files![0]!.text();
-    setText("theme", css);
-    input.value = "";
-  };
-
-  const saveTheme = () => {
-    const name = prompt("Save theme as", selectedTheme() === BASE_THEME_NAME ? "my-theme.css" : selectedTheme());
-    if (name === null || name === "") return;
-    files.saveTheme(name, text.theme);
-  };
-
   const commands: Record<Command, () => void> = {
     redraw,
     "load-dot": () => dotPicker.click(),
     "save-dot": () => download("diagram.dot", files.saveDot(), "text/vnd.graphviz"),
-    "load-theme": () => themePicker.click(),
-    "save-theme": saveTheme,
     "save-png": async () => download("diagram.png", await files.exportPng(), "image/png"),
     "export-html": async () => download("shabnam.html", await files.exportHtml(), "text/html"),
     "tab-1": () => setActive(TAB_IDS[0]!),
     "tab-2": () => setActive(TAB_IDS[1]!),
     "tab-3": () => setActive(TAB_IDS[2]!),
     "tab-4": () => setActive(TAB_IDS[3]!),
-    "tab-5": () => setActive(TAB_IDS[4]!),
   };
 
   onMount(() => {
     favicon();
+    for (const [selector, properties] of Object.entries(seed.styles)) {
+      for (const [property, value] of Object.entries(properties)) stylist.addRule(selector, property, value);
+    }
     redraw();
     const onKey = (event: KeyboardEvent) => {
       const command = commandOf(event);
@@ -134,12 +124,7 @@ export function Workbench() {
         <button title="Cmd/Ctrl+S" onClick={commands["save-dot"]}>
           Save DOT
         </button>
-        <button title="Shift+Cmd/Ctrl+O" onClick={commands["load-theme"]}>
-          Load Theme
-        </button>
-        <button title="Shift+Cmd/Ctrl+S" onClick={commands["save-theme"]}>
-          Save Theme
-        </button>
+        <button onClick={() => stylist.save()}>Save Styles</button>
         <button title="Cmd/Ctrl+P" onClick={commands["save-png"]}>
           Save PNG
         </button>
@@ -147,7 +132,6 @@ export function Workbench() {
           Export HTML
         </button>
         <input ref={dotPicker} class="hidden" type="file" accept=".dot,.gv" onChange={(e) => loadDot(e.currentTarget)} />
-        <input ref={themePicker} class="hidden" type="file" accept=".css,text/css" onChange={(e) => loadTheme(e.currentTarget)} />
         <span id="shabnam-status" />
       </header>
 
@@ -159,31 +143,19 @@ export function Workbench() {
           <g id="shabnam-connectors" />
         </svg>
         <div id="shabnam-annotation-html" />
-        <style id="shabnam-theme-css" />
         <style id="shabnam-style-css" />
         <script id="shabnam-action-js" />
       </div>
 
       <div id="shabnam-editors">
         <Tabs active={active()} setActive={setActive} />
-        <div class="theme-bar" classList={{ hidden: active() !== "theme" }}>
-          <label for="theme-picker">Theme:</label>
-          <select
-            id="theme-picker"
-            class="theme-select"
-            value={selectedTheme()}
-            onChange={(e) => onSelectTheme(e.currentTarget.value)}
-          >
-            <For each={files.listThemes()}>{(name) => <option value={name}>{name}</option>}</For>
-          </select>
-        </div>
-        <Show when={active()} keyed>
+        <Show when={textTab(active())} keyed>
           {(tab) => (
             <Editor
               tab={tab}
               value={text[tab]}
               onInput={(v) => setText(tab, v)}
-              highlight={highlightOf(tab)}
+              highlight={HIGHLIGHT[tab]}
             />
           )}
         </Show>
@@ -192,11 +164,8 @@ export function Workbench() {
   );
 }
 
-function highlightOf(tab: TabId) {
-  if (tab === "dot") return highlightDot;
-  if (tab === "annotation") return highlightHtml;
-  if (tab === "action") return highlightJs;
-  return highlightCss;
+function textTab(tab: TabId): keyof TabText | undefined {
+  return tab === "styles" ? undefined : tab;
 }
 
 function favicon(): void {

@@ -1,10 +1,13 @@
 // Workbench runtime: redraw, sinks, measure, place.
+//
+// The style sink is not here. `#shabnam-style-css` belongs to the `Stylist`,
+// which drives it through CSSOM (§3) — writing its `textContent` from `inject`
+// would wipe every rule the Stylist inserted, so the sink is not in the map.
 
-import { Css } from "../css/css.ts";
 import { Diagram } from "../diagram/diagram.ts";
 import { Vizer } from "../diagram/vizer.ts";
+import { Stylist } from "../stylist/stylist.ts";
 import type * as T from "../types.ts";
-import { appliedSheet, themeSheet } from "./files.ts";
 
 const asHtml = (element: Element, text: string) => {
   element.innerHTML = text;
@@ -27,8 +30,6 @@ const SINK_WRITE = new Map<string, (element: Element, text: string) => void>([
   ["node-shells", asHtml],
   ["connectors", asHtml],
   ["annotation-html", asHtml],
-  ["theme-css", asText],
-  ["style-css", asText],
   ["action-js", asScript],
   ["status", asText],
 ]);
@@ -38,23 +39,11 @@ const SINK_PREFIX = "shabnam-";
 export class Engine implements T.Workbench {
   private vizer = new Vizer();
   private diagram = new Diagram();
-  private css = new Css();
-  private lastDerived = "";
-  private model: T.DiagramModel | undefined;
 
   constructor(
     private text: T.TabText,
-    private setTab: T.SetTab,
-    private selectedTheme: () => string,
+    private stylist: Stylist,
   ) {}
-
-  discardDerived(): void {
-    this.lastDerived = "";
-  }
-
-  lastModel(): T.DiagramModel | undefined {
-    return this.model;
-  }
 
   async redraw(): Promise<void> {
     const started = performance.now();
@@ -62,15 +51,9 @@ export class Engine implements T.Workbench {
     if (json === null) return;
 
     const model = this.diagram.bag(json);
-    this.model = model;
-    const derived = this.diagram.derived(model);
-    const style = this.css.plus(this.css.minus(this.text.style, this.lastDerived), derived);
-    this.lastDerived = derived;
-    this.setTab("style", style);
+    this.stylist.setDerived(this.diagram.derived(model));
+    this.stylist.feed();
 
-    const sheet = themeSheet(this.selectedTheme(), this.text.theme);
-    this.inject("theme-css", "");
-    this.inject("style-css", appliedSheet(style, sheet, this.css));
     this.inject("main-html", this.diagram.frame(model));
     this.inject("annotation-html", this.text.annotation);
 

@@ -1,56 +1,35 @@
-// File verbs: DOT load/save, theme catalog, export HTML / PNG.
+// File verbs: DOT load/save, export HTML / PNG.
 
+import { Stylist } from "../stylist/stylist.ts";
 import type * as T from "../types.ts";
-import { THEMES } from "./theme-catalog.ts";
 
 const PNG_SCALE = 2;
 const PNG_MARGIN = 12;
-
-export const BASE_THEME_NAME = "theme.css";
-export const BASE_THEME = THEMES.get(BASE_THEME_NAME)!;
 
 export class Files implements T.Files {
   constructor(
     private text: T.TabText,
     private setTab: T.SetTab,
-    private discardDerived: () => void,
+    private stylist: Stylist,
   ) {}
 
   loadDot(dot: string): void {
-    this.discardDerived();
     this.setTab("dot", dot);
-    this.setTab("style", "");
   }
 
   saveDot(): string {
     return this.text.dot;
   }
 
-  listThemes(): string[] {
-    return [...THEMES.keys()];
-  }
-
-  loadTheme(name: string): string {
-    const css = THEMES.get(name);
-    if (css === undefined) throw new Error(`unknown theme: ${name}`);
-    return css;
-  }
-
-  saveTheme(name: string, css: string): void {
-    const file = name === BASE_THEME_NAME ? "my-theme.css" : name;
-    download(file, css, "text/css");
-  }
-
   async exportHtml(): Promise<string> {
     const [css, app] = await Promise.all([asset("shabnam-css"), asset("shabnam-app")]);
-    return page(css, app, seed(this.text));
+    return page(css, app, seed(this.text, userFile(this.stylist.rows())));
   }
 
   async exportPng(): Promise<Blob> {
     const canvas = document.getElementById("shabnam-canvas")!;
     const frame = framing(canvas);
-    const applied = document.getElementById("shabnam-style-css")!.textContent!;
-    const svg = snapshot(canvas, frame, [await asset("shabnam-css"), applied]);
+    const svg = snapshot(canvas, frame, [await asset("shabnam-css"), this.stylist.serialize()]);
     return raster(svg, frame.crop);
   }
 }
@@ -62,18 +41,14 @@ export function download(name: string, body: string | Blob, type: string): void 
   URL.revokeObjectURL(url);
 }
 
-export function themeSheet(name: string, text: string): string {
-  if (name === BASE_THEME_NAME) return text;
-  if (!liveCss(BASE_THEME)) return text;
-  return `${BASE_THEME}\n\n${text}`;
-}
-
-function liveCss(css: string): boolean {
-  return css.replace(/\/\*[\s\S]*?\*\//g, "").trim() !== "";
-}
-
-export function appliedSheet(style: string, sheet: string, css: T.Css): string {
-  return css.plus(css.expand(style, sheet), css.expand(sheet, sheet));
+/** The user layer, as the export seed carries it. Theme ships; derived redraws. */
+export function userFile(rows: T.StyleRow[]): T.StyleFile {
+  const file: T.StyleFile = {};
+  for (const row of rows) {
+    if (row.origin !== "user") continue;
+    (file[row.selector] ??= {})[row.property] = row.value;
+  }
+  return file;
 }
 
 type Framing = { page: { width: number; height: number }; crop: T.Box };
@@ -155,8 +130,8 @@ function decode(base64: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-function seed(text: T.TabText): string {
-  return JSON.stringify(text).replace(/</g, "\\u003c");
+function seed(text: T.TabText, styles: T.StyleFile): string {
+  return JSON.stringify({ ...text, styles }).replace(/</g, "\\u003c");
 }
 
 function page(css: string, app: string, json: string): string {
