@@ -1,15 +1,19 @@
 /* Workbench chrome only. The diagram's own styling is derived Base CSS plus the
    user's My Style, which land in the canvas sinks — never here.
 
-   Tokens, then the four core classes, then the skeleton. Everything else is
-   reached by element and position, so the markup carries almost no hooks: the
-   ids below are the layout and the coordinate contract, and the only classes are
-   the core four plus `.rows`/`.val` from `research-lab/stylist/index.html` and
-   two state flags. `@apply` is a Stylist feature, not real CSS, so a rule that
-   wants a core class copies its properties. */
+   Tokens, then the skeleton. Everything is reached by element and position, so
+   the markup carries almost no hooks: the ids below are the sinks the engine
+   writes and the coordinate contract, and the only classes are `.rows`/`.row`
+   and the three box names from `research-lab/stylist/index.html`, plus one state
+   flag. `@apply` is a Stylist feature, not real CSS, so a rule that wants a core
+   class copies its properties.
 
-:root,
-svg {
+   Every id here is two hyphenated words, and that is not a style preference: a
+   DOT node keeps its own name as its id (§3.1), so a bare `#app` or `#canvas`
+   is a live collision waiting for a node called `app`. The chrome's own boxes
+   carry no id at all — `body > main` and `body > aside` reach them. */
+
+body {
   --theme-color: white;
 
   --primary-color: #0b3d91;
@@ -24,55 +28,31 @@ svg {
   --vertical-gap: 2em;
   --horizontal-gap: 2em;
 
-  --raised-shadow: 0 10px 22px grey;
-  --flat-shadow: 0 0 2px;
+  --raised-shadow: 0 0px 6px grey;
+  --flat-shadow: 1px 1px 1px;
 
-  --vertical-pad: 4px;
-  --horizontal-pad: 3px;
+  --vertical-pad: 0.75em;
+  --horizontal-pad: 0.5em;
 
   --glass-background: color-mix(in srgb, var(--secondary-color) 10%, transparent);
   --paper-background: color-mix(in srgb, var(--primary-color) 10%, var(--theme-color));
 }
 
-/* ------------------------------------------------------------- core classes */
-
-.paper {
-  background: var(--paper-background);
-  box-shadow: var(--flat-shadow);
-  border-radius: 3px;
-}
-
-.glass {
-  background: var(--glass-background);
-  box-shadow: var(--raised-shadow);
-  fill: var(--glass-background);
-}
-
-.row {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  flex: 1;
-}
-
-.col {
-  display: flex;
-  flex-direction: column;
-  flex-wrap: nowrap;
-}
-
-/* ----------------------------------------------------------------- elements */
 
 body {
   margin: 0;
   font-family: var(--main-font);
   font-size: var(--base-font-size);
   background: var(--theme-color);
+
+  display: flex;
+  flex-direction: row;
+  justify-content: stretch;
+  height: 100vh;
 }
 
 img {
   height: 2em;
-  width: auto;
 }
 
 button {
@@ -83,83 +63,33 @@ button {
   box-shadow: var(--flat-shadow);
 }
 
-input {
-  font: inherit;
-  height: auto;
-  min-width: 0;
-  border: 0;
-  border-radius: 3px;
-  background: var(--paper-background);
-}
 
-/* The toolbar, and the styles tab's own header. */
-header {
+body>aside {
   display: flex;
-  gap: var(--horizontal-pad);
-  align-items: center;
-  line-height: 2em;
-  margin: var(--horizontal-pad);
+  width: 40em;
 }
 
-/* The tab strip: four equal buttons. */
-nav {
-  display: flex;
-}
-
-nav > button {
-  flex: 1;
-  border-radius: 0;
-}
-
-/* The whole coding window. No highlighting, no completion, no caret of ours. */
-textarea {
-  flex: 1;
-  min-height: 0;
-  border: 0;
-  resize: none;
-  outline: none;
-  padding: var(--vertical-pad);
-  font-family: var(--code-font);
-  tab-size: 2;
-}
-
-.active {
-  box-shadow: inset var(--raised-shadow);
-}
-
-.hidden {
-  display: none;
-}
-
-/* ----------------------------------------------------------------- skeleton */
-
-/* .col — toolbar on top, then the canvas beside the editors. */
-#shabnam-workbench {
+body>main {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-}
-
-#shabnam-workbench > div {
-  display: flex;
   flex: 1;
-  min-height: 0;
-}
-
-/* The coordinate contract (§3.4): `#shabnam-canvas` is the positioned ancestor,
-   so its padding-box top-left is the one origin both layers use. */
-#shabnam-canvas {
-  flex: 1;
-  position: relative;
-  overflow: auto;
   min-width: 0;
+}
+
+/* The coordinate contract (§3.4): the canvas is the positioned ancestor, so its
+   padding-box top-left is the one origin both layers use. */
+#diagram-canvas {
+  position: relative;
+  flex: 1;
+  overflow: auto;
 }
 
 /* Both layers are absolute inside the canvas and therefore scroll with
-   `#shabnam-main-html`; `overflow: visible` lets shells and connectors past the
-   visible box paint, and no viewBox keeps one user unit equal to one pixel. */
-#shabnam-main-svg,
-#shabnam-annotation-html {
+   `#diagram-html`. The explicit 100% is load-bearing: an `<svg>` left to size
+   itself falls back to 300×150, and `overflow: visible` is what lets shells and
+   connectors paint past the visible box. */
+#diagram-svg,
+#annotation-html {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -170,62 +100,112 @@ textarea {
 
 /* Part of the anchor contract: the anchor point is the annotation's own centre,
    so `data-anchor="core"` centres it on that node without anyone measuring. */
-#shabnam-annotation-html [data-anchor] {
+#annotation-html [data-anchor] {
   position: absolute;
   transform: translate(-50%, -50%);
   pointer-events: auto;
 }
 
-/* .col, and the one pane that does not grow. `min-width` is not decoration: a
-   flex item defaults to `min-width: auto`, so without this the rows' inputs
-   push the pane past its 30em and starve the canvas. */
-#shabnam-editors {
+.edge {
+  color: var(--accent-color);
+}
+
+
+nav {
+  display: flex;
+  gap: var(--horizontal-pad);
+  align-items: center;
+  height: 3em;
+}
+
+nav>* {
+  height: 100%;
+}
+
+aside>nav>button {
+  flex: 1;
+  border-radius: 0;
+  border: 0.2px solid grey;
+}
+
+.active {
+  box-shadow: inset var(--raised-shadow);
+}
+
+
+header {
+  display: flex;
+  gap: var(--horizontal-pad);
+  align-items: center;
+  line-height: 2em;
+  margin: var(--horizontal-pad);
+}
+
+aside {
   display: flex;
   flex-direction: column;
-  flex: 0 0 30em;
-  min-width: 0;
-  min-height: 0;
+  justify-content: stretch;
 }
 
-/* --------------------------------------------------------------- styles tab */
+aside>nav {
+  gap: 0
+}
 
-/* `research-lab/stylist/index.html`, as it stands. A style row is a `.row` that
-   does not grow; the value box is the one that takes the slack. */
-.rows {
-  display: flex;
-  flex-direction: column-reverse;
+/* The tab window is whichever of the two the active tab renders — a textarea for
+   the three text tabs, a section for the rows. Either way it takes the rest of
+   the column, and `min-height: 0` is what lets it scroll instead of pushing. */
+aside>textarea,
+aside>section {
   flex: 1;
-  gap: 0.5em;
   min-height: 0;
-  overflow-y: auto;
-  background-color: lightgray;
-  padding: 1em 0.5em;
 }
 
-.rows > header {
-  justify-content: space-between;
+textarea {
+  border: 0;
+  padding: var(--horizontal-pad);
+  font-family: var(--code-font);
+  tab-size: 2;
+  resize: none;
 }
 
-.rows > .row {
-  flex: 0 0 1.5em;
-  gap: 0.5em;
-  box-shadow: 0 0 6px;
+aside>section {
+  display: flex;
+  flex-direction: column;
 }
 
-.rows .val {
-  flex: 1 1 0;
+/* The styles tab. `.rows > .row` rather than `.row`, because the diagram's own
+   `.row` core class arrives from the sink and would otherwise reach these. */
+.rows {
+  overflow: auto;
+  padding: 0 var(--horizontal-pad) var(--vertical-pad);
 }
 
-.rows > .row > button {
-  width: 3em;
+.rows>.row {
+  display: flex;
+  gap: var(--horizontal-pad);
+  padding-top: 1px;
+}
+
+/* `min-width` is not decoration: an input defaults to `min-width: auto`, so
+   without this a long value pushes the row past the pane. */
+.rows>.row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  border: 0.2px solid grey;
+  border-radius: 3px;
+}
+
+.rows>.row .sel {
+  flex: 2;
 }
 
 /* Source is the only thing distinguishing one row from another (§1): 0 theme,
    1 dot, 2 user. Theme is the floor and says nothing. */
-.row[data-source="1"] {
+.rows>.row[data-source="1"] {
   border-left: 2px solid var(--secondary-color);
 }
 
-.row[data-source="2"] {
+.rows>.row[data-source="2"] {
   border-left: 2px solid var(--accent-color);
 }

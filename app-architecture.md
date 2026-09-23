@@ -39,26 +39,31 @@ After the JSON, **we** own the picture.
 Canvas skeleton — the named sinks each worker fills:
 
 ```html
-<div id="shabnam-canvas">
-  <div id="shabnam-main-html"><!-- layout + node HTML (zero inline styles) --></div>
-  <svg id="shabnam-main-svg">
-    <g id="shabnam-clusters"></g>
-    <g id="shabnam-node-shells"></g>
-    <g id="shabnam-connectors"></g>
+<article id="diagram-canvas">
+  <div id="diagram-html"><!-- layout + node HTML (zero inline styles) --></div>
+  <svg id="diagram-svg">
+    <g id="cluster-shells"></g>
+    <g id="node-shells"></g>
+    <g id="connector-paths"></g>
   </svg>
-  <div id="shabnam-annotation-html"></div>
-  <style id="shabnam-style-css"><!-- the Stylist's sheet. Never textContent. --></style>
-  <script id="shabnam-action-js"></script>
-</div>
+  <div id="annotation-html"></div>
+  <style id="style-css"><!-- the Stylist's sheet. Never textContent. --></style>
+  <script id="action-js"></script>
+</article>
 ```
 
-**Every id the app owns is prefixed `shabnam-`.** Node ids are DOT names (§3.1),
+**Every id the app owns is two hyphenated words.** Node ids are DOT names (§3.1),
 so the page's own ids and the diagram's ids share one space — and a diagram with
-a node called `connectors` had its edge markup written into that node's `<div>`.
-The prefix is the wall between the two namespaces. It is plumbing: derived rules never
-reference a sink id, and neither should a theme.
+a node called `connectors` had its edge markup written into that node's `<div>`,
+while one called `app` inherited `height: 100vh` from a chrome rule and stretched
+its rank to the viewport. A DOT identifier is a bare word, so a hyphenated pair
+is the wall between the two namespaces: `#diagram-canvas`, never `#canvas`. The
+chrome's own boxes take the rule further and carry no id at all — `body > main`
+and `body > aside` reach them, and the workbench renders straight into `body`
+with no `#root`. It is plumbing: derived rules never reference a sink id, and
+neither should a theme.
 
-**There is one sheet and it is not text.** `#shabnam-style-css` is owned by the
+**There is one sheet and it is not text.** `#style-css` is owned by the
 `Stylist`, which mutates `.sheet` through CSSOM — `insertRule`, `setProperty`,
 `removeProperty`. Nothing writes its `textContent`. `Stylist.serialize()` exists
 for export and PNG only, and is the single place CSS text is produced at all.
@@ -144,7 +149,7 @@ DOT text
   ├─ Diagram.derived ─────► StyleBag         almost empty if DOT has no style
   │
   ├─ Stylist.addRule ×n ──► the book, at source 1 (refused where the user wrote)
-  ├─ Stylist.feed ────────► #shabnam-style-css .sheet   (CSSOM, @apply expanded here)
+  ├─ Stylist.feed ────────► #style-css .sheet   (CSSOM, @apply expanded here)
   │
   │      ── inject, let the browser paint ──
   │
@@ -162,7 +167,7 @@ Two rules make this hold together:
 
 **Pure diagram workers, one DOM owner.** Files in `diagram/` are pure: data in, data out. They sit behind the `Diagram` facade. Only the workbench and the `Stylist` touch the live page.
 
-One named exception: `stylist/` owns `#shabnam-style-css` and drives it through
+One named exception: `stylist/` owns `#style-css` and drives it through
 **CSSOM** — `insertRule`, `deleteRule`, `setProperty`, `removeProperty` — because
 the browser is the only CSS engine we want. This is a live, on-document sheet: that
 is the point, since a property change must repaint without a redraw. If CSSOM is
@@ -256,7 +261,7 @@ Both `.node` and `.record` are named so a record member is reached without also
 wearing `.node`.
 
 **There is no per-cluster `.graph` block, and no diagram-level one either.** A
-cluster gets no element: the SVG layer paints above `#shabnam-main-html`, so a cluster
+cluster gets no element: the SVG layer paints above `#diagram-html`, so a cluster
 background drawn there would cover its own members. A block that styles an
 element nobody draws is inert, and inert output is worse than absent output.
 
@@ -287,7 +292,7 @@ SHAPE_HTML.get(node.shape) ?? SHAPE_HTML.get("box")
 
 First implementation: `box` only. Unknown shape falls back to `box`. Adding a shape is adding one map entry.
 
-`LayoutFramer` frames those strings into `#shabnam-main-html`:
+`LayoutFramer` frames those strings into `#diagram-html`:
 
 ```html
 <div class="diagram">
@@ -305,9 +310,9 @@ The subgraph class is the styling surface that matters. `#id` is left over for o
 
 ### 3.4 `Measurer` + `NodeSheller` + `EdgeDrawer` — the SVG layer
 
-Once the browser has painted `#shabnam-main-html`, `Measurer` reads the real geometry into `Box[]`. Then:
+Once the browser has painted `#diagram-html`, `Measurer` reads the real geometry into `Box[]`. Then:
 
-- **`NodeSheller`** draws visual cluster bounding boxes (`clusters(...)`) under `#shabnam-clusters` around measured member nodes of `subgraph cluster_...` with cluster labels, and draws shells around each node box (`shells(...)`). Shell files live in `svg/`; `SHELL_SVG` maps `shell=` to a file, defaulting to `svg/box.svg`. Icon comes from `icon/` when `icon=` is set. Caption is `caption=`, falling back to `label`.
+- **`NodeSheller`** draws visual cluster bounding boxes (`clusters(...)`) under `#cluster-shells` around measured member nodes of `subgraph cluster_...` with cluster labels, and draws shells around each node box (`shells(...)`). Shell files live in `svg/`; `SHELL_SVG` maps `shell=` to a file, defaulting to `svg/box.svg`. Icon comes from `icon/` when `icon=` is set. Caption is `caption=`, falling back to `label`.
 - **`EdgeDrawer`** draws connectors from **measured** box coordinates — never Graphviz `_draw_` paths — so edges keep following our boxes after CSS changes a gap, a font, or a width.
 
 Measured geometry is the single source of truth for size and position. The model deliberately does **not** carry Graphviz's `width` / `height`; two sources of size would guarantee that someone eventually uses the wrong one.
@@ -335,16 +340,16 @@ Four tabs, and one of them is not text. `SetTab` writes a **text tab** (load, se
 
 The coding window is **one `<textarea>`**, and it serves the three text tabs. `tabs.tsx` is a radio strip — four equal buttons, no editor, no store. Workbench owns `active`; when `active` is `styles` it paints the rows table instead of the textarea. No highlighting, no completion, no caret of ours, no component of ours: the textarea is written inline in `workbench.tsx`, because a component that wraps one element and forwards two props is a file for nothing.
 
-**The chrome's own CSS is `src/app.css`, and it is deliberately small.** Tokens, the four core classes (`.paper` · `.glass` · `.row` · `.col`), then a skeleton reached by *element and position* — `header`, `nav`, `textarea`, `#shabnam-workbench > div` — rather than by a hook per box. The markup therefore carries almost no `class` or `id`: a hook is allowed when the layout needs it, when it is a sink the engine writes, or when a test drives it. Nothing is named for decoration. The styles tab is `research-lab/stylist/index.html` verbatim (`.rows`, `.row`, `.btn`, `.sel`, `.prop`, `.val`, `#sl`, `#pl`) because that prototype is ten lines of CSS, and being restylable in ten lines is the point. The diagram's styling never appears here — it lives in the sinks (§3).
+**The chrome's own CSS is `src/app.css`, and it is deliberately small.** Tokens on `body`, then a skeleton reached by *element and position* — `body > main`, `body > aside`, `header`, `nav`, `textarea`, `aside > section` — rather than by a hook per box. The four core classes (`.paper` · `.glass` · `.row` · `.col`) are not here: they belong to the theme and arrive through the sink. The markup therefore carries almost no `class` or `id`: a hook is allowed when the layout needs it, when it is a sink the engine writes, or when a test drives it. Nothing is named for decoration, and the semantic element is preferred to a class — `main`, `aside`, `article`, `section`, `header`, `nav`, `output`, and `hidden` rather than a `.hidden`. The styles tab is `research-lab/stylist/index.html` verbatim (`.rows`, `.row`, `.sel`, `.prop`, `.val`, `#selector-list`, `#property-list`) because that prototype is ten lines of CSS, and being restylable in ten lines is the point. The diagram's styling never appears here — it lives in the sinks (§3).
 
 `redraw` is sync with the DOT tab — the full draw. The styles tab does not need Graphviz: a row edit is a `setProperty` on a live sheet, so the picture repaints with no redraw and no reflow of anything else. The UI may still use one Redraw button that always runs the DOT path.
 
 | Tab | Sink | Who writes it |
 |---|---|---|
 | diagram.dot | source for `renderJSON` | User. Seeded with a starter diagram. |
-| styles | `#shabnam-style-css` via CSSOM | The `Stylist`. One book, fed by the theme at source `0`, the redraw's derived bag at `1`, and the user's rows at `2`. The tab shows the book, one row per entry, tagged with its source. |
-| annotation.html | `#shabnam-annotation-html` | User. Cartesian `data-anchor` / `data-offset`. |
-| action.js | `#shabnam-action-js` | User. Runs last. |
+| styles | `#style-css` via CSSOM | The `Stylist`. One book, fed by the theme at source `0`, the redraw's derived bag at `1`, and the user's rows at `2`. The tab shows the book, one row per entry, tagged with its source. |
+| annotation.html | `#annotation-html` | User. Cartesian `data-anchor` / `data-offset`. |
+| action.js | `#action-js` | User. Runs last. |
 
 **Editing any row writes at source `2`.** There is one book, so the row *is* the
 entry: the value is replaced in place and the row's id survives. Nothing clones, and
@@ -395,8 +400,8 @@ dot text
   → Diagram.bag(json)                         → model
   → Diagram.derived(model)                    → StyleBag
   → Stylist.addRule(…, source 1) ×n           → into the book, refused at source 2
-  → Stylist.feed()                            → CSSOM on #shabnam-style-css
-  → Diagram.frame(model)                      → #shabnam-main-html
+  → Stylist.feed()                            → CSSOM on #style-css
+  → Diagram.frame(model)                      → #diagram-html
   → [ browser paints ]
   → Workbench.measure()                       → boxes
   → Diagram.clusters / shells / connectors    → SVG sinks
@@ -424,7 +429,7 @@ Fresh start. Do these in order, stop after each for review.
 
 1. **Skeleton.** Bun + SolidJS + TypeScript scaffold. `index.ts` mounts the workbench into `#root`. Four tabs, the canvas with its sinks, the Redraw button, the starter DOT. Nothing renders yet.
 2. **`Vizer` + `DiagramBagger`.** DOT in, `DiagramModel` out, dumped to the console. Namespaced sanitized ids, subgraph classes, numeric `x` / `y`. This is the step that proves we never need a parser.
-3. **`LayoutFramer` + `SHAPE_HTML.box`.** `#shabnam-main-html` filled: boxes in the right columns, correct id and classes. Unstyled is fine.
+3. **`LayoutFramer` + `SHAPE_HTML.box`.** `#diagram-html` filled: boxes in the right columns, correct id and classes. Unstyled is fine.
 4. **`Diagram.derived` + `Stylist`.** Derived `StyleRules` per §3.2, merged as the middle layer and fed to CSSOM. Identical input, identical map.
 5. **`Measurer` + `NodeSheller` + `EdgeDrawer`.** `svg/box.svg` as the only shell, `icon/` when `icon=` is set, connectors from measured coordinates.
 6. **Polish.** Export HTML, status line for parse errors.
@@ -467,13 +472,13 @@ Closed. Do not reopen in code without updating this file.
 | Tab vs sink | `SetTab` writes the three text tabs. `inject` writes sinks. The styles tab edits the `Stylist`. |
 | Who parses CSS | **Nobody, at runtime.** CSSOM receives rules; it is never asked to read a sheet back. The one-shot decomposition lives in `build/` and is not shipped. |
 | Theme catalog | None. One shipped theme: `theme/basic-theme.json`. No dropdown, no locked base, no overlay, no theme file verbs. |
-| Cascade | One live sheet, `#shabnam-style-css`, driven by CSSOM. Conflicts resolve in the map, not the cascade. |
+| Cascade | One live sheet, `#style-css`, driven by CSSOM. Conflicts resolve in the map, not the cascade. |
 | `@apply` | A property whose value is selector keys in the same map. Expanded at feed time, in place, so own later properties win. Expansion is a read — never a book entry. Missing name throws. Cycle throws. |
 | CSS text | Produced only by `Stylist.serialize()`, only for Export HTML and Save PNG. |
 | Attr → CSS property | `ATTR_CSS` registry |
 | Bag ties | Lexicographically smallest value, for determinism |
 | Bag absence | Counts as a value. Absence winning means no class rule for that key. |
-| App-owned ids | Prefixed `shabnam-`, so they cannot collide with a DOT name |
+| App-owned ids | Two hyphenated words, so they cannot collide with a DOT name |
 | Ids | The DOT name, sanitized. Collision throws. |
 | How nodes are styled | id + one type class (`node` or `record`) + one class per subgraph. Two classes at most. |
 | How HTML varies by shape | `SHAPE_HTML` map. First entry: `box` |
@@ -522,7 +527,7 @@ src/
     vizer.ts          Vizer          — the only viz.js caller
     diagram-bagger.ts the only VizJson reader
     css-bagger.ts     model → derived StyleRules
-    layout-framer.ts  model → columns → #shabnam-main-html
+    layout-framer.ts  model → columns → #diagram-html
     node-shaper.ts    SHAPE_HTML registry
     node-sheller.ts   boxes + nodes → shell SVG
     edge-drawer.ts    boxes + edges → connector SVG

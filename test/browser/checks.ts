@@ -4,13 +4,13 @@
 // back off the live sheet or out of `getComputedStyle`. No app internals, so
 // this cannot pass by agreeing with the Stylist about something wrong.
 //
-// The report leaves as base64 in `#shabnam-checks[data-report]`, which survives
+// The report leaves as base64 in `#test-report[data-report]`, which survives
 // HTML serialization untouched. `run.ts` picks it up from there.
 
 type Result = { name: string; ok: boolean; detail: string };
 
 const results: Result[] = [];
-const errors = (window as never as { SHABNAM_ERRORS: string[] }).SHABNAM_ERRORS;
+const errors = (window as never as { TEST_ERRORS: string[] }).TEST_ERRORS;
 
 function check(name: string, ok: boolean, detail: unknown): void {
   results.push({ name, ok, detail: String(detail) });
@@ -26,8 +26,8 @@ function base64(json: string): string {
 // here — if a stage throws, the page simply stops, and the report already in the
 // DOM is what the dump carries out. The driver notices the missing stages.
 function publish(stage: string): void {
-  const report = document.getElementById("shabnam-checks") ?? document.body.appendChild(document.createElement("div"));
-  report.id = "shabnam-checks";
+  const report = document.getElementById("test-report") ?? document.body.appendChild(document.createElement("div"));
+  report.id = "test-report";
   report.dataset.stage = stage;
   report.dataset.report = base64(JSON.stringify({ results, errors }));
 }
@@ -40,10 +40,10 @@ const $ = (selector: string) => document.querySelector(selector) as HTMLElement;
 const $$ = (selector: string) => [...document.querySelectorAll(selector)] as HTMLElement[];
 const tick = () => new Promise((done) => setTimeout(done, 30));
 
-const sheet = () => ($("#shabnam-style-css") as unknown as HTMLStyleElement).sheet!;
+const sheet = () => ($("#style-css") as unknown as HTMLStyleElement).sheet!;
 const cssTexts = () => [...sheet().cssRules].map((rule) => rule.cssText);
 const background = (id: string) => getComputedStyle($(`#${id}`)).backgroundColor;
-const boxes = () => $$("#shabnam-main-html .node").map((node) => JSON.stringify(node.getBoundingClientRect()));
+const boxes = () => $$("#diagram-html .node").map((node) => JSON.stringify(node.getBoundingClientRect()));
 
 /** Set a box and tell the component, the way a keystroke or a blur would. */
 function type(box: HTMLElement, value: string, event: "input" | "change"): Promise<unknown> {
@@ -64,27 +64,35 @@ const FIELD = new Map<Field, string>([
 const rows = () => $$(".rows > .row");
 const lastRow = () => rows()[rows().length - 1]!;
 
+// The shell carries no hook of its own now: the tabs are the aside's nav, and
+// Redraw is the first button in the main toolbar.
+const tabs = () => $$("body > aside > nav button");
+const redrawButton = () => $("body > main > nav button");
+// The styles tab's own toolbar: + Row, Cleanup, Save. It sits above the list, so
+// it is the section's header and not inside `.rows`.
+const rowTools = () => $$("body > aside > section > header button");
+
 const box = (row: HTMLElement, field: Field) =>
   row.querySelector(FIELD.get(field)!) as HTMLInputElement;
 
 function smoke(): void {
-  check("the workbench mounts", $("#shabnam-workbench") !== null, $$("#shabnam-editors nav button").length + " tabs");
+  check("the workbench mounts", document.querySelector("body > main") !== null, tabs().length + " tabs");
   check(
     "four tabs, named as the spec names them",
-    $$("#shabnam-editors nav button").map((tab) => tab.textContent).join(" ") ===
+    tabs().map((tab) => tab.textContent).join(" ") ===
       "diagram.dot styles annotation.html action.js",
-    $$("#shabnam-editors nav button").map((tab) => tab.textContent).join(" "),
+    tabs().map((tab) => tab.textContent).join(" "),
   );
 
-  const nodes = $$("#shabnam-main-html .node").length;
-  const connectors = $$("#shabnam-connectors *").length;
+  const nodes = $$("#diagram-html .node").length;
+  const connectors = $$("#connector-paths *").length;
   check("the starter diagram draws", nodes === 3 && connectors > 0, `${nodes} nodes, ${connectors} connector parts`);
-  check("the SVG layer is measured, not empty", $$("#shabnam-node-shells *").length > 0, $$("#shabnam-node-shells *").length);
-  check("the annotation is placed", $("#shabnam-annotation-html div") !== null, $("#shabnam-annotation-html").innerHTML.length);
+  check("the SVG layer is measured, not empty", $$("#node-shells *").length > 0, $$("#node-shells *").length);
+  check("the annotation is placed", $("#annotation-html div") !== null, $("#annotation-html").innerHTML.length);
 }
 
 function stylesheet(): void {
-  check("the sink carries no CSS text", $("#shabnam-style-css").textContent === "", JSON.stringify($("#shabnam-style-css").textContent));
+  check("the sink carries no CSS text", $("#style-css").textContent === "", JSON.stringify($("#style-css").textContent));
   check("the sheet has rules", sheet().cssRules.length > 0, `${sheet().cssRules.length} rules`);
   check("no @apply survives the feed", !cssTexts().join("").includes("@apply"), cssTexts().filter((t) => t.includes("apply")).length);
 
@@ -95,7 +103,7 @@ function stylesheet(): void {
 }
 
 async function rowsTab(): Promise<void> {
-  $$("#shabnam-editors nav button")[1]!.click();
+  tabs()[1]!.click();
   await tick();
 
   const sources = rows().reduce<Record<string, number>>((count, row) => {
@@ -129,14 +137,14 @@ async function liveRepaint(): Promise<void> {
   const layout = boxes();
   const ruleCount = sheet().cssRules.length;
 
-  $(".rows header button")!.click();
+  rowTools()[0]!.click();
   await tick();
   const row = lastRow();
   await type(box(row, "selector"), ".node", "change");
   await type(box(row, "property"), "background", "change");
   await type(box(row, "value"), "#ff0000", "input");
 
-  const painted = $$("#shabnam-main-html .node").map((node) => getComputedStyle(node).backgroundColor);
+  const painted = $$("#diagram-html .node").map((node) => getComputedStyle(node).backgroundColor);
   check("a user row repaints live, with no redraw", painted.every((colour) => colour === "rgb(255, 0, 0)"), JSON.stringify(painted));
   check("the repaint did not re-layout", JSON.stringify(boxes()) === JSON.stringify(layout), boxes().length + " boxes compared");
   check("the sheet gained no rule for a known selector", sheet().cssRules.length === ruleCount, `${ruleCount} → ${sheet().cssRules.length}`);
@@ -159,9 +167,9 @@ async function survivesRedraw(): Promise<void> {
   const token = () => getComputedStyle(document.documentElement).getPropertyValue("--primary-color").trim();
   const derived = token();
 
-  $$("#shabnam-editors nav button")[1]!.click();
+  tabs()[1]!.click();
   await tick();
-  $(".rows header button")!.click();
+  rowTools()[0]!.click();
   await tick();
   const row = lastRow();
   await type(box(row, "selector"), ":root, svg", "change");
@@ -172,7 +180,7 @@ async function survivesRedraw(): Promise<void> {
   // Cleanup re-reads the book, which is a synchronous sync path — no redraw, no
   // waiting on a frame. What comes back is the book itself, so this is where the
   // overwrite can be read rather than the tab's own optimistic copy of it.
-  $$(".rows header button")[1]!.click();
+  rowTools()[1]!.click();
   await tick();
   const mine = rows().filter((one) => box(one, "property").value === "--primary-color");
   const detail = mine.map((one) => `${one.id || "(no id)"}:${one.dataset.source}:${box(one, "value").value}`).join(" ");
@@ -183,7 +191,7 @@ async function survivesRedraw(): Promise<void> {
   // A redraw absorbs the DOT's tokens at source 1 *before* the pipeline ever
   // waits for a frame, so the guard is observable without waiting for the whole
   // draw to land.
-  $("#shabnam-workbench > header button").click();
+  redrawButton().click();
   await tick();
   check("a redraw does not take the row back", token() === "#ff00ff", token());
 }
@@ -191,7 +199,7 @@ async function survivesRedraw(): Promise<void> {
 async function applyAndCleanup(): Promise<void> {
   // A scratch selector nothing else owns: removing this row must not take a
   // theme rule down with it, because delete is not revert (§1).
-  $(".rows header button")!.click();
+  rowTools()[0]!.click();
   await tick();
   const row = lastRow();
   await type(box(row, "selector"), ".scratch", "change");
@@ -204,13 +212,13 @@ async function applyAndCleanup(): Promise<void> {
 
   // Cleanup first, so the count is the book's and not a list still carrying
   // rows this run has since removed. Then the comparison measures one thing.
-  $$(".rows header button")[1]!.click();
+  rowTools()[1]!.click();
   await tick();
   const settled = rows().length;
-  $(".rows header button")!.click();
+  rowTools()[0]!.click();
   await tick();
   const withBlank = rows().length;
-  $$(".rows header button")[1]!.click();
+  rowTools()[1]!.click();
   await tick();
   check("Cleanup drops a blank row", withBlank === settled + 1 && rows().length === settled, `${settled} → ${withBlank} → ${rows().length}`);
 }
@@ -220,12 +228,12 @@ async function applyAndCleanup(): Promise<void> {
 // page's clock and the run gets cut off wherever it happens to be, so this stage
 // stays cheap on purpose (debt S3).
 async function redrawStillWorks(): Promise<void> {
-  $$("#shabnam-editors nav button")[0]!.click();
+  tabs()[0]!.click();
   await tick();
-  $("#shabnam-workbench > header button").click();
+  redrawButton().click();
   await tick();
-  const nodes = $$("#shabnam-main-html .node").length;
-  const connectors = $$("#shabnam-connectors *").length;
+  const nodes = $$("#diagram-html .node").length;
+  const connectors = $$("#connector-paths *").length;
   check("Redraw still draws the picture", nodes === 3 && connectors > 0, `${nodes} nodes, ${connectors} connector parts`);
 }
 
@@ -236,7 +244,7 @@ async function mounted(): Promise<void> {
   // read the picture half-drawn. Connectors are the last thing the pipeline puts
   // down.
   for (let waited = 0; waited < 200; waited += 1) {
-    if ($$("#shabnam-connectors *").length > 0) return;
+    if ($$("#connector-paths *").length > 0) return;
     await tick();
   }
   throw new Error("the diagram never drew");

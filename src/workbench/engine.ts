@@ -1,6 +1,6 @@
 // Workbench runtime: redraw, sinks, measure, place.
 //
-// The style sink is not here. `#shabnam-style-css` belongs to the `Stylist`,
+// The style sink is not here. `#style-css` belongs to the `Stylist`,
 // which drives it through CSSOM (§3) — writing its `textContent` from `inject`
 // would wipe every rule the Stylist inserted, so the sink is not in the map.
 
@@ -25,16 +25,14 @@ const asScript = (element: Element, text: string) => {
 };
 
 const SINK_WRITE = new Map<string, (element: Element, text: string) => void>([
-  ["main-html", asHtml],
-  ["clusters", asHtml],
+  ["diagram-html", asHtml],
+  ["cluster-shells", asHtml],
   ["node-shells", asHtml],
-  ["connectors", asHtml],
+  ["connector-paths", asHtml],
   ["annotation-html", asHtml],
   ["action-js", asScript],
-  ["status", asText],
+  ["redraw-status", asText],
 ]);
-
-const SINK_PREFIX = "shabnam-";
 
 export class Engine implements T.Workbench {
   private vizer = new Vizer();
@@ -56,26 +54,26 @@ export class Engine implements T.Workbench {
     // typed row back off them. `absorb` paints once at the end.
     this.stylist.absorb(bagEntries(this.diagram.derived(model), T.SOURCE.dot));
 
-    this.inject("main-html", this.diagram.frame(model));
+    this.inject("diagram-html", this.diagram.frame(model));
     this.inject("annotation-html", this.text.annotation);
 
     await painted();
     const boxes = this.measure();
-    this.inject("clusters", this.diagram.clusters(boxes, model));
+    this.inject("cluster-shells", this.diagram.clusters(boxes, model));
     this.inject("node-shells", this.diagram.shells(boxes, model));
-    this.inject("connectors", this.diagram.connectors(boxes, model));
+    this.inject("connector-paths", this.diagram.connectors(boxes, model));
     this.place(boxes);
-    this.inject("status", `${model.nodes.length} nodes, ${model.edges.length} edges — redrawn in ${Math.round(performance.now() - started)} ms`);
+    this.inject("redraw-status", `${model.nodes.length} nodes, ${model.edges.length} edges — redrawn in ${Math.round(performance.now() - started)} ms`);
     this.inject("action-js", this.text.action);
   }
 
   inject(sink: string, text: string): void {
     const write = SINK_WRITE.get(sink)!;
-    write(document.getElementById(SINK_PREFIX + sink)!, text);
+    write(document.getElementById(sink)!, text);
   }
 
   measure(): T.Box[] {
-    const nodes = document.querySelectorAll<HTMLElement>("#shabnam-main-html .rank > [id]");
+    const nodes = document.querySelectorAll<HTMLElement>("#diagram-html .rank > [id]");
     return [...nodes].map((node) => ({
       id: node.id,
       left: node.offsetLeft,
@@ -87,7 +85,7 @@ export class Engine implements T.Workbench {
 
   place(boxes: T.Box[]): void {
     const byId = new Map(boxes.map((box) => [box.id, box]));
-    for (const mark of document.querySelectorAll<HTMLElement>("#shabnam-annotation-html [data-anchor]")) {
+    for (const mark of document.querySelectorAll<HTMLElement>("#annotation-html [data-anchor]")) {
       const spec = mark.dataset.anchor!;
       const at = spec.includes(",") ? pair(spec) : center(byId.get(spec)!);
       const offset = pair(mark.dataset.offset ?? "0,0");
@@ -100,7 +98,7 @@ export class Engine implements T.Workbench {
     try {
       return await this.vizer.render(dot);
     } catch (error) {
-      this.inject("status", String(error));
+      this.inject("redraw-status", String(error));
       return null;
     }
   }

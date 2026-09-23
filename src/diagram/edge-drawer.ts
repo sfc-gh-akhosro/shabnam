@@ -6,11 +6,11 @@
 import type * as T from "../types.ts";
 import { SHELL_PAD } from "./node-sheller.ts";
 
-const ARROW = `<defs><marker id="shabnam-arrow" class="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" /></marker></defs>`;
+const ARROW = `<defs><marker id="connector-arrow" class="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" /></marker></defs>`;
 
 export function getCssConnectorMode(): string | undefined {
   if (typeof document === "undefined") return undefined;
-  const canvas = document.getElementById("shabnam-canvas");
+  const canvas = document.getElementById("diagram-canvas");
   if (!canvas) return undefined;
   const style = getComputedStyle(canvas);
   const val =
@@ -45,7 +45,7 @@ function edgePath(edge: T.Edge, from: T.Box, to: T.Box, mode: string): string {
   return (
     `<path id="${edge.id}" class="${classes}"` +
     ` d="${d}"` +
-    ` marker-end="url(#shabnam-arrow)" />`
+    ` marker-end="url(#connector-arrow)" />`
   );
 }
 

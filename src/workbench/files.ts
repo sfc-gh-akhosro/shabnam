@@ -25,14 +25,14 @@ export class Files implements T.Files {
   }
 
   async exportHtml(): Promise<string> {
-    const [css, app] = await Promise.all([asset("shabnam-css"), asset("shabnam-app")]);
+    const [css, app] = await Promise.all([asset("app-css"), asset("app-js")]);
     return page(css, app, seed(this.text, bookFile(this.stylist.rows())));
   }
 
   async exportPng(): Promise<Blob> {
-    const canvas = document.getElementById("shabnam-canvas")!;
+    const canvas = document.getElementById("diagram-canvas")!;
     const frame = framing(canvas);
-    const svg = snapshot(canvas, frame, [await asset("shabnam-css"), this.stylist.serialize()]);
+    const svg = snapshot(canvas, frame, [await asset("app-css"), this.stylist.serialize()]);
     return raster(svg, frame.crop);
   }
 }
@@ -58,7 +58,7 @@ type Framing = { page: { width: number; height: number }; crop: T.Box };
 
 function framing(canvas: HTMLElement): Framing {
   const origin = canvas.getBoundingClientRect();
-  const painted = [...canvas.querySelectorAll(".rank > [id], #shabnam-node-shells > g, #shabnam-connectors path, #shabnam-annotation-html *")];
+  const painted = [...canvas.querySelectorAll(".rank > [id], #node-shells > g, #connector-paths path, #annotation-html *")];
   const boxes = painted.map((element) => element.getBoundingClientRect());
   const left = Math.min(...boxes.map((box) => box.left)) - origin.left + canvas.scrollLeft;
   const top = Math.min(...boxes.map((box) => box.top)) - origin.top + canvas.scrollTop;
@@ -80,7 +80,7 @@ function snapshot(canvas: HTMLElement, frame: Framing, styles: string[]): string
   const clone = canvas.cloneNode(true) as HTMLElement;
   clone.querySelectorAll("style, script").forEach((element) => element.remove());
   const wrapper = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
-  wrapper.setAttribute("id", "canvas");
+  wrapper.setAttribute("id", "diagram-canvas");
   wrapper.setAttribute(
     "style",
     `position:relative;overflow:hidden;font:${getComputedStyle(canvas).font};` +
@@ -144,14 +144,13 @@ function page(css: string, app: string, json: string): string {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Shabnam — exported diagram</title>
-    <style id="shabnam-css">${css}</style>
+    <style id="app-css">${css}</style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="application/json" id="shabnam-seed">${json}</script>
-    <script type="text/plain" id="shabnam-app" data-encoding="base64">${encode(app)}</script>
+    <script type="application/json" id="app-seed">${json}</script>
+    <script type="text/plain" id="app-js" data-encoding="base64">${encode(app)}</script>
     <script type="module">
-      const source = atob(document.getElementById("shabnam-app").textContent.trim());
+      const source = atob(document.getElementById("app-js").textContent.trim());
       const bytes = Uint8Array.from(source, (char) => char.charCodeAt(0));
       import(URL.createObjectURL(new Blob([bytes], { type: "text/javascript" })));
     </script>

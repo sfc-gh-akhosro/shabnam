@@ -5,6 +5,12 @@
 // The textarea is the whole coding window: no highlighting, no completion, no
 // caret of ours. Only the ids the engine's sinks and the export need survive
 // here; everything the CSS wants, it reaches by element and position.
+//
+// The shell is `main` (toolbar + diagram) beside `aside` (the tabs), both direct
+// children of `body`, so neither needs a hook of its own. The ids that remain are
+// the sinks the engine writes and the one positioned ancestor the coordinate
+// contract names (§3.4) — and every one of them is two hyphenated words, because
+// a bare word is a name a DOT node can also have (§3.1).
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
@@ -48,7 +54,7 @@ const STARTER_TEXT: TabText = {
 };
 
 function seeded(): { text: TabText; styles: StyleFile } {
-  const seed = document.getElementById("shabnam-seed");
+  const seed = document.getElementById("app-seed");
   if (seed === null) return { text: STARTER_TEXT, styles: {} };
   const parsed = JSON.parse(seed.textContent!);
   return {
@@ -88,7 +94,7 @@ export function Workbench() {
     "load-dot": () => dotPicker.click(),
     "save-dot": () => download("diagram.dot", files.saveDot(), "text/vnd.graphviz"),
     "save-png": async () => download("diagram.png", await files.exportPng(), "image/png"),
-    "export-html": async () => download("shabnam.html", await files.exportHtml(), "text/html"),
+    "export-html": async () => download("diagram.html", await files.exportHtml(), "text/html"),
     "tab-1": () => setActive(TAB_IDS[0]!),
     "tab-2": () => setActive(TAB_IDS[1]!),
     "tab-3": () => setActive(TAB_IDS[2]!),
@@ -113,48 +119,50 @@ export function Workbench() {
   });
 
   return (
-    <div id="shabnam-workbench">
-      <header>
-        <img src={LOGO_URI} alt="" />
-        <b>Shabnam</b>
-        <button title="Cmd/Ctrl+Enter" onClick={redraw}>Redraw</button>
-        <button title="Cmd/Ctrl+O" onClick={commands["load-dot"]}>Load DOT</button>
-        <button title="Cmd/Ctrl+S" onClick={commands["save-dot"]}>Save DOT</button>
-        <button title="Cmd/Ctrl+P" onClick={commands["save-png"]}>Save PNG</button>
-        <button title="Cmd/Ctrl+E" onClick={commands["export-html"]}>Export HTML</button>
-        <input ref={dotPicker} class="hidden" type="file" accept=".dot,.gv" onChange={(e) => loadDot(e.currentTarget)} />
-        <span id="shabnam-status" />
-      </header>
+    <>
+      <main>
+        <nav>
+          <img src={LOGO_URI} alt="" />
+          <b>Shabnam</b>
+          <button title="Cmd/Ctrl+Enter" onClick={redraw}> Redraw Diagram </button>
+          <button title="Cmd/Ctrl+O" onClick={commands["load-dot"]}>Load DOT</button>
+          <button title="Cmd/Ctrl+S" onClick={commands["save-dot"]}>Save DOT</button>
+          <button title="Cmd/Ctrl+P" onClick={commands["save-png"]}>Save PNG</button>
+          <button title="Cmd/Ctrl+E" onClick={commands["export-html"]}>Export HTML</button>
+          {/* `hidden` rather than a class: the picker is opened by `.click()`,
+              never seen, and needs no CSS of its own. */}
+          <input ref={dotPicker} hidden type="file" accept=".dot,.gv" onChange={(e) => loadDot(e.currentTarget)} />
+          <output id="redraw-status" />
+        </nav>
 
-      <div>
-        <div id="shabnam-canvas">
-          <div id="shabnam-main-html" />
-          <svg id="shabnam-main-svg">
-            <g id="shabnam-clusters" />
-            <g id="shabnam-node-shells" />
-            <g id="shabnam-connectors" />
+        <article id="diagram-canvas">
+          <div id="diagram-html" />
+          <svg id="diagram-svg">
+            <g id="cluster-shells" />
+            <g id="node-shells" />
+            <g id="connector-paths" />
           </svg>
-          <div id="shabnam-annotation-html" />
-          <style id="shabnam-style-css" />
-          <script id="shabnam-action-js" />
-        </div>
+          <div id="annotation-html" />
+          <style id="style-css" />
+          <script id="action-js" />
+        </article>
+      </main>
 
-        <div id="shabnam-editors">
-          <Tabs active={active()} setActive={setActive} />
-          <Show when={active() === "styles"}>
-            <Rows stylist={stylist} stamp={stamp()} />
-          </Show>
-          <Show when={textTab(active())} keyed>
-            {(tab) => (
-              <textarea
-                value={text[tab]}
-                onInput={(event) => setText(tab, event.currentTarget.value)}
-              />
-            )}
-          </Show>
-        </div>
-      </div>
-    </div>
+      <aside>
+        <Tabs active={active()} setActive={setActive} />
+        <Show when={active() === "styles"}>
+          <Rows stylist={stylist} stamp={stamp()} />
+        </Show>
+        <Show when={textTab(active())} keyed>
+          {(tab) => (
+            <textarea
+              value={text[tab]}
+              onInput={(event) => setText(tab, event.currentTarget.value)}
+            />
+          )}
+        </Show>
+      </aside>
+    </>
   );
 }
 

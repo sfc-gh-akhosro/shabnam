@@ -29,7 +29,7 @@ test("spline mode (default) generates cubic bezier SVG paths", async () => {
   expect(svg).toContain('<path id="a_b" class="edge"');
   expect(svg).toContain('d="M');
   expect(svg).toContain('C');
-  expect(svg).toContain('marker-end="url(#shabnam-arrow)"');
+  expect(svg).toContain('marker-end="url(#connector-arrow)"');
 });
 
 test("ortho mode generates rounded corner step paths", async () => {
@@ -51,7 +51,7 @@ test("ortho mode generates rounded corner step paths", async () => {
 
   expect(svg).toContain('<path id="a_b" class="edge"');
   expect(svg).toContain('Q');
-  expect(svg).toContain('marker-end="url(#shabnam-arrow)"');
+  expect(svg).toContain('marker-end="url(#connector-arrow)"');
 });
 
 test("straight line mode generates direct L segments", async () => {

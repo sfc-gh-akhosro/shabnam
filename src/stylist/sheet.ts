@@ -1,6 +1,6 @@
 // The one live sheet, and the `@apply` expansion that happens on the way in.
 //
-// `#shabnam-style-css` is driven through CSSOM only (§3): one `CSSStyleRule` per
+// `#style-css` is driven through CSSOM only (§3): one `CSSStyleRule` per
 // selector, a property is `setProperty` / `removeProperty`. Nothing here writes
 // `textContent`, and nothing asks the browser to read a sheet back.
 //
@@ -14,7 +14,7 @@
 
 import type * as T from "../types.ts";
 
-const SINK = "shabnam-style-css";
+const SINK = "style-css";
 const APPLY = "@apply";
 
 /**

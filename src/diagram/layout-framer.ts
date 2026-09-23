@@ -1,4 +1,4 @@
-// Model → ranks → `#shabnam-main-html` (§3.3). Graphviz `pos` decides which rank a
+// Model → ranks → `#diagram-html` (§3.3). Graphviz `pos` decides which rank a
 // node is in, and nothing else — size and position are the Measurer's (§3.4).
 
 import type * as T from "../types.ts";

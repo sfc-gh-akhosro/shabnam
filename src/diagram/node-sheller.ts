@@ -4,8 +4,8 @@
 // a caption strip — so it is stroke-only and never covers the label.
 //
 // Coordinate contract, stated once and depended on by EdgeDrawer too: every
-// number here is CSS pixels in the padding-box space of `#shabnam-canvas`. `#shabnam-main-html`
-// is in flow and `#shabnam-main-svg` is `position: absolute; inset: 0` inside it, so the
+// number here is CSS pixels in the padding-box space of `#canvas`. `#diagram-html`
+// is in flow and `#diagram-svg` is `position: absolute; inset: 0` inside it, so the
 // two layers share that one origin and scroll together. The SVG has no viewBox,
 // which is what keeps one user unit equal to one pixel.
 
@@ -142,7 +142,7 @@ function shell(box: T.Box, node: T.Node): string {
   if (!shellMarkup && !badgeMarkup) return "";
 
   // Subgraph classes only. A grouping class no CSS selects is noise on the
-  // element (§3.1) — `#shabnam-node-shells > g` already reaches every one of these.
+  // element (§3.1) — `#node-shells > g` already reaches every one of these.
   return (
     `<g data-node="${node.id}">` +
     shellMarkup +

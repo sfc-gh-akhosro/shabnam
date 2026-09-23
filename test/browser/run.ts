@@ -32,13 +32,12 @@ const PAGE = `<!doctype html>
     <link rel="stylesheet" href="./app.css" />
   </head>
   <body>
-    <div id="root"></div>
-    <script>
-      window.SHABNAM_ERRORS = [];
+        <script>
+      window.TEST_ERRORS = [];
       const real = console.error.bind(console);
-      console.error = (...args) => { window.SHABNAM_ERRORS.push(args.join(" ")); real(...args); };
-      addEventListener("error", (e) => window.SHABNAM_ERRORS.push(String(e.message)));
-      addEventListener("unhandledrejection", (e) => window.SHABNAM_ERRORS.push(String(e.reason)));
+      console.error = (...args) => { window.TEST_ERRORS.push(args.join(" ")); real(...args); };
+      addEventListener("error", (e) => window.TEST_ERRORS.push(String(e.message)));
+      addEventListener("unhandledrejection", (e) => window.TEST_ERRORS.push(String(e.reason)));
     </script>
     <script type="module" src="./index.js"></script>
     <script type="module" src="./checks.js"></script>

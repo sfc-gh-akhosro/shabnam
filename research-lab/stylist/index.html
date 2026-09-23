@@ -1,31 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <title>Stylist</title>
   <style>
-    .rows { max-width: 30em; display: flex; gap: 0.5em;
-      flex-direction: column; justify-content: stretch;
+    .rows {
+      max-width: 30em;
+      display: flex;
+      gap: 0.5em;
+      flex-direction: column;
+      justify-content: stretch;
       background-color: lightgray;
       padding: 1em 0.5em;
     }
-    
-    header { display: flex; justify-content: space-between; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+    }
 
 
-    .row { display: flex; height: 1.5em; gap: 0.5em; box-shadow: 0 0 6px;} 
+    .row {
+      display: flex;
+      height: 1.5em;
+      gap: 0.5em;
+      box-shadow: 0 0 6px;
+    }
+
     .val {
       flex: 1 1 0;
       min-width: 0;
     }
-    .row > button {
+
+    .row>button {
       width: 3em;
     }
+
     input {
       height: auto;
     }
   </style>
 </head>
+
 <body>
   <div id="app"></div>
   <script type="module">
@@ -34,7 +51,7 @@
     import html from "https://esm.sh/solid-js@1.8.18/html";
 
     const SELECTORS = [":root", ".diagram", ".rank", ".node", ".record", ".shell", ".edge", ".arrow", ".cluster_", ".cell", ".label", ".icon", ".cluster_source", "#lake", "#runtime"];
-    const PROPERTIES = {"@apply":"text","color":"color","background":"color","background-color":"color","border-color":"color","fill":"color","stroke":"color","font-family":"text","font-size":"text","border-width":"text","stroke-width":"text","padding":"text","gap":"text"};
+    const PROPERTIES = { "@apply": "text", "color": "color", "background": "color", "background-color": "color", "border-color": "color", "fill": "color", "stroke": "color", "font-family": "text", "font-size": "text", "border-width": "text", "stroke-width": "text", "padding": "text", "gap": "text" };
 
     class Stylist {
       constructor() {
@@ -104,4 +121,5 @@
     render(App, document.getElementById("app"));
   </script>
 </body>
+
 </html>

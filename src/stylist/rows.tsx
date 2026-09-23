@@ -3,9 +3,12 @@
 // delete on the left and an add on the right.
 //
 // The markup is `research-lab/stylist/index.html` verbatim — `.rows`, `header`,
-// `.row`, `.btn`, `.sel`, `.prop`, `.val`, and the two datalists `#sl` and
-// `#pl`. That prototype is styled by ten lines of CSS, and it is the only
-// reason this tab is cheap to restyle.
+// `.row`, `.sel`, `.prop`, `.val`, and the two datalists, named in full here so
+// no DOT node can collide with them (§3.1). That prototype is styled by ten lines
+// of CSS, and it is the only reason this tab is cheap to restyle. The three box
+// classes stay because the browser checks drive the rows through them; the
+// buttons carry nothing, since `header button` and `.row button` already reach
+// them.
 //
 // The list is a snapshot of `Stylist.rows()`, which is the book traversed in
 // order. One row per entry: a repeated `(selector, property)` is an overwrite in
@@ -96,7 +99,7 @@ export function Rows(props: RowsProps) {
   };
 
   return (
-    <div class="rows">
+    <section>
       <header>
         <b>Stylist</b>
         <div>
@@ -106,13 +109,14 @@ export function Rows(props: RowsProps) {
         </div>
       </header>
 
-      <datalist id="sl">
+      <datalist id="selector-list">
         <Index each={selectors(rows())}>{(name) => <option value={name()} />}</Index>
       </datalist>
-      <datalist id="pl">
+      <datalist id="property-list">
         <Index each={[...PROPERTY.keys()]}>{(name) => <option value={name()} />}</Index>
       </datalist>
 
+      <div class="rows">
       <Index each={rows()}>
         {(row, at) => (
           // Each box carries its own `title`: the pane is narrow, so a long
@@ -122,10 +126,10 @@ export function Rows(props: RowsProps) {
             id={row().id === REFUSED ? undefined : String(row().id)}
             data-source={row().source}
           >
-            <button class="btn" title="remove this row" onClick={() => drop(at)}>❌</button>
+            <button title="remove this row" onClick={() => drop(at)}>❌</button>
             <input
               class="sel"
-              list="sl"
+              list="selector-list"
               placeholder="selector"
               title={row().selector}
               value={row().selector}
@@ -133,7 +137,7 @@ export function Rows(props: RowsProps) {
             />
             <input
               class="prop"
-              list="pl"
+              list="property-list"
               placeholder="property"
               title={row().property}
               value={row().property}
@@ -147,11 +151,12 @@ export function Rows(props: RowsProps) {
               value={row().value === "" && swatched(row()) ? "#000000" : row().value}
               onInput={(event) => write(at, "value", event.currentTarget.value)}
             />
-            <button class="btn" title="insert a row below" onClick={() => insert(at)}>➕</button>
+            <button title="insert a row below" onClick={() => insert(at)}>➕</button>
           </div>
         )}
       </Index>
-    </div>
+      </div>
+    </section>
   );
 }
 

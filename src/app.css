@@ -1,231 +1,227 @@
 /* Workbench chrome only. The diagram's own styling is derived Base CSS plus the
    user's My Style, which land in the canvas sinks — never here.
 
-   Tokens, then the four core classes, then the skeleton. Everything else is
-   reached by element and position, so the markup carries almost no hooks: the
-   ids below are the layout and the coordinate contract, and the only classes are
-   the core four plus `.rows`/`.val` from `research-lab/stylist/index.html` and
-   two state flags. `@apply` is a Stylist feature, not real CSS, so a rule that
-   wants a core class copies its properties. */
+   Tokens, then the skeleton. Everything is reached by element and position, so
+   the markup carries almost no hooks: the ids below are the sinks the engine
+   writes and the coordinate contract, and the only classes are `.rows`/`.row`
+   and the three box names from `research-lab/stylist/index.html`, plus one state
+   flag. `@apply` is a Stylist feature, not real CSS, so a rule that wants a core
+   class copies its properties.
 
-:root,
-svg {
+   Every id here is two hyphenated words, and that is not a style preference: a
+   DOT node keeps its own name as its id (§3.1), so a bare `#app` or `#canvas`
+   is a live collision waiting for a node called `app`. The chrome's own boxes
+   carry no id at all — `body > main` and `body > aside` reach them. */
+
+body {
   --theme-color: white;
 
-  --primary-color: #0b3d91;
-  --secondary-color: #1565c0;
-  --accent-color: #ff8f00;
+  --primary-color: blue;
+  --secondary-color: green;
+  --accent-color: orange;
 
   --main-font: system-ui, sans-serif;
   --title-font: system-ui, sans-serif;
   --base-font-size: 14px;
   --code-font: ui-monospace, Menlo, Consolas, monospace;
 
-  --vertical-gap: 2em;
-  --horizontal-gap: 2em;
+  --vertical-gap: 1em;
+  --horizontal-gap: 1em;
 
-  --raised-shadow: 0 10px 22px grey;
-  --flat-shadow: 0 0 2px;
+  --raised-shadow: 1px 2px 4px;
+  --flat-shadow: 0px 0px 2px;
 
-  --vertical-pad: 4px;
-  --horizontal-pad: 3px;
+  --vertical-pad: 0.5em;
+  --horizontal-pad: 0.75em;
 
-  --glass-background: color-mix(in srgb, var(--secondary-color) 10%, transparent);
   --paper-background: color-mix(in srgb, var(--primary-color) 10%, var(--theme-color));
+  --glass-background: color-mix(in srgb, var(--theme-color) 30%, transparent);
 }
 
-/* ------------------------------------------------------------- core classes */
-
-.paper {
-  background: var(--paper-background);
-  box-shadow: var(--flat-shadow);
-  border-radius: 3px;
-}
-
-.glass {
-  background: var(--glass-background);
-  box-shadow: var(--raised-shadow);
-  fill: var(--glass-background);
-}
-
-.row {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  flex: 1;
-}
-
-.col {
-  display: flex;
-  flex-direction: column;
-  flex-wrap: nowrap;
-}
-
-/* ----------------------------------------------------------------- elements */
 
 body {
   margin: 0;
   font-family: var(--main-font);
   font-size: var(--base-font-size);
-  background: var(--theme-color);
+
+  background-color: var(--theme-color);
+
+  display: flex;
+  justify-content: stretch;
+  height: 100vh;
 }
 
-img {
-  height: 2em;
-  width: auto;
-}
 
-button {
+button, input {
   font: inherit;
   border: 0;
   border-radius: 3px;
-  background: var(--paper-background);
-  box-shadow: var(--flat-shadow);
+  background-color: var(--glass-background);
+  box-shadow: var(--raised-shadow);
 }
 
-input {
-  font: inherit;
-  height: auto;
+
+body>aside {
+  width: 40em;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   min-width: 0;
-  border: 0;
-  border-radius: 3px;
-  background: var(--paper-background);
+  gap: var(--vertical-gap) var(--horizontal-gap);
 }
 
-/* The toolbar, and the styles tab's own header. */
-header {
+
+
+nav {
   display: flex;
   gap: var(--horizontal-pad);
   align-items: center;
+  height: 2.5em;
   line-height: 2em;
-  margin: var(--horizontal-pad);
+  padding: var(--vertical-pad);
 }
 
-/* The tab strip: four equal buttons. */
-nav {
+nav>img {
+  height: 100%;
+}
+
+
+aside {
   display: flex;
+  flex-direction: column;
+  justify-content: stretch;
+
+  gap: var(--vertical-gap);
+
+    background-color: var(--glass-background);
+
 }
 
-nav > button {
+
+/* radio buttons push effect: tight buttons with inset when active */
+aside>nav {
+  gap: 0
+}
+
+aside>nav>button {
   flex: 1;
   border-radius: 0;
 }
 
-/* The whole coding window. No highlighting, no completion, no caret of ours. */
-textarea {
+.active {
+  box-shadow: inset var(--flat-shadow);
+}
+
+
+article {
+  display: flex;
   flex: 1;
-  min-height: 0;
+  overflow: auto;
+
+}
+
+
+textarea {
   border: 0;
-  resize: none;
-  outline: none;
-  padding: var(--vertical-pad);
   font-family: var(--code-font);
   tab-size: 2;
+
+  height: fit-content;
+  padding: 1em;
 }
 
-.active {
-  box-shadow: inset var(--raised-shadow);
-}
-
-.hidden {
-  display: none;
-}
-
-/* ----------------------------------------------------------------- skeleton */
-
-/* .col — toolbar on top, then the canvas beside the editors. */
-#shabnam-workbench {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-#shabnam-workbench > div {
-  display: flex;
+aside > :last-child {
   flex: 1;
-  min-height: 0;
 }
 
-/* The coordinate contract (§3.4): `#shabnam-canvas` is the positioned ancestor,
-   so its padding-box top-left is the one origin both layers use. */
-#shabnam-canvas {
-  flex: 1;
-  position: relative;
-  overflow: auto;
-  min-width: 0;
-}
-
-/* Both layers are absolute inside the canvas and therefore scroll with
-   `#shabnam-main-html`; `overflow: visible` lets shells and connectors past the
-   visible box paint, and no viewBox keeps one user unit equal to one pixel. */
-#shabnam-main-svg,
-#shabnam-annotation-html {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  pointer-events: none;
-}
-
-/* Part of the anchor contract: the anchor point is the annotation's own centre,
-   so `data-anchor="core"` centres it on that node without anyone measuring. */
-#shabnam-annotation-html [data-anchor] {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  pointer-events: auto;
-}
-
-/* .col, and the one pane that does not grow. `min-width` is not decoration: a
-   flex item defaults to `min-width: auto`, so without this the rows' inputs
-   push the pane past its 30em and starve the canvas. */
-#shabnam-editors {
+.row {
   display: flex;
-  flex-direction: column;
-  flex: 0 0 30em;
-  min-width: 0;
-  min-height: 0;
+  gap: var(--horizontal-pad);
 }
 
-/* --------------------------------------------------------------- styles tab */
 
-/* `research-lab/stylist/index.html`, as it stands. A style row is a `.row` that
-   does not grow; the value box is the one that takes the slack. */
 .rows {
   display: flex;
   flex-direction: column-reverse;
+  justify-content: stretch;
+
+  gap: var(--horizontal-pad);
+
+
+
+  overflow: auto;
+  padding: var(--horizontal-pad) var(--vertical-pad);
+
+
+  .row {
   flex: 1;
-  gap: 0.5em;
-  min-height: 0;
-  overflow-y: auto;
-  background-color: lightgray;
-  padding: 1em 0.5em;
+  min-width: 0;
+
+  height: 1.5em;
+      box-shadow: var(--raised-shadow);
+
+    button {
+      width: 3em;
+      background-color: var(--paper-background);
+    };
+
+    input {
+      width: 10em;
+            background-color: var(--paper-background);
+
+    };
+  };
+
 }
 
-.rows > header {
-  justify-content: space-between;
-}
 
-.rows > .row {
-  flex: 0 0 1.5em;
-  gap: 0.5em;
-  box-shadow: 0 0 6px;
-}
 
-.rows .val {
-  flex: 1 1 0;
-}
 
-.rows > .row > button {
-  width: 3em;
-}
 
 /* Source is the only thing distinguishing one row from another (§1): 0 theme,
    1 dot, 2 user. Theme is the floor and says nothing. */
-.row[data-source="1"] {
-  border-left: 2px solid var(--secondary-color);
+.rows>.row[data-source="1"] {
+
+  background-color: color-mix(in srgb, var(--accent-color), var(--theme-color));  
 }
 
-.row[data-source="2"] {
-  border-left: 2px solid var(--accent-color);
+.rows>.row[data-source="0"] {
+  background-color: var(--accent-color);  
 }
+
+
+
+aside > section {
+  display: contents;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+}
+
+
+#diagram-canvas {
+  position: relative;
+}
+
+#diagram-html {
+  display: contents;
+}
+
+#annotation-html,
+#diagram-svg {
+  flex: 1;
+  position: absolute;
+  inset: 0;
+
+}
+
+.diagram {
+  padding: var(--vertical-gap) var(--horizontal-gap);
+  flex: 1;
+}
+
