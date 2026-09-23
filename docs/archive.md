@@ -9,8 +9,9 @@ out wrong. Iterations 1–5 were the original build plan, which lived in
 here — they live in `docs/technical-debts.md`.
 
 **Status: iterations 1–7 all done, each verified in a browser. The as-is → to-be
-plan (sessions A–D) is closed. CodeJar is accepted. The plan now running is the
-Stylist rewrite in `current-task.md`.**
+plan (sessions A–D) is closed. CodeJar is accepted. The Stylist rewrite
+(sessions 1–8) is closed: style is data, the styles tab is rows, and the CSSOM
+half has a browser test that runs on demand.**
 
 ## Session 1 — the law learns about the Stylist
 
@@ -35,6 +36,217 @@ What was decided, and is the reason the doc changed before the code:
 
 `README.md` still describes five tabs and `Css.plus` — it documents the code, which
 has not moved yet, so it is synced in session 7, not here.
+
+---
+
+## Session 2 — the types
+
+`src/types.ts` says what §10 says. `StyleRules`, `StyleFile`, `StyleOrigin`,
+`StyleRow`, and the seven-method `Stylist` interface in; `Css` out;
+`Diagram.derived` returns `StyleRules`; `Files` loses the theme verbs; `TabId` is
+four ids and `TabText` is keyed off the three *text* tabs on purpose, because the
+styles tab is not text.
+
+**Nothing was stubbed, deliberately.** Stubbing to green meant deleting the theme
+and style tabs three sessions before their replacement existed, so the break was
+left standing: 18 `tsc` errors across 6 files, each one assigned to the session
+that would fix it. `bun test` stayed green throughout, which is honest and blind
+— bun does not typecheck.
+
+---
+
+## Session 3 — decompose basic.css, once
+
+`theme/basic-theme.json` is tracked: 13 selectors, `:root, svg` one key, the five
+mixins kept, `@apply` first in each rule that has one. `build/decompose-theme.ts`
+was run once by hand and is not wired into the build.
+
+Two things the plan did not foresee, and both are reusable knowledge:
+
+- **CSSOM only exists in a browser.** So the script serves a one-page harness on
+  `:3100`, the page reads its own `<style>` back and `POST`s the result. One hand
+  run, and still no CSS parser in the repo.
+- **Do not enumerate `rule.style`.** Enumeration yields longhands, and a shorthand
+  holding `var()` or `color-mix()` leaves every longhand empty — the first run
+  silently produced `"background-color": ""`. The script reports
+  `rule.style.cssText` and splits that instead.
+
+The `@apply` lift is a text pass that rewrites it to `--shabnam-apply`, which
+CSSOM keeps verbatim and in place, and the name is turned back on write. Values
+are CSSOM's serialization, not the source text: `flex-direction` + `flex-wrap`
+came back as `flex-flow`, `flex: 1` as `flex: 1 1 0%`. Equivalent, not identical.
+
+---
+
+## Session 4 — the Stylist
+
+`src/stylist/stylist.ts` — three layers, `merged()`, the seven interface methods.
+`src/stylist/sheet.ts` — `resolve` / `serialize` / `applyBound` as pure functions
+plus a thin `Sheet` holding the CSSOM side. `src/css/` deleted.
+
+Three calls the plan left open:
+
+- **`feed()` is public on the class, not on the interface.** The conductor calls
+  it once per draw; §10 caps the interface at seven and `feed` is not one of them.
+- **No `attach()`.** A `<style>` has no `.sheet` until it is in the document, so
+  `Sheet` looks the element up on first use — necessarily after mount — and throws
+  if it is null. One place, instead of an eighth verb on the surface.
+- **The pure half is exported and the DOM half is thin,** which is what makes the
+  interesting half testable without a browser.
+
+**The short path is real, with one correctness branch.** `addRule` / `removeRule`
+do one `setProperty` / `removeProperty`, and fall back to a full `feed()` when the
+property is `@apply` or when the *selector being edited is named by* some `@apply`
+— editing `.paper` has to reach every consumer that applied it. `removeRule` also
+re-sets the property from the under-layer, so removing a shadow reverts rather
+than un-paints.
+
+Verified with 21 checks in a throwaway harness driven by headless Chrome
+(`--dump-dom`), the browser tool being unavailable. That trick is the part that
+outlived the harness — session 8 made it a permanent test.
+
+---
+
+## Session 5 — CssBagger returns a map
+
+`Diagram.derived(model): StyleRules`. `rules()` and `pad()` gone, replaced by
+`put()` (translate a bag into one entry, create nothing for an empty bag) and
+`own()` (get-or-create, because node overrides and position margins both speak
+about `#id` and the second must not clobber the first). The cluster recursion
+composes a flat path, so `&` is gone and the empty wrapper rule the old nesting
+needed is gone with it.
+
+**Verified declaration-identical, not eyeballed.** The app did not compile yet, so
+a throwaway script imported the old bagger from `git show HEAD:` alongside the new
+one, flattened the old text, and diffed selector | property | value across four
+graphs. All four identical and in the same order — the only difference being
+`:root` → `:root, svg`, which was the latent-bug fix the session was told to make.
+
+---
+
+## Session 6 — strip the old plumbing
+
+Nothing left that moves CSS as text. Both sinks (`theme-css`, `style-css`) are out
+of `SINK_WRITE`, so `inject` can no longer reach the Stylist's sheet, and
+`#shabnam-theme-css` is gone from the skeleton. Redraw is bag → `setDerived` →
+`feed` → frame → measure → SVG. **The tree compiled again.**
+
+Four calls the plan left open:
+
+- **`discardDerived` simply died.** The redraw that follows a load replaces the
+  layer wholesale, so a discard verb was a second way to say the same thing. §4's
+  "dead `#id` rules cannot stick" is now true by construction.
+- **The export seed's user rows come from `rows()`,** filtered by
+  `files.ts`'s `userFile(rows)`, rather than an eighth interface method. Restoring
+  is the same shape in reverse: the workbench replays the seed through `addRule` in
+  `onMount`, because `Sheet` needs the element in the document.
+- **Session 7's tab work was borrowed,** because compiling required it: four
+  labels, `keys.ts` down to `tab-1`–`tab-4`, and the styles tab rendering nothing
+  until `rows.tsx` landed.
+- **`theme/theme.css` and `theme/blueprint.css` deleted** — with the catalog gone,
+  nothing read them.
+
+Verified live and then through a real `Cmd+E` export reloaded standalone: same 13
+rules, same picture, seed keys exactly `dot` / `action` / `annotation` / `styles`.
+**One pre-existing caveat, found not caused:** an exported file does not run from
+`file://`, because the page imports the app as a blob URL module and an opaque
+origin blocks it. Over any HTTP server it paints.
+
+---
+
+## Session 7 — four tabs and the rows UI
+
+`src/stylist/rows.tsx` — one `Rows` component, `Index` over a snapshot of
+`Stylist.rows()`, native `input list=` for selector and property, and a header
+carrying `+ Row` / `Cleanup` / `Save Styles`. `highlightCss` and its three `.hl-`
+classes are gone; nothing else used them.
+
+Five calls the plan left open:
+
+- **Selector and property commit on `change`; the value commits on `input`.** The
+  value is the point — one `setProperty`, picture follows the caret. A selector is
+  different: `addRule` ends in `insertRule`, which *throws* on a selector CSS
+  cannot parse, and every mid-word state of `.node` is one. Committing on blur
+  keeps the half-typed states away from CSSOM without writing a validator.
+- **Theme and derived rows are value-editable only.** Editing the value writes a
+  user row that shadows it, so the rule then shows twice — which is honest, both
+  layers really are still there. Renaming a theme row's selector would have meant
+  "a user row that shadows nothing", and `+` already says that.
+- **`×` exists only on user rows.** Removing a theme or derived row is not a thing
+  the three-layer model can express.
+- **The swatch is conditional.** `type=color` only speaks six-digit hex; pointed at
+  `var(--paper)` it would show black and mean nothing. The text box is the truth.
+- **`Save Styles` lives in the tab header,** not the toolbar: the toolbar is the
+  file-and-diagram verbs.
+
+**A `stamp` prop, because a redraw replaces a layer under the tab.** `Workbench`
+bumps a counter after every `engine.redraw()` and `Rows` re-syncs on it. Three
+lines, against a stale derived list.
+
+**One real bug found by the browser pass, and fixed.** `removeRule` looked the
+under-layer value up in the *unresolved* map, so a `background` arriving through
+`@apply .paper` came back `undefined` and removing a shadow *cleared* the property
+instead of reverting it — boxes went transparent rather than back to lavender. It
+now resolves first, which is exactly what `feed` paints. Pre-existing from session
+4, on the short path only, which is why a Redraw always healed it and session 4's
+harness missed it.
+
+---
+
+## Session 8 — the tests, and a real browser one
+
+The text-asserting tests were already gone: the expander test was deleted in
+session 4, the bagger test rewritten against the map in session 5, and
+`ui-integration.test.ts` had already lost its `Css` imports and its derived-text
+assertions. What was actually owed was the other half — the one bun cannot reach.
+
+**`test/browser/` is now a permanent test, not a harness.** `run.ts` serves the
+real app on `:3101`, spawns the already-installed Chrome with `--headless=new
+--dump-dom`, and reads one base64 JSON report back out of the dumped DOM;
+`checks.ts` runs inside the page. 20 checks: the app mounts, four tabs named as §4
+names them, the starter diagram draws with its SVG layer and annotation, the sink
+carries **no** CSS text, no `@apply` survives the feed, the theme paints, derived
+tokens reach `:root`, every layer is listed and origin-tagged, a theme row is
+value-editable only, **a user row repaints live with no redraw and no re-layout**,
+removing a shadow reverts to the layer under it, an `@apply` row re-feeds cleanly,
+`Cleanup` drops a blank row, Redraw still draws, and no console or uncaught error
+happened anywhere along the way.
+
+**Decided with the user: headless Chrome, no dependency.** Playwright was the
+other option and it would give real pointer events and retries, but it is a large
+dev dependency and a second runner for a page we can drive from inside. The
+checks touch **no app internals** — they set a box, dispatch the event the
+component listens for, and read `getComputedStyle` and the live sheet — so the
+test cannot pass by agreeing with the Stylist about something wrong.
+
+Four things learned building it, all of them the kind that cost an hour twice:
+
+- **No `try` / `catch`, so the report is published after every stage.** If a stage
+  throws, the page stops and the dump carries out whatever was already recorded;
+  the driver prints the last stage reached and fails. An `unhandledrejection`
+  listener flushes rather than swallows.
+- **`btoa` only speaks Latin-1.** A detail string holding `→` threw *inside*
+  `publish`, which looked exactly like a hung check: the stage attribute advanced
+  and the report did not. The JSON is UTF-8 encoded first.
+- **Do not wait on `requestAnimationFrame` under `--virtual-time-budget`.** Frames
+  stop being produced once the page settles, so an rAF-based tick hangs forever
+  while a timer tick keeps working.
+- **Wait for the connectors, not the nodes.** The SVG layer is injected a frame
+  after the HTML, so waiting on a node reads the picture half-drawn — which showed
+  up as an empty shell layer only after the time budget was raised.
+
+**One real bug found, and fixed.** `keyed()` in `rows.tsx` asked only for a
+selector and a property, so filling a row in the natural order committed the rule
+while the value box was still empty. For `@apply` that is fatal — an empty value
+splits to `[""]`, and `flatten` throws `@apply : not defined`, taking the app down
+mid-typing. A row now reaches the Stylist only when all three boxes say something,
+which also gives clearing the value box its natural meaning: the rule is removed.
+
+**Debt S2 is closed as superseded** — its own reasoning is below. The split it
+described still holds and is now load-bearing: the map merge and `@apply`
+resolution are pure and tested under bun, the feed is browser-only and tested by
+`bun run test:browser`. The browser half stays a separate command on purpose; it
+costs seconds and a Chrome launch, and `bun test` is the one that runs constantly.
 
 ---
 
@@ -346,6 +558,20 @@ Law files (`app-architecture` §1/§3/§4/§5/§7/§8/§10, `current-task`, `REA
 ---
 
 ## Closed debts — kept for the reasoning
+
+### S2. ~~`Css.plus` / `Css.minus` cannot be tested under `bun`~~ — **closed by
+session 8, as superseded**
+
+The original entry: `bun test` has no CSSOM, so both throw there by design;
+session B verified them in the browser, the expander still ran under Bun, and a
+DOM shim would be worse than no test.
+
+`Css` no longer exists, so the subject is gone — but the limit it recorded is
+permanent and now shapes the suite. The pure half (`resolve`, `serialize`,
+`applyBound`, the merge) is tested under bun in `test/stylist.test.ts`; the feed,
+the live repaint, and the rows tab are tested in a real browser by
+`test/browser/`. The debt asked for "a browser-run harness, when regression tests
+earn their place" — they earned it, and it found two bugs on the way in.
 
 These were paid. They live here rather than in `docs/technical-debts.md`, which
 holds only open debts. Their ids are retired, not reused. Anything written below

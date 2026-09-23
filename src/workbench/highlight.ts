@@ -46,19 +46,6 @@ export function highlightHtml(code: string): string {
   );
 }
 
-export function highlightCss(code: string): string {
-  const CSS_PATTERN =
-    /(\/\*[\s\S]*?\*\/)|(@(?:apply|mixin|include|keyframes|media|layer|import)\b)|([^{};\n]+(?=\{))|([a-zA-Z0-9_-]+)(?=\s*:)|(".*?"|'.*?')/g;
-  return paint(code, CSS_PATTERN, ([, comment, atrule, selector, property, str]) =>
-    comment ? hl("hl-comment", comment)
-    : atrule ? hl("hl-atrule", atrule)
-    : selector ? hl("hl-selector", selector)
-    : property ? hl("hl-property", property)
-    : str ? hl("hl-string", str)
-    : "",
-  );
-}
-
 export function highlightDot(code: string): string {
   const DOT_PATTERN =
     /(\/\/[^\n]*|\/\*[\s\S]*?\*\/|#[^\n]*)|(".*?")|(\b(?:digraph|graph|subgraph|node|edge|strict)\b)|(\b(?:rankdir|label|shape|style|color|fillcolor|fontname|fontsize|penwidth|splines)\b)|(->|--)/gi;

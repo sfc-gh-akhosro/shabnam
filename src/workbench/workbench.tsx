@@ -1,9 +1,10 @@
 // SolidJS shell: canvas skeleton, the radio strip, and one CodeJar for the
 // three text tabs. The styles tab is not text — it is a rows view onto the
-// `Stylist`, and `rows.tsx` fills it in the next session.
+// `Stylist`, so it renders `Rows` instead of the editor.
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
+import { Rows } from "../stylist/rows.tsx";
 import { Stylist } from "../stylist/stylist.ts";
 import type { StyleFile, TabId, TabText } from "../types.ts";
 import { Engine } from "./engine.ts";
@@ -67,12 +68,17 @@ export function Workbench() {
   const seed = seeded();
   const [text, setText] = createStore<TabText>(seed.text);
   const [active, setActive] = createSignal<TabId>("dot");
+  const [stamp, setStamp] = createSignal(0);
   const stylist = new Stylist();
   const engine = new Engine(text, stylist);
   const files = new Files(text, (tab, value) => setText(tab, value), stylist);
   let dotPicker!: HTMLInputElement;
 
-  const redraw = () => engine.redraw();
+  // The stamp tells the styles tab that the derived layer has been replaced.
+  const redraw = async () => {
+    await engine.redraw();
+    setStamp(stamp() + 1);
+  };
 
   const loadDot = async (input: HTMLInputElement) => {
     files.loadDot(await input.files![0]!.text());
@@ -124,7 +130,6 @@ export function Workbench() {
         <button title="Cmd/Ctrl+S" onClick={commands["save-dot"]}>
           Save DOT
         </button>
-        <button onClick={() => stylist.save()}>Save Styles</button>
         <button title="Cmd/Ctrl+P" onClick={commands["save-png"]}>
           Save PNG
         </button>
@@ -149,6 +154,9 @@ export function Workbench() {
 
       <div id="shabnam-editors">
         <Tabs active={active()} setActive={setActive} />
+        <Show when={active() === "styles"}>
+          <Rows stylist={stylist} stamp={stamp()} />
+        </Show>
         <Show when={textTab(active())} keyed>
           {(tab) => (
             <Editor

@@ -193,9 +193,6 @@ body {
 .hl-tag { color: #e11d48; font-weight: 600; }
 .hl-attr { color: #d97706; }
 .hl-property { color: #2563eb; font-weight: 500; }
-.hl-value { color: #0d9488; }
-.hl-atrule { color: #ec4899; font-weight: 600; }
-.hl-selector { color: #6366f1; font-weight: 600; }
 .hl-operator { color: #f43f5e; font-weight: 700; }
 
 .editor-wrap {
@@ -212,4 +209,102 @@ body {
 
 .hidden {
   display: none !important;
+}
+
+/* ------------------------------------------------------------ styles tab */
+
+#shabnam-styles {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+
+#shabnam-styles-head {
+  display: flex;
+  gap: 0.4em;
+  padding: 0.5em;
+  border-bottom: 1px solid #d6dbe0;
+}
+
+#shabnam-styles-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+}
+
+.style-row {
+  display: flex;
+  gap: 0.3em;
+  align-items: center;
+}
+
+.style-row input {
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  min-width: 0;
+  border: 1px solid #d6dbe0;
+  border-radius: 3px;
+  padding: 0.2em 0.3em;
+}
+
+.style-row input:read-only {
+  background: #f4f6f8;
+  color: #52606d;
+}
+
+.style-selector {
+  flex: 1.3 1 0;
+}
+
+/* Custom-property names are the long ones (`--horizontal-gap`), so the property
+   box gets the most room. Anything still clipped is readable on hover. */
+.style-property {
+  flex: 1.6 1 0;
+}
+
+.style-value {
+  flex: 1 1 0;
+}
+
+.style-swatch {
+  flex: 0 0 2em;
+  padding: 0;
+  height: 1.7em;
+}
+
+.style-row button,
+.style-row .style-remove {
+  flex: 0 0 1.6em;
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid #d6dbe0;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #52606d;
+}
+
+.style-row span.style-remove {
+  border: 0;
+  background: none;
+}
+
+.style-row[data-origin="derived"] {
+  border-left: 2px solid #94a3b8;
+  padding-left: 0.3em;
+}
+
+.style-row[data-origin="user"] {
+  border-left: 2px solid #2563eb;
+  padding-left: 0.3em;
+}
+
+.style-row[data-origin="theme"] {
+  border-left: 2px solid transparent;
+  padding-left: 0.3em;
 }

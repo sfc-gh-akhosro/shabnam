@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "bun run build/dev.ts",
     "build": "bun run build/build.ts",
-    "test": "bun test test"
+    "test": "bun test test",
+    "test:browser": "bun run test/browser/run.ts"
   },
   "keywords": [
     "diagram",

@@ -113,8 +113,8 @@ describe("UI & Workbench Integration Suite", () => {
     }
   });
 
-  test("Syntax highlighters tokenize JS, HTML, CSS, and DOT correctly", async () => {
-    const { highlightJs, highlightHtml, highlightCss, highlightDot } = await import(
+  test("Syntax highlighters tokenize JS, HTML, and DOT correctly", async () => {
+    const { highlightJs, highlightHtml, highlightDot } = await import(
       "../src/workbench/highlight.ts"
     );
 
@@ -126,10 +126,6 @@ describe("UI & Workbench Integration Suite", () => {
     const html = highlightHtml('<div class="box">text</div>');
     expect(html).toContain('<span class="hl-tag">&lt;div</span>');
     expect(html).toContain('<span class="hl-attr">class</span>');
-
-    const css = highlightCss(".node { color: red; }");
-    expect(css).toContain('<span class="hl-selector">.node </span>');
-    expect(css).toContain('<span class="hl-property">color</span>');
 
     const dot = highlightDot('digraph { a -> b [label="Hi"] }');
     expect(dot).toContain('<span class="hl-keyword">digraph</span>');

@@ -10,7 +10,7 @@ being decided, not by being tidied.
 **Only open debts live here.** A paid debt leaves immediately: if its reasoning
 still teaches something it moves to `docs/archive.md`, otherwise it is deleted.
 Ids are permanent and never reused, so the gaps in the numbering are expected —
-D2, D3, R1 are in the archive; M2, P1, P2, P3 are gone.
+D2, D3, R1, S2 are in the archive; M2, P1, P2, P3 are gone.
 
 ---
 
@@ -246,14 +246,6 @@ declaration scoping, not ours.
 **Cost to close:** nothing we should pay. Second-guessing Graphviz's own
 membership lists is how we end up with a second DOT reader.
 
-### S2. `Css.plus` / `Css.minus` cannot be tested under `bun`
-
-`bun test` has no CSSOM, so both throw there by design. Session B verified them
-in the browser. The expander still runs under Bun. A DOM shim would be worse
-than no test.
-
-**Cost to close:** a browser-run harness, when regression tests earn their place.
-
 ### S6. Completer parked in `temp/completer/`
 
 CodeJar is accepted. The current-line classifier (`complete.ts`, tests, `Slot`
@@ -271,3 +263,38 @@ either order. Nothing in the UI triggers it today — Redraw is a button and a
 shortcut, not a keystroke handler. A hot-reload feature would trigger it.
 
 **Cost to close:** one guard flag, when something can actually cause it.
+
+### S7. A styles row commits its selector to CSSOM unvalidated
+
+`Stylist.addRule` ends in `sheet.insertRule`, which throws on a selector CSS
+cannot parse. The rows tab keeps the mid-typing state away from it — selector and
+property commit on `change`, not on keystroke — but a *finished* typo (`.`, `#`)
+still reaches `insertRule` and takes the app down with a stack. That is the law's
+preferred failure (§ fail loud), and the alternative is a CSS selector validator,
+which is a parser we refuse.
+
+**Cost to close:** nothing we should pay as a parser. If it becomes annoying, the
+honest fix is a browser-supplied probe, not a grammar of our own.
+
+### S9. The browser half of the suite is a second command
+
+`bun test` covers the pure half; `bun run test:browser` launches Chrome for the
+CSSOM half. They are not one command, on purpose: the browser run costs a Chrome
+launch and several seconds, and `bun test` is the one that runs constantly. The
+risk is the real one — a command nobody types is a test nobody runs.
+
+The driver also hard-codes the macOS Chrome path, overridable with `CHROME=`, and
+pins `--virtual-time-budget`, so a very slow machine could dump the DOM early;
+that shows up as a missing stage rather than a false pass.
+
+**Cost to close:** chaining it into `bun run test`, once we mind the seconds
+less than the risk. Not a code change.
+
+### S8. The styles row is three columns in a narrow pane
+
+Property names are the long ones (`--horizontal-gap`, `--raised-shadow`) and they
+clip mid-word at the pane's width. Every box carries a `title`, so a clipped row
+is readable on hover. Widening the editor pane, or wrapping a row onto two lines,
+both cost more than the annoyance is worth today.
+
+**Cost to close:** a grid that wraps, or a resizable pane. Not urgent.

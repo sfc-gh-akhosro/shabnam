@@ -4,7 +4,7 @@ import { CodeJar } from "codejar";
 import { createEffect, onCleanup, onMount } from "solid-js";
 import type { TabId } from "../types.ts";
 
-export { highlightCss, highlightDot, highlightHtml, highlightJs } from "./highlight.ts";
+export { highlightDot, highlightHtml, highlightJs } from "./highlight.ts";
 
 type EditorProps = {
   tab: TabId;

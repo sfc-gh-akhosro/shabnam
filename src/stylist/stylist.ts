@@ -9,7 +9,7 @@
 // per draw (§5). A row edit does not need it — that is the short path.
 
 import type * as T from "../types.ts";
-import { applyBound, Sheet, serialize } from "./sheet.ts";
+import { applyBound, resolve, Sheet, serialize } from "./sheet.ts";
 import basicTheme from "../../theme/basic-theme.json";
 
 const APPLY = "@apply";
@@ -30,7 +30,11 @@ export class Stylist implements T.Stylist {
   removeRule(selector: string, property: string): void {
     this.user.get(selector)?.delete(property);
     if (property === APPLY || applyBound(selector, this.merged())) return this.feed();
-    const under = this.merged().get(selector)?.get(property);
+    // The layer under a removed row is what `feed` *paints*, not what the map
+    // literally holds: a `background` may arrive through `@apply .paper` and
+    // appear nowhere in this selector's own properties. So resolve first, or
+    // removing a shadow un-paints the inherited value instead of reverting it.
+    const under = resolve(this.merged()).get(selector)?.get(property);
     if (under === undefined) this.sheet.clear(selector, property);
     else this.sheet.set(selector, property, under);
   }

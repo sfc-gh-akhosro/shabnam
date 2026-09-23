@@ -446,6 +446,7 @@ Closed. Do not reopen in code without updating this file.
 | UI library | SolidJS. Skeleton is JSX, not a string. |
 | viz.js in the page | Inlined. Redraw calls it every run. |
 | `try` / `catch` | Exactly one, around `Vizer.render` |
+| Tests | Two halves. Pure logic under `bun test`; the live sheet, the repaint and the rows tab under headless Chrome (`bun run test:browser`), because bun has no CSSOM. No test runner dependency — Chrome's `--dump-dom` is the driver. |
 
 ---
 
@@ -459,7 +460,7 @@ shabnam/
   svg/            shells. first file: box.svg
   icon/           borrowed logos
   theme/          the shipped theme: basic.css and its decomposed basic-theme.json
-  test/           if needed
+  test/           if needed. `test/browser/` is the CSSOM half, run in real Chrome
   docs/           documentation, project management, reports
   research-lab/   discovery, experiments, prototypes
   build/          build scripts / generated inputs to the bundler
