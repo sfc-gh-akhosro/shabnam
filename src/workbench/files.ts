@@ -15,6 +15,9 @@ export class Files implements T.Files {
 
   loadDot(dot: string): void {
     this.setTab("dot", dot);
+    // A new diagram starts on a blank book holding the theme (§1). Redraw keeps
+    // the book; Load is the one verb that does not.
+    this.stylist.reset();
   }
 
   saveDot(): string {
@@ -23,7 +26,7 @@ export class Files implements T.Files {
 
   async exportHtml(): Promise<string> {
     const [css, app] = await Promise.all([asset("shabnam-css"), asset("shabnam-app")]);
-    return page(css, app, seed(this.text, userFile(this.stylist.rows())));
+    return page(css, app, seed(this.text, bookFile(this.stylist.rows())));
   }
 
   async exportPng(): Promise<Blob> {
@@ -41,12 +44,12 @@ export function download(name: string, body: string | Blob, type: string): void 
   URL.revokeObjectURL(url);
 }
 
-/** The user layer, as the export seed carries it. Theme ships; derived redraws. */
-export function userFile(rows: T.StyleRow[]): T.StyleFile {
+/** The whole book, as the export seed carries it: an export paints what you see.
+ *  Each entry keeps its source, so the exported page reproduces the same book. */
+export function bookFile(rows: T.StyleRow[]): T.StyleFile {
   const file: T.StyleFile = {};
   for (const row of rows) {
-    if (row.origin !== "user") continue;
-    (file[row.selector] ??= {})[row.property] = row.value;
+    (file[row.selector] ??= {})[row.property] = { value: row.value, source: row.source };
   }
   return file;
 }

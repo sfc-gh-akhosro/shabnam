@@ -102,11 +102,12 @@ Not source: `input/`, `output/`, `local/`, `temp/`, `etc/`, leftover `dot-parser
 ## What not to do in this repo
 
 - Do not add a **new major library** — a new runtime dependency that changes the design — without writing it into `app-architecture.md` §0 first. A library means we accept its whole tree. See Dependencies below.
-- Do not hand-roll a library that is already on §0 (or should be) to avoid that conversation. CodeJar is the tab window; we do not own the caret.
-- Do not write a code editor, a formatter-on-type, or autocomplete on `Workbench`. A loose completer may come later — park drafts in untracked `temp/`, not in `src/`.
-- Do not confuse `SetTab` (text tabs) with `inject` (sinks). CodeJar paints the three text tabs. It does not pretty-print. The styles tab is not text: it is a rows view onto the `Stylist`.
-- Style is data. A rule is `selector → property → value`, the `Stylist` feeds it to CSSOM, and `@apply` resolves at feed time. Do not build a CSS string to paint with, do not parse a sheet back, do not reintroduce `plus` / `minus`. `Stylist.serialize()` is for export only.
+- Do not hand-roll a library that is already on §0 (or should be) to avoid that conversation.
+- Do not write a code editor, a formatter-on-type, autocomplete, or syntax highlighting on `Workbench`. The tab window is a bare `<textarea>`. A loose completer may come later — park drafts in untracked `temp/`, not in `src/`.
+- Do not confuse `SetTab` (text tabs) with `inject` (sinks). The textarea holds the three text tabs and does nothing to them. The styles tab is not text: it is a rows view onto the `Stylist`.
 - Do not add a config tab, a second Graphviz grammar, a second theme mechanism, or “while we’re here” refactors.
+- Do not give a chrome element a `class` or an `id` that the CSS does not need. `app.css` is small because the markup is reachable by element and position; every hook you add is a line someone has to read before they can restyle anything. A hook exists for one of three reasons: the layout, a sink the engine writes, or a state a test drives. Decoration is not one of them.
+- Style is data. A rule is `selector → property → value`, the `Stylist` feeds it to CSSOM, and `@apply` resolves at feed time. Do not build a CSS string to paint with, do not parse a sheet back, do not reintroduce `plus` / `minus`. `Stylist.serialize()` is for export only.
 - Do not write tests that chase float precision or other noise as if they were the product.
 - Do not implement every `shape=` in the first pass. `box` is enough until we say otherwise.
 - Do not change root files (especially `.gitignore`, `app-architecture.md`, `coding-rules.md`) or root folders without review and user discussion and approval.

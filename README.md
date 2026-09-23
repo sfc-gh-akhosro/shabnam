@@ -48,17 +48,17 @@ bun run test:browser   # the CSSOM half, in real headless Chrome
 
 ## How it works
 
-Four tabs — `diagram.dot` · `styles` · `annotation.html` · `action.js`. Three of them are text, painted by CodeJar. The styles tab is not: it is a table of rows. Press Redraw:
+Four tabs — `diagram.dot` · `styles` · `annotation.html` · `action.js`. Three of them are text, in one plain `<textarea>`. The styles tab is not: it is a table of rows. Press Redraw:
 
 ```
 DOT → Vizer → VizJson → Diagram.bag → DiagramModel
-        ├→ Diagram.derived → Stylist.setDerived → feed → CSSOM
+        ├→ Diagram.derived → Stylist.addRule(…, source 1) → feed → CSSOM
         └→ Diagram.frame   → measure → clusters / shells / connectors
 ```
 
-**Style is data.** A rule is `selector → property → value`, and that is the same shape on disk, in the tab, and in memory. The `Stylist` holds three layers — the shipped `theme/basic-theme.json`, the rules *derived* from your DOT attributes, and your own rows — merges them per property (later wins), and feeds the result to CSSOM. There is no CSS text on that path: no string is built to paint with and no sheet is ever parsed back.
+**Style is data.** A rule is `selector → property → value`, and that is the same shape on disk, in the tab, and in memory. The `Stylist` holds **one book** of them, and every entry records who wrote it — `0` the shipped `theme/basic-theme.json`, `1` the rules *derived* from your DOT attributes, `2` you. A repeated key is an overwrite, not a second rule, and `addRule` refuses a write whose source is lower than the entry already there. There is no merge step and no CSS text on the path: no string is built to paint with and no sheet is ever parsed back.
 
-So a row edit is one `setProperty` on a live sheet. **The picture changes as you type, with no Redraw.** Editing a theme or derived row writes a row of your own that shadows it, which is why saving only ever writes your rows, and a redraw can throw the derived layer away and rebuild it without touching anything you typed. `@apply` stays a property and is resolved at feed time.
+So a row edit is one `setProperty` on a live sheet. **The picture changes as you type, with no Redraw.** Editing any row writes at source `2`, in place, keeping the row's identity — and because a redraw feeds at `1`, it cannot take a row back off you. Nothing shadows anything, so the tab shows one row per rule and a rule cannot appear twice. `@apply` stays a property and is expanded at feed time, against the book.
 
 Everything is client-side: no server, no build step at runtime, no telemetry. Graphviz runs in the page via [`@viz-js/viz`](https://github.com/mdaines/viz-js). There is no DOT parser in this codebase and there is not meant to be one — `renderJSON` is the only DOT consumer.
 

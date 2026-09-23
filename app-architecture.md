@@ -8,11 +8,11 @@ This file is the blueprint. It describes the app we are building from scratch. W
 
 ## 0. Stack
 
-Bun (ESM packaging only) + viz.js + TypeScript + SolidJS + HTML + CSS + CodeJar.
+Bun (ESM packaging only) + viz.js + TypeScript + SolidJS + HTML + CSS.
 
 A library means we accept its whole dependency tree. Adding, removing, or rescoping anything on this list is a conversation that lands here first.
 
-**The stack is a lock, not carved stone.** "Discussed first" means *bring it up*, not *do without*. If a feature is genuinely better served by a library — a real parser instead of a hand-rolled scanner, a real AST instead of string surgery — say so, make the case, and we amend this section. Hand-rolling something a mature library does properly, in order to avoid a conversation, is the worse outcome: it is more code, less correct, and ours to maintain forever. CodeJar is the tab window (read, write, highlight, caret). It is not an IDE and it does not pretty-print. What stays forbidden is a library that changes the *design* — a second DOT reader, a second layout engine, a second UI framework — and that ban is about the design, not about the dependency count.
+**The stack is a lock, not carved stone.** "Discussed first" means *bring it up*, not *do without*. If a feature is genuinely better served by a library — a real parser instead of a hand-rolled scanner, a real AST instead of string surgery — say so, make the case, and we amend this section. Hand-rolling something a mature library does properly, in order to avoid a conversation, is the worse outcome: it is more code, less correct, and ours to maintain forever. The tab window is a plain `<textarea>` — CodeJar was on this list and was removed, because highlighting cost a library, a highlighter file, nine `hl-*` classes and a `contenteditable` div, and it bought nothing the diagram needs. What stays forbidden is a library that changes the *design* — a second DOT reader, a second layout engine, a second UI framework — and that ban is about the design, not about the dependency count.
 
 Type-driven TypeScript, following Go / Rust:
 
@@ -30,7 +30,7 @@ Shabnam is **DOT semantics** + **viz.js parse and layout** + **CSS / HTML / JS**
 
 The user authors a diagram in DOT — the same language already used for architecture diagrams. Shabnam does **not** try to be Graphviz. It hands the DOT to Graphviz to get **one JSON**. Then we **traverse that JSON once** into our own model, and from the model we build:
 
-1. **Derived rules** — a `StyleRules` map, almost empty if DOT has no style; one of three layers the `Stylist` merges
+1. **Derived rules** — a `StyleBag`, almost empty if DOT has no style; absorbed into the one book at source `1`
 2. **Layout HTML** — columns of node HTML
 3. **SVG layer** — shells and connectors, drawn around the *measured* boxes
 
@@ -63,19 +63,45 @@ reference a sink id, and neither should a theme.
 `removeProperty`. Nothing writes its `textContent`. `Stylist.serialize()` exists
 for export and PNG only, and is the single place CSS text is produced at all.
 
-**Style parity.** The picture is exactly the three rule layers, merged per property, later winning:
+**Style parity.** The picture is exactly **one book of rules**, and every entry
+carries who wrote it:
 
-1. **theme** — `theme/basic-theme.json`, the one shipped theme
-2. **derived** — `Diagram.derived(model)`, regenerated on every redraw, never saved
-3. **user** — the rows the user typed, saved as `user-style.json`
+```
+StyleRules: selector → property → (value, id, source)
+source:     0 theme · 1 dot · 2 user
+```
 
-There is no locked base, no overlay, no theme catalog, and no CSS file in the loop. A rule is
-`selector → property → value`, which is what the tab shows and what the JSON holds.
+There are no layers and no merge step. `Stylist.addRule` is the one door in, and it
+**refuses a write whose source is lower than the entry already there** — equal or
+higher wins. That single guard is what the three layers used to be for: a redraw
+feeds the DOT's rules at source `1` and cannot take a row back off the user at `2`.
+
+1. **Load DOT** starts blank, absorbs `theme/basic-theme.json` at `0`, draws, then
+   absorbs `Diagram.derived(model)` at `1`.
+2. **Redraw** keeps the book and re-absorbs the derived bag at `1`.
+3. **A row edit** writes at `2`.
+
+**An accepted overwrite is destructive, immediately, by design.** The entry is
+replaced and CSSOM is told. The value underneath is not kept anywhere, so deleting a
+source-`2` row does not revert to the theme's value — the rule leaves the book and
+stops being painted. (What *does* come back is anything `@apply` still supplies; see
+below.) This is the reason the design is this small, and the reason there is no
+merge buffer, no `plus` / `minus`, and no second map.
+
+Because Redraw does not flush, a rule derived from a DOT you have since edited stays
+in the book at source `1`. **Load DOT is the reset path**; meanwhile the stale rule is
+a visible row with a delete button. There is no purge-by-source machinery.
+
+A rule is `selector → property → value`, which is what the tab shows and what the
+JSON holds — plus `source` on disk, and `id` only in memory.
 
 `@apply` is a **property** whose value is a space-separated list of selectors that
 are keys in the same map. It survives in the data and on disk, and is resolved only
 when feeding CSSOM: the named keys' declarations are set at the position `@apply`
-appears, so the selector's own later properties win. An undefined name throws. A cycle throws.
+appears, so the selector's own later properties win. **Expansion is a read, never a
+write** — an expanded declaration reaches the sheet and never becomes a book entry,
+so there is no question of what source it would carry and the tab keeps showing
+exactly what was actually said. An undefined name throws. A cycle throws.
 
 Nodes have **two layers**: an HTML layer (`shape →` markup, in flow, measurable) and an SVG layer that draws a **shell** around the measured box, with icon and caption inside the shell.
 
@@ -115,10 +141,10 @@ DOT text
   ├─ Diagram.bag ─────────► DiagramModel     the only VizJson consumer
   │
   ├─ Diagram.frame ───────► mainHtml         columns + node HTML
-  ├─ Diagram.derived ─────► StyleRules       almost empty if DOT has no style
+  ├─ Diagram.derived ─────► StyleBag         almost empty if DOT has no style
   │
-  ├─ Stylist.setDerived ──► the derived layer, replaced wholesale
-  ├─ Stylist.feed ────────► #shabnam-style-css .sheet   (CSSOM, @apply resolved here)
+  ├─ Stylist.addRule ×n ──► the book, at source 1 (refused where the user wrote)
+  ├─ Stylist.feed ────────► #shabnam-style-css .sheet   (CSSOM, @apply expanded here)
   │
   │      ── inject, let the browser paint ──
   │
@@ -143,10 +169,9 @@ is the point, since a property change must repaint without a redraw. If CSSOM is
 missing, the `Stylist` throws. Do not fall back to writing `textContent`.
 
 **There is no CSS parser, and no CSS algebra.** `Css.plus` / `Css.minus` are gone.
-Merging three layers is `Map` composition, and dropping the last derived bag is
-replacing a layer — not subtracting a serialized sheet from another. The only code
-that ever *read* CSS text was the one-shot decomposition in `build/`, which ran once
-to produce `theme/basic-theme.json` and is not in the runtime.
+There is nothing to merge — one book, and a repeated key is an overwrite decided by
+`source`. The only code that ever *read* CSS text was the one-shot decomposition in
+`build/`, which produced `theme/basic-theme.json` and is not in the runtime.
 
 Hard rule: if a step is not "call viz", "traverse the JSON", or "emit HTML / rules / SVG", it does not belong in this app.
 
@@ -180,7 +205,7 @@ A corollary, and a test you can apply to any class in the output: **a class that
 
 ### 3.2 `CssBagger` — derived styling
 
-Consumes the model, emits a **`StyleRules` map**. Important attrs only — not comprehensive. Almost empty if DOT has no presentation. It returns data, not text: there is no CSS string to build, indent, or re-parse.
+Consumes the model, emits a **`StyleBag`**. Important attrs only — not comprehensive. Almost empty if DOT has no presentation. It returns data, not text: there is no CSS string to build, indent, or re-parse. It mints no ids and sets no source; the `Stylist` stamps both as it absorbs the bag at source `1`.
 
 Attribute-to-property translation is a registry, not scattered logic:
 
@@ -308,24 +333,35 @@ Tabs, in this order: **diagram.dot · styles · annotation.html · action.js**
 
 Four tabs, and one of them is not text. `SetTab` writes a **text tab** (load, seed, user edit, or a deliberate machine write). `inject` writes a **sink**. Those are different directions. The styles tab is neither: it is a view onto the `Stylist`'s rules, and it edits them through the `Stylist` API.
 
-The coding window is **one CodeJar**, and it serves the three text tabs. `tabs.tsx` is a radio strip — four equal buttons, no editor, no store. Workbench owns `active`; when `active` is `styles` it paints the rows table instead of the editor. CodeJar highlights, keeps the caret, indents. It is not an IDE, and it no longer sees CSS at all.
+The coding window is **one `<textarea>`**, and it serves the three text tabs. `tabs.tsx` is a radio strip — four equal buttons, no editor, no store. Workbench owns `active`; when `active` is `styles` it paints the rows table instead of the textarea. No highlighting, no completion, no caret of ours, no component of ours: the textarea is written inline in `workbench.tsx`, because a component that wraps one element and forwards two props is a file for nothing.
+
+**The chrome's own CSS is `src/app.css`, and it is deliberately small.** Tokens, the four core classes (`.paper` · `.glass` · `.row` · `.col`), then a skeleton reached by *element and position* — `header`, `nav`, `textarea`, `#shabnam-workbench > div` — rather than by a hook per box. The markup therefore carries almost no `class` or `id`: a hook is allowed when the layout needs it, when it is a sink the engine writes, or when a test drives it. Nothing is named for decoration. The styles tab is `research-lab/stylist/index.html` verbatim (`.rows`, `.row`, `.btn`, `.sel`, `.prop`, `.val`, `#sl`, `#pl`) because that prototype is ten lines of CSS, and being restylable in ten lines is the point. The diagram's styling never appears here — it lives in the sinks (§3).
 
 `redraw` is sync with the DOT tab — the full draw. The styles tab does not need Graphviz: a row edit is a `setProperty` on a live sheet, so the picture repaints with no redraw and no reflow of anything else. The UI may still use one Redraw button that always runs the DOT path.
 
 | Tab | Sink | Who writes it |
 |---|---|---|
 | diagram.dot | source for `renderJSON` | User. Seeded with a starter diagram. |
-| styles | `#shabnam-style-css` via CSSOM | The `Stylist`. Three layers: `theme/basic-theme.json`, the derived map from redraw, and the user's rows. The tab shows all three, origin-tagged. |
+| styles | `#shabnam-style-css` via CSSOM | The `Stylist`. One book, fed by the theme at source `0`, the redraw's derived bag at `1`, and the user's rows at `2`. The tab shows the book, one row per entry, tagged with its source. |
 | annotation.html | `#shabnam-annotation-html` | User. Cartesian `data-anchor` / `data-offset`. |
 | action.js | `#shabnam-action-js` | User. Runs last. |
 
-**Editing a theme or derived row writes a user row that shadows it.** `user-style.json` only ever holds user rows, so a theme stays a theme and a redraw can replace the derived layer wholesale without touching anything the user typed.
+**Editing any row writes at source `2`.** There is one book, so the row *is* the
+entry: the value is replaced in place and the row's id survives. Nothing clones, and
+no row is read-only — a row has no layer beneath it to shadow. A subsequent redraw
+feeds at `1` and is refused on that entry, which is how a typed row survives.
 
-**There is no merge buffer.** That was the cost of round-tripping CSS text through a tab. Merging is now `Map` composition at feed time (theme ← derived ← user, later wins per property), and dropping the last bag is replacing a layer. `Css.plus`, `Css.minus`, and `lastDerived` no longer exist. Load DOT drops the derived layer; dead `#id` rules cannot stick because nothing accumulated them.
+**There is no merge buffer and no merge step.** That was the cost of round-tripping
+CSS text through a tab, and then of keeping three maps. `Css.plus`, `Css.minus` and
+`lastDerived` no longer exist. Dead `#id` rules cannot stick because nothing
+accumulates layers — though a rule derived from a DOT you have since edited does stay
+until you delete the row or Load DOT (§1).
 
-**`@apply` is resolved at feed time**, against the merged map — not in the file and not in the tab. It stays visible as a property wherever the user or the theme wrote it.
+**`@apply` is expanded at feed time**, against the book — not in the file and not in
+the tab. It stays visible as a property wherever the user or the theme wrote it, and
+an expanded declaration never becomes a book entry.
 
-There is exactly one shipped theme, `theme/basic-theme.json`, decomposed once from `theme/basic.css` by a script in `build/`. There is no locked base, no overlay, no dropdown, and no theme file verbs.
+There is exactly one shipped theme, `theme/basic-theme.json`, decomposed once from `basic.css` by a script in `build/`. The CSS it was decomposed from lives in `research-lab/stylist/`, because the runtime has no CSS file in it. There is no locked base, no overlay, no dropdown, and no theme file verbs.
 
 Autocomplete is not part of the fiddle. Do not put `suggestions` on `Workbench`.
 
@@ -357,8 +393,8 @@ Everything runs in the browser. `index.ts` mounts the SolidJS workbench into `#r
 dot text
   → Vizer.render(dot)                         → json
   → Diagram.bag(json)                         → model
-  → Diagram.derived(model)                    → StyleRules
-  → Stylist.setDerived(rules)                 → replaces the derived layer
+  → Diagram.derived(model)                    → StyleBag
+  → Stylist.addRule(…, source 1) ×n           → into the book, refused at source 2
   → Stylist.feed()                            → CSSOM on #shabnam-style-css
   → Diagram.frame(model)                      → #shabnam-main-html
   → [ browser paints ]
@@ -367,6 +403,9 @@ dot text
   → Workbench.place()                         → annotation.html
   → action.js last
 ```
+
+`Files.loadDot` calls `Stylist.reset()` first: a new diagram starts on a blank book
+holding only the theme. Redraw does not.
 
 A row edit is the short path: `Stylist.addRule` / `removeRule` → one `setProperty` or
 `removeProperty` → the browser repaints. No viz, no bag, no frame, no measure. The SVG
@@ -406,7 +445,7 @@ Closed. Do not reopen in code without updating this file.
 | Who owns size and position | `Workbench.measure`. Graphviz `width` / `height` / `_draw_` are unused. |
 | Who draws | Us: HTML (`SHAPE_HTML`) + SVG (`svg/` shells, `icon/`) |
 | Who touches the DOM | The `workbench/` package and the `Stylist` (its own sheet). `diagram/` workers are pure. |
-| How derived rules are built | `Diagram.derived` on the model, returning `StyleRules`. Flat selectors, shortest that identifies. Classes first, `#id` last. Almost empty if DOT has no style. |
+| How derived rules are built | `Diagram.derived` on the model, returning a `StyleBag`. Flat selectors, shortest that identifies. Classes first, `#id` last. Almost empty if DOT has no style. |
 | CSS naming | Identical to DOT naming (§3.1). No prefix, no `cluster_` stripping. |
 | A class that is not a DOT name | Exists only if theme or a user row selects it |
 | Colour in derived rules | Only from a DOT attribute or a `:root` variable. Never invented. |
@@ -416,16 +455,20 @@ Closed. Do not reopen in code without updating this file.
 | Rank wrapper | `.rank` (Graphviz rank). Never `.column`. |
 | SVG custom properties | Tokens keyed on `:root, svg`. `:root` alone is not enough for SVG fill. |
 | Element classes | One invented type class, two at most. Mixins are `@apply` only. DOT membership classes all apply. |
-| What a rule is | `selector → property → value`. A map entry. Not a line of CSS. |
-| The style file | `user-style.json`, user rows only. Nested object: `{ selector: { property: value } }`. Map insertion order is row order. |
-| CSSOM identity | One `CSSStyleRule` per selector. A property is `setProperty` / `removeProperty`, so no index is ever stored — `deleteRule` renumbers, which is why `cssom_id` was dropped. |
-| Layer merge | theme ← derived ← user, per property, later wins. Map composition at feed time. No `plus` / `minus`, no `lastDerived`. |
-| Editing a theme or derived row | Writes a user row that shadows it. The theme file and the derived layer stay untouched. |
+| What a rule is | `selector → property → (value, id, source)`. A map entry. Not a line of CSS. |
+| Rule id | A counter on the `Stylist`, minted on first sight of a `(selector, property)` and kept by an accepted overwrite. Live-DOM only: it ties a `.row`, a book entry and a declaration together, and is never written to a file. |
+| Rule source | `0` theme, `1` dot, `2` user. `addRule` refuses a lower source; equal or higher wins. This replaces the three layers. |
+| The style file | `style-rules.json`, the whole book: `{ selector: { property: { value, source } } }`. One shape — the theme is that shape with every source `0`. Map insertion order is row order. |
+| CSSOM identity | One `CSSStyleRule` per selector. A property is `setProperty` / `removeProperty`, so no index is ever stored — `deleteRule` renumbers, which is why a *CSSOM* index was dropped. A rule id reaches a declaration through the book, as `(selector, property)`. |
+| Layer merge | None. One book; a repeated key is an overwrite arbitrated by `source`. No `plus` / `minus`, no `lastDerived`, no merge buffer. |
+| An accepted overwrite | Destructive and immediate. The value underneath is not kept, so delete is not revert — except for what `@apply` still supplies. |
+| Load vs Redraw | Load DOT resets the book to the theme. Redraw keeps it and re-absorbs the derived bag at source `1`. No purge by source. |
+| Editing a row | Writes at source `2`, in place, keeping the row's id. No shadow row, and no read-only row. |
 | Tab vs sink | `SetTab` writes the three text tabs. `inject` writes sinks. The styles tab edits the `Stylist`. |
 | Who parses CSS | **Nobody, at runtime.** CSSOM receives rules; it is never asked to read a sheet back. The one-shot decomposition lives in `build/` and is not shipped. |
 | Theme catalog | None. One shipped theme: `theme/basic-theme.json`. No dropdown, no locked base, no overlay, no theme file verbs. |
 | Cascade | One live sheet, `#shabnam-style-css`, driven by CSSOM. Conflicts resolve in the map, not the cascade. |
-| `@apply` | A property whose value is selector keys in the same map. Resolved at feed time, in place, so own later properties win. Missing name throws. Cycle throws. |
+| `@apply` | A property whose value is selector keys in the same map. Expanded at feed time, in place, so own later properties win. Expansion is a read — never a book entry. Missing name throws. Cycle throws. |
 | CSS text | Produced only by `Stylist.serialize()`, only for Export HTML and Save PNG. |
 | Attr → CSS property | `ATTR_CSS` registry |
 | Bag ties | Lexicographically smallest value, for determinism |
@@ -441,7 +484,7 @@ Closed. Do not reopen in code without updating this file.
 | Workbench tabs | diagram.dot, styles, annotation.html, action.js |
 | Shortcuts | A `Map` registry in `workbench/keys.ts`, not a switch |
 | PNG export | `foreignObject` → `<canvas>` → `toBlob`. No rasterizer dependency. |
-| Tab editor | CodeJar, accepted. One instance, for the three text tabs. Radio strip selects. Not an IDE. Not a formatter. |
+| Tab editor | A bare `<textarea>`, inline in `workbench.tsx`. One instance, for the three text tabs. Radio strip selects. No highlighting, no completion. |
 | The styles tab | A rows table, not an editor. Native `input list=` for selector and property. |
 | UI library | SolidJS. Skeleton is JSX, not a string. |
 | viz.js in the page | Inlined. Redraw calls it every run. |
@@ -459,7 +502,7 @@ shabnam/
   src/            all TS, TSX, CSS, HTML
   svg/            shells. first file: box.svg
   icon/           borrowed logos
-  theme/          the shipped theme: basic.css and its decomposed basic-theme.json
+  theme/          the shipped theme: basic-theme.json (basic.css lives in research-lab/)
   test/           if needed. `test/browser/` is the CSSOM half, run in real Chrome
   docs/           documentation, project management, reports
   research-lab/   discovery, experiments, prototypes
@@ -484,16 +527,14 @@ src/
     node-sheller.ts   boxes + nodes → shell SVG
     edge-drawer.ts    boxes + edges → connector SVG
 
-  stylist/          the rules and the one live sheet. CSSOM only (§3).
-    stylist.ts        Stylist        — addRule / removeRule / cleanup / save / rows / feed
-    sheet.ts          CSSOM handle: insertRule, setProperty, @apply at feed, serialize
+  stylist/          the book and the one live sheet. CSSOM only (§3).
+    stylist.ts        Stylist        — addRule / removeRule / reset / cleanup / rows / save / feed
+    sheet.ts          CSSOM handle: insertRule, setProperty, expand(@apply) at feed, serialize
     rows.tsx          the styles tab: a rows table, not an editor
 
   workbench/        the page shell (≤ 7 files)
-    workbench.tsx     SolidJS shell: canvas + radio strip + one CodeJar
+    workbench.tsx     SolidJS shell: canvas + radio strip + one textarea
     tabs.tsx          four equal buttons. No editor. Workbench owns the window.
-    editor.tsx        real CodeJar (caret is the library's)
-    highlight.ts      string in, span HTML out
     engine.ts         Workbench: redraw / inject / measure / place
     files.ts          Files: DOT, export
     keys.ts           KEY_COMMAND registry
@@ -538,33 +579,37 @@ The types.ts should closely follow this sesions (but with more proper signiture 
 type VizJson = unknown
 type TabId = "dot" | "styles" | "annotation" | "action"
 
-// selector → property → value. Insertion order is row order.
-type StyleRules = Map<string, Map<string, string>>
+// the book: selector → property → (value, id, source). Insertion order is row order.
+type Source     = 0 | 1 | 2                                     // theme · dot · user
+type Rule       = { value: string; id: number; source: Source }
+type StyleRules = Map<string, Map<string, Rule>>
 
-// what the JSON holds: { selector: { property: value } }
-type StyleFile = Record<string, Record<string, string>>
+// a producer's output — the derived bag. No ids, no source.
+type StyleBag   = Map<string, Map<string, string>>
 
-type StyleOrigin = "theme" | "derived" | "user"
-type StyleRow = { selector: string; property: string; value: string; origin: StyleOrigin }
+// what the JSON holds: { selector: { property: { value, source } } }
+type StyleFile  = Record<string, Record<string, { value: string; source: Source }>>
+
+type StyleRow = { selector: string; property: string; value: string; id: number; source: Source }
 
 interface Vizer { render(dot: string): Promise<VizJson> }
 
 interface Diagram {
   bag(json: VizJson): DiagramModel
   frame(model: DiagramModel): string
-  derived(model: DiagramModel): StyleRules
+  derived(model: DiagramModel): StyleBag
   clusters(boxes: Box[], model: DiagramModel): string
   shells(boxes: Box[], model: DiagramModel): string
   connectors(boxes: Box[], model: DiagramModel): string
 }
 
 interface Stylist {
-  addRule(selector: string, property: string, value: string): void   // writes a user row
+  addRule(selector: string, property: string, value: string, source: Source): void  // the one door in
   removeRule(selector: string, property: string): void
-  setDerived(rules: StyleRules): void   // replaces the layer, wholesale
+  reset(): void                         // blank book + theme. Load DOT, not Redraw.
   cleanup(): void                       // drop emptied selectors, re-feed
-  rows(): StyleRow[]                    // the tab, origin-tagged, in order
-  save(): void                          // user rows → user-style.json
+  rows(): StyleRow[]                    // the tab, source-tagged, in order
+  save(): void                          // the book → style-rules.json
   serialize(): string                   // CSS text. Export / PNG only.
 }
 

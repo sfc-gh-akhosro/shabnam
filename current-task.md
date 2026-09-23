@@ -110,8 +110,8 @@ which is the reason this design is smaller than the one it replaced.
 
 No DOT parser — Graphviz already is one. No CSS parser and no CSS algebra — CSSOM
 already is one, and a rule that stays data never needs to be re-read. No second
-layout engine, no config tab, no IDE. CodeJar is the tab window for the three text
-tabs; it holds the caret and highlights, and it is not allowed to grow into an
+layout engine, no config tab, no IDE. The tab window is a bare `<textarea>`: no
+highlighting, no completion, no library, and it is not allowed to grow into an
 editor.
 
 Every one of those refusals has been tried in some form and written down in
@@ -121,20 +121,40 @@ Every one of those refusals has been tried in some form and written down in
 
 # Current task
 
-**None.** The Stylist rewrite is finished and archived — sessions 1–8 are in
-`docs/archive.md`, with the decisions each one had to make and the two bugs the
-browser test found on its way in.
 
-The state the next session opens on:
+tab "styles":
 
-- Four tabs. Style is data: `selector → property → value`, three layers, one live
-  CSSOM sheet. No CSS text anywhere except `Stylist.serialize()`, for export.
-- `bun test` — 51 pass, the pure half. `bun run test:browser` — 20 checks in real
-  headless Chrome, the CSSOM half. `bunx tsc --noEmit` clean, `bun run build` green.
-- Open debts are in `docs/technical-debts.md`. The ones most likely to be picked
-  up next: **R2** (`shape=record` renders as a box and keeps its braces, which is
-  why the fixture looks busy), **S8** / **S7** (the rows tab's narrow columns and
-  its unvalidated selector), and the three cosmetic findings session 7 recorded —
-  no canvas padding, the starter annotation landing on a label, and nodes reading
-  as flat fills because `border-width` is 0.
-- The only open publishing question: this repo has no licence file.
+the row must be similar to /researchlab/stylist/index.html  implementation. 
+css to apply is there too, I like that styling and everything, the solidjs is there, etc. Use that one and just do similar (almost identical): no change of style or things. simple tweaks are enough.
+
+<.row id="5"> 
+  <delete, selector, property, value, add>
+
+add always adds a new empty row to the next line. delete, removes current row.
+
+why many items (insluding :root, svg vars) are repeated in Style tab. It shows the logic is broken, not just a mistake.
+
+we do not have and do not keep any .css file anymore.
+(although we have a simple translator, if needed to translate .css to our styleRules)
+
+as I understood you have a stylist interface with 
+interface stylist:
+    - public add rule (selector: text, property, value)
+    - public cleanup (): removes redudant rules or "soft deleted" rules.
+    - public save (): into disk.
+    - public remove rule (rule index)
+        - remove just makes it null, does not purge it from the array, ask cssom remove the entry. 
+        - Purging them happens during cleanup() often when redraw is triggered.
+
+We need to track and associate our .rows .row element (in #styles_tab) to our styleRules key and CSSOM entry.
+Better not skip it.
+
+our styleRules is the source of truth for styling.
+
+type styleRules: is nested selector => property => (value, id)
+we add, remove, and "traverse and yield" for some tasks.
+
+a counter can create id.
+
+
+

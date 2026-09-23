@@ -1,30 +1,33 @@
-// The derived layer must be identical for identical input, or every diff is
+// The derived bag must be identical for identical input, or every diff is
 // noise (§3.2). That claim rests on three interacting rules — absence counts as
 // a value, ties break on the lexicographically smallest, and ATTR_CSS insertion
 // order is declaration order — which is exactly what a test is for.
 //
 // The rest of these guard the two §3.2 rules that are easy to regress: naming is
 // DOT naming, and no colour is invented. They assert map entries, because the
-// bagger returns `StyleRules` and nothing on this path is ever text.
+// bagger returns a `StyleBag` and nothing on this path is ever text.
 
 import { expect, test } from "bun:test";
 import { CssBagger } from "../src/diagram/css-bagger.ts";
 import { DiagramBagger } from "../src/diagram/diagram-bagger.ts";
 import { Vizer } from "../src/diagram/vizer.ts";
-import { asFile } from "../src/stylist/stylist.ts";
 import type * as T from "../src/types.ts";
 
 const FIXTURE = new URL("../research-lab/example-1.dot", import.meta.url).pathname;
 
 const vizer = new Vizer();
 
-async function rules(dot: string): Promise<T.StyleRules> {
+async function rules(dot: string): Promise<T.StyleBag> {
   return new CssBagger().bag(new DiagramBagger().bag(await vizer.render(dot)));
 }
 
-// Insertion order is part of the contract, so compare the ordered JSON.
-function shape(out: T.StyleRules): string {
-  return JSON.stringify(asFile(out));
+// Insertion order is part of the contract, so compare the ordered JSON. The
+// bagger emits a bag, not the book — no ids, no source — so this nests it
+// straight rather than going through `asFile`.
+function shape(out: T.StyleBag): string {
+  return JSON.stringify(
+    Object.fromEntries([...out].map(([selector, properties]) => [selector, Object.fromEntries(properties)])),
+  );
 }
 
 const dot = await Bun.file(FIXTURE).text();

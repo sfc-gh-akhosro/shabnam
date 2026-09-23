@@ -6,8 +6,8 @@
 
 import { Diagram } from "../diagram/diagram.ts";
 import { Vizer } from "../diagram/vizer.ts";
-import { Stylist } from "../stylist/stylist.ts";
-import type * as T from "../types.ts";
+import { bagEntries, Stylist } from "../stylist/stylist.ts";
+import * as T from "../types.ts";
 
 const asHtml = (element: Element, text: string) => {
   element.innerHTML = text;
@@ -51,8 +51,10 @@ export class Engine implements T.Workbench {
     if (json === null) return;
 
     const model = this.diagram.bag(json);
-    this.stylist.setDerived(this.diagram.derived(model));
-    this.stylist.feed();
+    // The book is kept, not flushed (§1). The DOT's rules arrive at source 1 and
+    // are refused wherever the user has written at 2, so a redraw cannot take a
+    // typed row back off them. `absorb` paints once at the end.
+    this.stylist.absorb(bagEntries(this.diagram.derived(model), T.SOURCE.dot));
 
     this.inject("main-html", this.diagram.frame(model));
     this.inject("annotation-html", this.text.annotation);

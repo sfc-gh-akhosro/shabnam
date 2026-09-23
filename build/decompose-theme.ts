@@ -1,8 +1,10 @@
-// One-shot: theme/basic.css -> theme/basic-theme.json (selector -> property -> value).
+// One-shot: research-lab/stylist/basic.css -> theme/basic-theme.json, in the book's
+// file shape: selector -> property -> { value, source }, every source 0.
 //
 // Deliberately NOT wired into `bun run build`. The runtime never parses CSS; this
 // script exists so basic.css could be converted once, by hand, and the JSON it
-// produced is what ships. basic.css stays in the repo as the readable source.
+// produced is what ships. The CSS it reads lives in `research-lab/`, because the
+// runtime keeps no CSS file of its own.
 //
 // CSSOM does the parsing, and CSSOM only exists in a browser — so this serves a
 // one-page harness, the browser reads its own stylesheet back, and posts the
@@ -24,7 +26,7 @@ import { ROOT } from "./bundle.ts";
 const MARKER = "--shabnam-apply";
 const PORT = 3100;
 
-const css = await Bun.file(`${ROOT}theme/basic.css`).text();
+const css = await Bun.file(`${ROOT}research-lab/stylist/basic.css`).text();
 const marked = css.replace(/@apply\s+([^;}]+);/g, `${MARKER}: $1;`);
 
 const harness = `<!doctype html>
@@ -44,16 +46,20 @@ const harness = `<!doctype html>
 `;
 
 type Reported = [selector: string, cssText: string][];
+type Entry = { value: string; source: 0 };
 
-function nest(reported: Reported): Record<string, Record<string, string>> {
-  const theme: Record<string, Record<string, string>> = {};
+function nest(reported: Reported): Record<string, Record<string, Entry>> {
+  const theme: Record<string, Record<string, Entry>> = {};
   for (const [selector, cssText] of reported) {
-    const rule: Record<string, string> = (theme[selector] ??= {});
+    const rule: Record<string, Entry> = (theme[selector] ??= {});
     for (const declaration of cssText.split(";")) {
       if (!declaration.trim()) continue;
       const colon = declaration.indexOf(":");
       const property = declaration.slice(0, colon).trim();
-      rule[property === MARKER ? "@apply" : property] = declaration.slice(colon + 1).trim();
+      rule[property === MARKER ? "@apply" : property] = {
+        value: declaration.slice(colon + 1).trim(),
+        source: 0,
+      };
     }
   }
   return theme;

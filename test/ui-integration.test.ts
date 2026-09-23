@@ -7,7 +7,8 @@ import { NodeSheller } from "../src/diagram/node-sheller.ts";
 import { EdgeDrawer } from "../src/diagram/edge-drawer.ts";
 import { Vizer } from "../src/diagram/vizer.ts";
 import type { StyleRow, TabText } from "../src/types.ts";
-import { userFile } from "../src/workbench/files.ts";
+import { SOURCE } from "../src/types.ts";
+import { bookFile } from "../src/workbench/files.ts";
 
 const BARE_BONE_DOT = `digraph barebone {
   rankdir=LR
@@ -32,8 +33,8 @@ const RECORD_DOT = `digraph records {
 `;
 
 describe("UI & Workbench Integration Suite", () => {
-  test("theme/ ships exactly one theme, and its decomposed JSON", () => {
-    expect(readdirSync("theme").sort()).toEqual(["basic-theme.json", "basic.css"]);
+  test("theme/ ships exactly one theme, and no CSS file", () => {
+    expect(readdirSync("theme").sort()).toEqual(["basic-theme.json"]);
   });
 
   test("Bare-bone DOT derives only the token block", async () => {
@@ -113,44 +114,34 @@ describe("UI & Workbench Integration Suite", () => {
     }
   });
 
-  test("Syntax highlighters tokenize JS, HTML, and DOT correctly", async () => {
-    const { highlightJs, highlightHtml, highlightDot } = await import(
-      "../src/workbench/highlight.ts"
-    );
-
-    const js = highlightJs("const x = 42; // note");
-    expect(js).toContain('<span class="hl-keyword">const</span>');
-    expect(js).toContain('<span class="hl-number">42</span>');
-    expect(js).toContain('<span class="hl-comment">// note</span>');
-
-    const html = highlightHtml('<div class="box">text</div>');
-    expect(html).toContain('<span class="hl-tag">&lt;div</span>');
-    expect(html).toContain('<span class="hl-attr">class</span>');
-
-    const dot = highlightDot('digraph { a -> b [label="Hi"] }');
-    expect(dot).toContain('<span class="hl-keyword">digraph</span>');
-    expect(dot).toContain('<span class="hl-operator">-&gt;</span>');
-  });
-
-  test("The export seed carries the three text tabs and the user rows only", () => {
+  test("The export seed carries the three text tabs and the whole book, sourced", () => {
     const text: TabText = {
       dot: BARE_BONE_DOT,
       action: "console.log('hello');",
       annotation: "<div>Note</div>",
     };
     const rows: StyleRow[] = [
-      { selector: ".node", property: "background", value: "red", origin: "theme" },
-      { selector: ".node", property: "color", value: "white", origin: "derived" },
-      { selector: ".node", property: "@apply", value: ".glass", origin: "user" },
-      { selector: "#a", property: "border-width", value: "2px", origin: "user" },
+      { selector: ".node", property: "background", value: "red", id: 1, source: SOURCE.theme },
+      { selector: ".node", property: "color", value: "white", id: 2, source: SOURCE.dot },
+      { selector: ".node", property: "@apply", value: ".glass", id: 3, source: SOURCE.user },
+      { selector: "#a", property: "border-width", value: "2px", id: 4, source: SOURCE.user },
     ];
 
-    const parsed = JSON.parse(JSON.stringify({ ...text, styles: userFile(rows) }));
+    const parsed = JSON.parse(JSON.stringify({ ...text, styles: bookFile(rows) }));
 
     expect(parsed.dot).toBe(BARE_BONE_DOT);
     expect(parsed.action).toBe("console.log('hello');");
     expect(parsed.annotation).toBe("<div>Note</div>");
-    expect(parsed.styles).toEqual({ ".node": { "@apply": ".glass" }, "#a": { "border-width": "2px" } });
+    // An export paints what you see, so every source travels — and the id does
+    // not, because it means nothing on the other page.
+    expect(parsed.styles).toEqual({
+      ".node": {
+        background: { value: "red", source: 0 },
+        color: { value: "white", source: 1 },
+        "@apply": { value: ".glass", source: 2 },
+      },
+      "#a": { "border-width": { value: "2px", source: 2 } },
+    });
     expect(parsed.theme).toBeUndefined();
   });
 });

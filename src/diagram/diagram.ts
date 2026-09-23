@@ -22,7 +22,7 @@ export class Diagram implements T.Diagram {
     return this.framer.frame(model);
   }
 
-  derived(model: T.DiagramModel): T.StyleRules {
+  derived(model: T.DiagramModel): T.StyleBag {
     return this.css.bag(model);
   }
 

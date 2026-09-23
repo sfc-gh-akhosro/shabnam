@@ -1,4 +1,4 @@
-// Model → derived StyleRules (§3.2). Graphviz has already resolved `node [...]` /
+// Model → derived StyleBag (§3.2). Graphviz has already resolved `node [...]` /
 // `edge [...]` defaults onto every object, so we recover them statistically:
 // the most common value wins, ties break on the lexicographically smallest, and
 // identical input therefore produces an identical map in an identical insertion
@@ -95,8 +95,8 @@ function preamble(model: T.DiagramModel, nodeBag: Bag, edgeBag: Bag): Bag {
 type Bag = Map<string, string>;
 
 export class CssBagger {
-  bag(model: T.DiagramModel): T.StyleRules {
-    const out: T.StyleRules = new Map();
+  bag(model: T.DiagramModel): T.StyleBag {
+    const out: T.StyleBag = new Map();
     const graphBag = pick(model.attrs);
     const nodeBag = mode(model.nodes.map((node) => node.attrs));
     const edgeBag = mode(model.edges.map((edge) => edge.attrs));
@@ -121,7 +121,7 @@ export class CssBagger {
   }
 
   private cluster(
-    out: T.StyleRules,
+    out: T.StyleBag,
     cluster: T.Cluster,
     model: T.DiagramModel,
     inherited: Bag,
@@ -143,7 +143,7 @@ export class CssBagger {
   }
 
   private nodeOverrides(
-    out: T.StyleRules,
+    out: T.StyleBag,
     model: T.DiagramModel,
     nodeBag: Bag,
     bags: Map<string, Bag>,
@@ -154,7 +154,7 @@ export class CssBagger {
     }
   }
 
-  private nodePositionMargins(out: T.StyleRules, model: T.DiagramModel): void {
+  private nodePositionMargins(out: T.StyleBag, model: T.DiagramModel): void {
     const axes = AXES.get(model.rankdir) ?? AXES.get("TB")!;
     const columns = bucket(model.nodes, axes);
     for (const column of columns) {
@@ -277,7 +277,7 @@ function compare(a: string, b: string): number {
 // Translates a bag of Graphviz attributes into one map entry. A selector that
 // would say nothing is never created, so an empty subgraph leaves no trace.
 function put(
-  out: T.StyleRules,
+  out: T.StyleBag,
   selector: string,
   bag: Bag,
   registry: T.AttrCss = ATTR_CSS,
@@ -292,7 +292,7 @@ function put(
 }
 
 // Get-or-create, because two passes can both have something to say about `#id`.
-function own(out: T.StyleRules, selector: string, seed?: Bag): Bag {
+function own(out: T.StyleBag, selector: string, seed?: Bag): Bag {
   const properties = out.get(selector) ?? seed ?? new Map<string, string>();
   out.set(selector, properties);
   return properties;

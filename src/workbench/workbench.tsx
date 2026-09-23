@@ -1,14 +1,17 @@
-// SolidJS shell: canvas skeleton, the radio strip, and one CodeJar for the
+// SolidJS shell: canvas skeleton, the radio strip, and one textarea for the
 // three text tabs. The styles tab is not text — it is a rows view onto the
-// `Stylist`, so it renders `Rows` instead of the editor.
+// `Stylist`, so it renders `Rows` instead of the textarea.
+//
+// The textarea is the whole coding window: no highlighting, no completion, no
+// caret of ours. Only the ids the engine's sinks and the export need survive
+// here; everything the CSS wants, it reaches by element and position.
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { Rows } from "../stylist/rows.tsx";
-import { Stylist } from "../stylist/stylist.ts";
+import { fileEntries, Stylist } from "../stylist/stylist.ts";
 import type { StyleFile, TabId, TabText } from "../types.ts";
 import { Engine } from "./engine.ts";
-import { Editor, highlightDot, highlightHtml, highlightJs } from "./editor.tsx";
 import { download, Files } from "./files.ts";
 import { type Command, commandOf } from "./keys.ts";
 import { TAB_IDS, Tabs } from "./tabs.tsx";
@@ -44,12 +47,6 @@ const STARTER_TEXT: TabText = {
   annotation: STARTER_HTML,
 };
 
-const HIGHLIGHT: Record<keyof TabText, (code: string) => string> = {
-  dot: highlightDot,
-  annotation: highlightHtml,
-  action: highlightJs,
-};
-
 function seeded(): { text: TabText; styles: StyleFile } {
   const seed = document.getElementById("shabnam-seed");
   if (seed === null) return { text: STARTER_TEXT, styles: {} };
@@ -74,7 +71,7 @@ export function Workbench() {
   const files = new Files(text, (tab, value) => setText(tab, value), stylist);
   let dotPicker!: HTMLInputElement;
 
-  // The stamp tells the styles tab that the derived layer has been replaced.
+  // The stamp tells the styles tab that the book has taken the DOT's rules.
   const redraw = async () => {
     await engine.redraw();
     setStamp(stamp() + 1);
@@ -100,9 +97,10 @@ export function Workbench() {
 
   onMount(() => {
     favicon();
-    for (const [selector, properties] of Object.entries(seed.styles)) {
-      for (const [property, value] of Object.entries(properties)) stylist.addRule(selector, property, value);
-    }
+    // The theme is the floor of the book; an export seed then lays its own
+    // entries over it, each at the source it was saved with.
+    stylist.reset();
+    stylist.absorb(fileEntries(seed.styles));
     redraw();
     const onKey = (event: KeyboardEvent) => {
       const command = commandOf(event);
@@ -116,57 +114,45 @@ export function Workbench() {
 
   return (
     <div id="shabnam-workbench">
-      <header id="shabnam-toolbar">
-        <h1 id="shabnam-brand">
-          <img id="shabnam-brand-logo" src={LOGO_URI} alt="" />
-          Shabnam
-        </h1>
-        <button id="shabnam-redraw" title="Cmd/Ctrl+Enter" onClick={redraw}>
-          Redraw
-        </button>
-        <button title="Cmd/Ctrl+O" onClick={commands["load-dot"]}>
-          Load DOT
-        </button>
-        <button title="Cmd/Ctrl+S" onClick={commands["save-dot"]}>
-          Save DOT
-        </button>
-        <button title="Cmd/Ctrl+P" onClick={commands["save-png"]}>
-          Save PNG
-        </button>
-        <button title="Cmd/Ctrl+E" onClick={commands["export-html"]}>
-          Export HTML
-        </button>
+      <header>
+        <img src={LOGO_URI} alt="" />
+        <b>Shabnam</b>
+        <button title="Cmd/Ctrl+Enter" onClick={redraw}>Redraw</button>
+        <button title="Cmd/Ctrl+O" onClick={commands["load-dot"]}>Load DOT</button>
+        <button title="Cmd/Ctrl+S" onClick={commands["save-dot"]}>Save DOT</button>
+        <button title="Cmd/Ctrl+P" onClick={commands["save-png"]}>Save PNG</button>
+        <button title="Cmd/Ctrl+E" onClick={commands["export-html"]}>Export HTML</button>
         <input ref={dotPicker} class="hidden" type="file" accept=".dot,.gv" onChange={(e) => loadDot(e.currentTarget)} />
         <span id="shabnam-status" />
       </header>
 
-      <div id="shabnam-canvas">
-        <div id="shabnam-main-html" />
-        <svg id="shabnam-main-svg">
-          <g id="shabnam-clusters" />
-          <g id="shabnam-node-shells" />
-          <g id="shabnam-connectors" />
-        </svg>
-        <div id="shabnam-annotation-html" />
-        <style id="shabnam-style-css" />
-        <script id="shabnam-action-js" />
-      </div>
+      <div>
+        <div id="shabnam-canvas">
+          <div id="shabnam-main-html" />
+          <svg id="shabnam-main-svg">
+            <g id="shabnam-clusters" />
+            <g id="shabnam-node-shells" />
+            <g id="shabnam-connectors" />
+          </svg>
+          <div id="shabnam-annotation-html" />
+          <style id="shabnam-style-css" />
+          <script id="shabnam-action-js" />
+        </div>
 
-      <div id="shabnam-editors">
-        <Tabs active={active()} setActive={setActive} />
-        <Show when={active() === "styles"}>
-          <Rows stylist={stylist} stamp={stamp()} />
-        </Show>
-        <Show when={textTab(active())} keyed>
-          {(tab) => (
-            <Editor
-              tab={tab}
-              value={text[tab]}
-              onInput={(v) => setText(tab, v)}
-              highlight={HIGHLIGHT[tab]}
-            />
-          )}
-        </Show>
+        <div id="shabnam-editors">
+          <Tabs active={active()} setActive={setActive} />
+          <Show when={active() === "styles"}>
+            <Rows stylist={stylist} stamp={stamp()} />
+          </Show>
+          <Show when={textTab(active())} keyed>
+            {(tab) => (
+              <textarea
+                value={text[tab]}
+                onInput={(event) => setText(tab, event.currentTarget.value)}
+              />
+            )}
+          </Show>
+        </div>
       </div>
     </div>
   );

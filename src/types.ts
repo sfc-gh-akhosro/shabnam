@@ -70,22 +70,41 @@ export type TabText = Record<"dot" | "annotation" | "action", string>;
 export type SetTab = (tab: keyof TabText, text: string) => void;
 
 // ---------------------------------------------------------------------------
-// style — one representation: selector → property → value
+// style — one book: selector → property → (value, id, source)
 // ---------------------------------------------------------------------------
 
-/** Insertion order is row order. */
-export type StyleRules = Map<string, Map<string, string>>;
+/**
+ * Who wrote an entry. Ordered, and that order is the whole access rule: a write
+ * is refused when its source is lower than the one already sitting there, so a
+ * redraw cannot take a row back off the user.
+ */
+export type Source = 0 | 1 | 2;
 
-/** What a style JSON file holds: `{ selector: { property: value } }`. */
-export type StyleFile = Record<string, Record<string, string>>;
+export const SOURCE = { theme: 0, dot: 1, user: 2 } as const satisfies Record<string, Source>;
 
-export type StyleOrigin = "theme" | "derived" | "user";
+/** `id` is a live-DOM thing: it ties a `.row`, a book entry and a declaration
+ * together for as long as the page lives. It is never written to a file. */
+export type Rule = {
+  value: string;
+  id: number;
+  source: Source;
+};
+
+/** The book. The source of truth for style. Insertion order is row order. */
+export type StyleRules = Map<string, Map<string, Rule>>;
+
+/** A producer's output — the derived bag. No ids, no opinion about source. */
+export type StyleBag = Map<string, Map<string, string>>;
+
+/** What a style JSON file holds. One shape, sourced; the theme is all `0`. */
+export type StyleFile = Record<string, Record<string, { value: string; source: Source }>>;
 
 export type StyleRow = {
   selector: string;
   property: string;
   value: string;
-  origin: StyleOrigin;
+  id: number;
+  source: Source;
 };
 
 // ---------------------------------------------------------------------------
@@ -99,23 +118,24 @@ export interface Vizer {
 export interface Diagram {
   bag(json: VizJson): DiagramModel;
   frame(model: DiagramModel): string;
-  derived(model: DiagramModel): StyleRules;
+  derived(model: DiagramModel): StyleBag;
   clusters(boxes: Box[], model: DiagramModel): string;
   shells(boxes: Box[], model: DiagramModel): string;
   connectors(boxes: Box[], model: DiagramModel): string;
 }
 
 export interface Stylist {
-  /** Writes a user row, shadowing whatever theme or derived says. */
-  addRule(selector: string, property: string, value: string): void;
+  /** The one door into the book. Refused when `source` is lower than the entry
+   * already there; an accepted overwrite keeps that entry's id. */
+  addRule(selector: string, property: string, value: string, source: Source): void;
   removeRule(selector: string, property: string): void;
-  /** Replaces the derived layer, wholesale. */
-  setDerived(rules: StyleRules): void;
+  /** Back to a blank book holding the theme. Load DOT, not Redraw. */
+  reset(): void;
   /** Drop emptied selectors, re-feed. */
   cleanup(): void;
-  /** The tab: every layer, origin-tagged, in order. */
+  /** The tab: the book, traversed and yielded in order. */
   rows(): StyleRow[];
-  /** User rows → `user-style.json`. */
+  /** The book → `style-rules.json`. */
   save(): void;
   /** CSS text. Export HTML and Save PNG only. */
   serialize(): string;

@@ -13,7 +13,12 @@ import { bundleConfig, ROOT } from "../../build/bundle.ts";
 
 const PORT = 3101;
 const CHROME = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const BUDGET = 120_000;
+// Virtual time, not wall clock: every `await tick()` in the checks fast-forwards
+// the page's clock by its full 30 ms, so a poll loop burns budget at a rate that
+// has nothing to do with how long the run actually takes. When the budget runs
+// out Chrome dumps the DOM wherever the page happens to be — a short budget
+// looks exactly like a test that stopped mid-suite. Keep it generous.
+const BUDGET = 600_000;
 
 type Report = { results: { name: string; ok: boolean; detail: string }[]; errors: string[] };
 

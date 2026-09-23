@@ -52,18 +52,28 @@ function type(box: HTMLElement, value: string, event: "input" | "change"): Promi
   return tick();
 }
 
-const rows = () => $$("#shabnam-styles-list .style-row");
+type Field = "selector" | "property" | "value";
+
+/** The prototype's box names (`index.html`): selector, property, value. */
+const FIELD = new Map<Field, string>([
+  ["selector", ".sel"],
+  ["property", ".prop"],
+  ["value", ".val"],
+]);
+
+const rows = () => $$(".rows > .row");
 const lastRow = () => rows()[rows().length - 1]!;
-const box = (row: HTMLElement, field: "selector" | "property" | "value") =>
-  row.querySelector(`.style-${field}`) as HTMLInputElement;
+
+const box = (row: HTMLElement, field: Field) =>
+  row.querySelector(FIELD.get(field)!) as HTMLInputElement;
 
 function smoke(): void {
-  check("the workbench mounts", $("#shabnam-workbench") !== null, $$("#shabnam-tab-strip .tab").length + " tabs");
+  check("the workbench mounts", $("#shabnam-workbench") !== null, $$("#shabnam-editors nav button").length + " tabs");
   check(
     "four tabs, named as the spec names them",
-    $$("#shabnam-tab-strip .tab").map((tab) => tab.textContent).join(" ") ===
+    $$("#shabnam-editors nav button").map((tab) => tab.textContent).join(" ") ===
       "diagram.dot styles annotation.html action.js",
-    $$("#shabnam-tab-strip .tab").map((tab) => tab.textContent).join(" "),
+    $$("#shabnam-editors nav button").map((tab) => tab.textContent).join(" "),
   );
 
   const nodes = $$("#shabnam-main-html .node").length;
@@ -85,18 +95,32 @@ function stylesheet(): void {
 }
 
 async function rowsTab(): Promise<void> {
-  $$("#shabnam-tab-strip .tab")[1]!.click();
+  $$("#shabnam-editors nav button")[1]!.click();
   await tick();
 
-  const origins = rows().reduce<Record<string, number>>((count, row) => {
-    const origin = row.dataset.origin!;
-    return { ...count, [origin]: (count[origin] ?? 0) + 1 };
+  const sources = rows().reduce<Record<string, number>>((count, row) => {
+    const source = row.dataset.source!;
+    return { ...count, [source]: (count[source] ?? 0) + 1 };
   }, {});
-  check("the styles tab lists every layer, tagged", rows().length > 0 && origins.theme! > 0 && origins.derived! > 0, JSON.stringify(origins));
+  check("the styles tab lists the book, source-tagged", rows().length > 0 && sources["0"]! > 0 && sources["1"]! > 0, JSON.stringify(sources));
 
-  const themeRow = rows().find((row) => row.dataset.origin === "theme")!;
-  const locked = box(themeRow, "selector").readOnly && box(themeRow, "property").readOnly && !box(themeRow, "value").readOnly;
-  check("a theme row is value-editable only", locked, `selector ${box(themeRow, "selector").readOnly}, value ${box(themeRow, "value").readOnly}`);
+  // The whole point of one book: the theme and the DOT both write `:root, svg`
+  // and `.node`, and a repeated key is an overwrite — so it cannot be two rows.
+  const keys = rows().map((row) => `${box(row, "selector").value}\u0000${box(row, "property").value}`);
+  const repeated = keys.filter((key, at) => keys.indexOf(key) !== at);
+  check("no rule appears twice", repeated.length === 0, repeated.length === 0 ? `${keys.length} rows, all distinct` : JSON.stringify(repeated));
+
+  const tokens = rows().filter((row) => box(row, "selector").value === ":root, svg");
+  check("the token block is one run of rows", tokens.length > 0, `${tokens.length} :root, svg rows`);
+
+  // Every row the book produced points at its entry. A row the tab has just
+  // invented has no id yet, but at this point none of them are invented.
+  const identified = rows().every((row) => /^\d+$/.test(row.id));
+  check("every row carries its rule id", identified, rows().map((row) => row.id).slice(0, 3).join(" ") + " …");
+
+  // Every row is editable now: there is no layer beneath one for it to shadow.
+  const editable = rows().every((row) => !box(row, "selector").readOnly && !box(row, "value").readOnly);
+  check("no row is read-only", editable, `${rows().length} rows checked`);
 }
 
 /** The whole point of the rewrite: one `setProperty`, no redraw, no re-layout. */
@@ -105,7 +129,7 @@ async function liveRepaint(): Promise<void> {
   const layout = boxes();
   const ruleCount = sheet().cssRules.length;
 
-  $("#shabnam-styles-head button")!.click();
+  $(".rows header button")!.click();
   await tick();
   const row = lastRow();
   await type(box(row, "selector"), ".node", "change");
@@ -117,38 +141,89 @@ async function liveRepaint(): Promise<void> {
   check("the repaint did not re-layout", JSON.stringify(boxes()) === JSON.stringify(layout), boxes().length + " boxes compared");
   check("the sheet gained no rule for a known selector", sheet().cssRules.length === ruleCount, `${ruleCount} → ${sheet().cssRules.length}`);
 
-  (lastRow().querySelector("button.style-remove") as HTMLElement).click();
+  (lastRow().querySelector("button") as HTMLElement).click();
   await tick();
-  check("removing a shadow reverts to the layer under it", background("core") === before, `${background("core")} vs ${before}`);
+  // Delete is not revert — but the theme says `.node { @apply .paper }`, and what
+  // `feed` paints is the expansion, so removing the row falls back to what
+  // `.paper` supplies rather than to nothing.
+  check("removing a row falls back to what @apply supplies", background("core") === before, `${background("core")} vs ${before}`);
+}
+
+/** The source guard, end to end: a redraw must not take a typed row back.
+ *
+ *  The scratch key is `--primary-color` on purpose — the theme owns it *and* the
+ *  DOT derives it, so it is the one place all three sources meet. The row is left
+ *  standing at the end: deleting it would take the theme's entry with it, which
+ *  is the design (§1) and not something to do behind a later stage's back. */
+async function survivesRedraw(): Promise<void> {
+  const token = () => getComputedStyle(document.documentElement).getPropertyValue("--primary-color").trim();
+  const derived = token();
+
+  $$("#shabnam-editors nav button")[1]!.click();
+  await tick();
+  $(".rows header button")!.click();
+  await tick();
+  const row = lastRow();
+  await type(box(row, "selector"), ":root, svg", "change");
+  await type(box(row, "property"), "--primary-color", "change");
+  await type(box(row, "value"), "#ff00ff", "input");
+  check("a user row overwrites what the DOT derived", token() === "#ff00ff", `${derived} → ${token()}`);
+
+  // Cleanup re-reads the book, which is a synchronous sync path — no redraw, no
+  // waiting on a frame. What comes back is the book itself, so this is where the
+  // overwrite can be read rather than the tab's own optimistic copy of it.
+  $$(".rows header button")[1]!.click();
+  await tick();
+  const mine = rows().filter((one) => box(one, "property").value === "--primary-color");
+  const detail = mine.map((one) => `${one.id || "(no id)"}:${one.dataset.source}:${box(one, "value").value}`).join(" ");
+  check("the overwrite is one row, not two", mine.length === 1, detail);
+  check("it kept the theme entry's id", /^\d+$/.test(mine[0]!.id), detail);
+  check("and it is the user's row now", mine[0]!.dataset.source === "2", detail);
+
+  // A redraw absorbs the DOT's tokens at source 1 *before* the pipeline ever
+  // waits for a frame, so the guard is observable without waiting for the whole
+  // draw to land.
+  $("#shabnam-workbench > header button").click();
+  await tick();
+  check("a redraw does not take the row back", token() === "#ff00ff", token());
 }
 
 async function applyAndCleanup(): Promise<void> {
-  $("#shabnam-styles-head button")!.click();
+  // A scratch selector nothing else owns: removing this row must not take a
+  // theme rule down with it, because delete is not revert (§1).
+  $(".rows header button")!.click();
   await tick();
   const row = lastRow();
-  await type(box(row, "selector"), ".node", "change");
+  await type(box(row, "selector"), ".scratch", "change");
   await type(box(row, "property"), "@apply", "change");
   await type(box(row, "value"), ".glass", "input");
 
   check("an @apply row feeds without leaking @apply", !cssTexts().join("").includes("@apply"), `${sheet().cssRules.length} rules`);
-  (lastRow().querySelector("button.style-remove") as HTMLElement).click();
+  (lastRow().querySelector("button") as HTMLElement).click();
   await tick();
 
+  // Cleanup first, so the count is the book's and not a list still carrying
+  // rows this run has since removed. Then the comparison measures one thing.
+  $$(".rows header button")[1]!.click();
+  await tick();
   const settled = rows().length;
-  $("#shabnam-styles-head button")!.click();
+  $(".rows header button")!.click();
   await tick();
   const withBlank = rows().length;
-  $$("#shabnam-styles-head button")[1]!.click();
+  $$(".rows header button")[1]!.click();
   await tick();
   check("Cleanup drops a blank row", withBlank === settled + 1 && rows().length === settled, `${settled} → ${withBlank} → ${rows().length}`);
 }
 
+// Clicks Redraw and checks the picture is still whole. It does not wait for the
+// draw to finish: under `--virtual-time-budget` a poll loop fast-forwards the
+// page's clock and the run gets cut off wherever it happens to be, so this stage
+// stays cheap on purpose (debt S3).
 async function redrawStillWorks(): Promise<void> {
-  $$("#shabnam-tab-strip .tab")[0]!.click();
+  $$("#shabnam-editors nav button")[0]!.click();
   await tick();
-  $("#shabnam-redraw").click();
+  $("#shabnam-workbench > header button").click();
   await tick();
-  await mounted();
   const nodes = $$("#shabnam-main-html .node").length;
   const connectors = $$("#shabnam-connectors *").length;
   check("Redraw still draws the picture", nodes === 3 && connectors > 0, `${nodes} nodes, ${connectors} connector parts`);
@@ -176,6 +251,8 @@ await rowsTab();
 publish("rows");
 await liveRepaint();
 publish("repaint");
+await survivesRedraw();
+publish("guard");
 await applyAndCleanup();
 publish("apply");
 await redrawStillWorks();

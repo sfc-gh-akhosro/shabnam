@@ -19,11 +19,10 @@ type TabsProps = {
 
 export function Tabs(props: TabsProps) {
   return (
-    <nav id="shabnam-tab-strip">
+    <nav>
       <For each={TAB_IDS}>
         {(id) => (
           <button
-            class="tab"
             classList={{ active: props.active === id }}
             onClick={() => props.setActive(id)}
           >

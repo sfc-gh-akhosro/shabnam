@@ -1,22 +1,38 @@
-// The one live sheet, and the `@apply` resolution that happens on the way in.
+// The one live sheet, and the `@apply` expansion that happens on the way in.
 //
 // `#shabnam-style-css` is driven through CSSOM only (§3): one `CSSStyleRule` per
 // selector, a property is `setProperty` / `removeProperty`. Nothing here writes
 // `textContent`, and nothing asks the browser to read a sheet back.
 //
-// `resolve` and `serialize` are pure: rules in, rules or text out, no DOM. That
-// is what makes the interesting half of this file testable under bun, which has
-// no CSSOM at all.
+// A rule id never appears here. CSSOM offers no handle on a single declaration —
+// only on the block — so an id reaches paint the only way it can: through the
+// book, as `(selector, property)`. The id lives in the entry, not in the sheet.
+//
+// `expand`, `resolve` and `serialize` are pure: rules in, rules or text out, no
+// DOM. That is what makes the interesting half of this file testable under bun,
+// which has no CSSOM at all.
 
 import type * as T from "../types.ts";
 
 const SINK = "shabnam-style-css";
 const APPLY = "@apply";
 
-/** Expands every `@apply` in place, so the selector's own later properties win. */
-export function resolve(rules: T.StyleRules): T.StyleRules {
-  const out: T.StyleRules = new Map();
-  for (const selector of rules.keys()) out.set(selector, flatten(selector, rules, []));
+/**
+ * One selector's declarations, with every `@apply` expanded in place so the
+ * selector's own later properties win.
+ *
+ * Expansion is a **read**: what comes back is destined for the sheet and never
+ * becomes a book entry, which is why an expanded declaration has no id and no
+ * source to argue about.
+ */
+export function expand(rules: T.StyleRules, selector: string): Map<string, string> {
+  return flatten(selector, rules, []);
+}
+
+/** Every selector, expanded. What `feed` and `serialize` both walk. */
+export function resolve(rules: T.StyleRules): T.StyleBag {
+  const out: T.StyleBag = new Map();
+  for (const selector of rules.keys()) out.set(selector, expand(rules, selector));
   return out;
 }
 
@@ -31,7 +47,7 @@ export function serialize(rules: T.StyleRules): string {
 export function applyBound(selector: string, rules: T.StyleRules): boolean {
   for (const own of rules.values()) {
     const names = own.get(APPLY);
-    if (names !== undefined && names.trim().split(/\s+/).includes(selector)) return true;
+    if (names !== undefined && names.value.trim().split(/\s+/).includes(selector)) return true;
   }
   return false;
 }
@@ -85,12 +101,12 @@ function flatten(selector: string, rules: T.StyleRules, seen: string[]): Map<str
   if (own === undefined) throw new Error(`@apply ${selector}: not defined`);
 
   const out = new Map<string, string>();
-  for (const [property, value] of own) {
+  for (const [property, rule] of own) {
     if (property !== APPLY) {
-      out.set(property, value);
+      out.set(property, rule.value);
       continue;
     }
-    for (const name of value.trim().split(/\s+/)) {
+    for (const name of rule.value.trim().split(/\s+/)) {
       for (const entry of flatten(name, rules, [...seen, selector])) out.set(...entry);
     }
   }

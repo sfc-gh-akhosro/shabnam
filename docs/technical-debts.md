@@ -287,6 +287,20 @@ The driver also hard-codes the macOS Chrome path, overridable with `CHROME=`, an
 pins `--virtual-time-budget`, so a very slow machine could dump the DOM early;
 that shows up as a missing stage rather than a false pass.
 
+**Confirmed, iteration 9.** Not just slow machines: the budget is *virtual* time,
+and every `await tick()` fast-forwards the page clock by its full 30 ms. A poll
+loop waiting for something to happen therefore burns budget at a rate unrelated
+to how long the run takes, and Chrome dumps the DOM wherever the page has got to.
+It cost a cycle to diagnose because the symptom is identical to a test that
+stopped: all-green checks, stage `"repaint"`, exit 1 — and the same code stopped
+at a different stage on each run. Budget raised to 600 s, and the checks were
+rewritten to stop polling: where a stage needs the book re-read, it clicks
+Cleanup, which is synchronous, rather than waiting on a redraw and a frame.
+
+**Rule of thumb for this harness:** do not wait for anything. Reach for a
+synchronous path, or assert on the part of the pipeline that runs before
+`await painted()`.
+
 **Cost to close:** chaining it into `bun run test`, once we mind the seconds
 less than the risk. Not a code change.
 
@@ -298,3 +312,22 @@ is readable on hover. Widening the editor pane, or wrapping a row onto two lines
 both cost more than the annoyance is worth today.
 
 **Cost to close:** a grid that wraps, or a resizable pane. Not urgent.
+
+### S10. Typing over a theme rule, then deleting the row, destroys the theme rule
+
+One book, and an accepted overwrite replaces the entry (§1). So a row you type on
+a key the theme already owns — `:root, svg` → `--primary-color`, say — does not
+sit *on top of* the theme's entry, it *becomes* it, at source 2. Delete that row
+and the theme's value goes with it: the rule leaves the book entirely and stops
+being painted. Load DOT is the way back.
+
+This is the design, decided deliberately and written into §1 — it is what buys us
+one map instead of three, no merge step, and no `plus` / `minus`. It is recorded
+here because it is a trap rather than a bug: it caught this iteration's own
+browser checks, which used theme-owned keys as scratch space and then wondered
+why the row count fell. What *does* survive a delete is anything `@apply` still
+supplies, which is why `removeRule` resolves the expansion before clearing.
+
+**Cost to close:** not a bug to fix. If it ever needs softening, the honest shape
+is a second entry per key rather than a flag — which is the three layers coming
+back, so it would be a conversation about §1, not a patch.
