@@ -101,10 +101,6 @@
     "flex-flow": {
       "value": "row",
       "source": 0
-    },
-    "flex": {
-      "value": "1 1 0%",
-      "source": 0
     }
   },
   ".col": {
@@ -150,10 +146,6 @@
       "value": ".col",
       "source": 0
     },
-    "justify-content": {
-      "value": "space-evenly",
-      "source": 0
-    },
     "gap": {
       "value": "var(--vertical-gap)",
       "source": 0
@@ -171,12 +163,52 @@
       "source": 0
     }
   },
+  ".node[data-shape=none]": {
+    "display": {
+      "value": "none",
+      "source": 0
+    }
+  },
   ".record": {
     "@apply": {
       "value": ".paper .row",
       "source": 0
+    },
+    "width": {
+      "value": "16em",
+      "source": 0
+    },
+    "height": {
+      "value": "8em",
+      "source": 0
     }
   },
+  ".invis": {
+    "display": {
+      "value": "none",
+      "source": 0
+    }
+  },
+  ".cell": {
+    "flex": {
+      "value": "1",
+      "source": 0
+    }, 
+    "border-bottom": {
+      "value": "thin solid",
+      "source": 0
+    },
+    "padding-left": {
+      "value": "0.75em",
+      "source": 0
+    },
+    "align-content": {
+      "value": "space-evenly",
+      "source": 0
+    }
+  },
+
+
   ".cell._1": {
     "@apply": {
       "value": ".glass",
@@ -186,6 +218,10 @@
   ".record > div": {
     "@apply": {
       "value": ".col",
+      "source": 0
+    },
+    "flex": {
+      "value": "1.6",
       "source": 0
     }
   }

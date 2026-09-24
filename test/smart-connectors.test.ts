@@ -101,3 +101,15 @@ test("per-edge splines attribute overrides diagram default", async () => {
   expect(svg).toMatch(/<path id="b_c"[^>]*d="[^"]*L[^"]*"/);
 });
 
+
+test("an edge's style words become classes, the way a node's do", async () => {
+  // `edge [style=invis]` is how DOT holds a rank in place without drawing
+  // anything, so the class has to reach the path for the theme to hide it.
+  const model = await makeModel("digraph { rankdir=LR; a -> b [style=invis] }");
+  const boxes: Box[] = [
+    { id: "a", left: 50, top: 50, width: 80, height: 40 },
+    { id: "b", left: 200, top: 120, width: 80, height: 40 },
+  ];
+
+  expect(new EdgeDrawer().draw(boxes, model)).toContain('class="edge invis"');
+});

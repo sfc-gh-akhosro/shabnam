@@ -19,12 +19,15 @@
 // load conductor's plumbing (§5), not part of the styling contract. A row edit
 // needs neither — that is the short path.
 
-import type * as T from "../types.ts";
+import * as T from "../types.ts";
 import { applyBound, expand, Sheet, serialize } from "./sheet.ts";
 import basicTheme from "../../theme/basic-theme.json";
 
 const APPLY = "@apply";
 const STYLE_FILE = "style-rules.json";
+
+/** The theme the book is founded on, named so a saved document can say so. */
+const THEME_NAME = "basic-theme.json";
 
 export class Stylist implements T.Stylist {
   private sheet = new Sheet();
@@ -33,10 +36,12 @@ export class Stylist implements T.Stylist {
   // invented that has not reached the book yet, so no entry may ever carry it.
   private counter = 1;
 
-  addRule(selector: string, property: string, value: string, source: T.Source): void {
-    if (!this.write(selector, property, value, source)) return;
-    if (property === APPLY || applyBound(selector, this.rules)) return this.feed();
-    this.sheet.set(selector, property, value);
+  addRule(selector: string, property: string, value: string, source: T.Source): number {
+    const id = this.write(selector, property, value, source);
+    if (id === REFUSED) return REFUSED;
+    if (property === APPLY || applyBound(selector, this.rules)) this.feed();
+    else this.sheet.set(selector, property, value);
+    return id;
   }
 
   removeRule(selector: string, property: string): void {
@@ -72,7 +77,7 @@ export class Stylist implements T.Stylist {
   }
 
   save(): void {
-    download(STYLE_FILE, JSON.stringify(asFile(this.rules), null, 2));
+    download(STYLE_FILE, JSON.stringify(asDocument(THEME_NAME, this.rules), null, 2));
   }
 
   serialize(): string {
@@ -99,11 +104,11 @@ export class Stylist implements T.Stylist {
     this.sheet.feed(this.rules);
   }
 
-  /** The guard and the book. False when the write was refused. */
-  private write(selector: string, property: string, value: string, source: T.Source): boolean {
+  /** The guard and the book. The id the entry carries, or `REFUSED`. */
+  private write(selector: string, property: string, value: string, source: T.Source): number {
     const written = writeRule(this.rules, selector, property, value, source, this.counter);
     if (written === this.counter) this.counter += 1;
-    return written !== REFUSED;
+    return written;
   }
 }
 
@@ -153,14 +158,42 @@ export function* fileEntries(file: T.StyleFile): Generator<Written> {
   }
 }
 
-/** The book as a file: `{ selector: { property: { value, source } } }`. No ids. */
-export function asFile(rules: T.StyleRules): T.StyleFile {
-  return Object.fromEntries(
-    [...rules].map(([selector, properties]) => [
-      selector,
-      Object.fromEntries([...properties].map(([property, rule]) => [property, { value: rule.value, source: rule.source }])),
-    ]),
-  );
+/** The book as a file: `{ selector: { property: { value, source } } }`. No ids.
+ *  `only` keeps one source — what Save Styles narrows to; absent keeps all,
+ *  which is what the export seed wants. */
+export function asFile(rules: T.StyleRules, only?: T.Source): T.StyleFile {
+  const file: T.StyleFile = {};
+  for (const [selector, properties] of rules) {
+    for (const [property, rule] of properties) {
+      if (only !== undefined && rule.source !== only) continue;
+      (file[selector] ??= {})[property] = { value: rule.value, source: rule.source };
+    }
+  }
+  return file;
+}
+
+/** The book as a saved document: the user's rules, over a named theme. */
+export function asDocument(theme: string, rules: T.StyleRules): T.StyleDocument {
+  return { theme, style: asFile(rules, T.SOURCE.user) };
+}
+
+/**
+ * The entries of either shape a style JSON can arrive in: a document, or the
+ * bare file an export seed carries. The discriminator is `theme` holding a
+ * string: in a file every top-level value is a map of declarations, so a
+ * selector named `theme` still cannot look like this.
+ */
+export function* documentEntries(parsed: T.StyleFile | T.StyleDocument): Generator<Written> {
+  yield* fileEntries(isDocument(parsed) ? parsed.style : parsed);
+}
+
+/** The theme a document names, or the founding one when it is a bare file. */
+export function themeOf(parsed: T.StyleFile | T.StyleDocument): string {
+  return isDocument(parsed) ? parsed.theme : THEME_NAME;
+}
+
+function isDocument(parsed: T.StyleFile | T.StyleDocument): parsed is T.StyleDocument {
+  return typeof (parsed as T.StyleDocument).theme === "string";
 }
 
 function own(rules: T.StyleRules, selector: string): Map<string, T.Rule> {

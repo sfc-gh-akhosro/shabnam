@@ -1,0 +1,117 @@
+digraph snowflake_gcp_integration {
+    rankdir=LR
+    splines=ortho;
+    nodesep=1
+    ranksep=1
+    concentrate=true;
+
+    
+    {
+        // GCP Services
+        
+        node [fillcolor="#ddffdd"]
+        
+        runtime
+        bq
+        geap
+        ge
+        gcs
+        gcp
+
+    }
+
+
+    subgraph {
+        node[shape=none height=0]
+        "Provider Services" -> "Lakehouse \n Federated Catalog" -> "Snowflake \n Data Services" -> "Consumer Apps" [style=invis]
+    }
+    
+    
+    subgraph cluster_a {
+        style=invis
+        
+        geap bq gcs
+        rank=same;
+    }
+    
+    subgraph cluster_b {
+        style=invis
+
+        runtime horizon
+        rank=same;
+    }
+
+    subgraph {
+        engine connectors analyst
+        
+        rank=same;
+    }
+    
+    subgraph {
+        spcs gcp ge agents ml
+        rank=same
+    }
+    
+
+
+    gcs [shape=record label="{GCS | {Iceberg Tables | Data | Metadata}}"]
+    ge  [shape=record label="Gemini Enterprise | {Agents}"  ]
+    bq [shape=record label="{GCP \n Services | {Managed Spark | BigQuery | VertexAI}}"]
+    runtime [shape=record label="Open Lakehouse \n Runtime Catalog "]
+
+    geap [shape=record label="{GEAP \n Tokens | {Gemini | Anthropic | Open AI | Grok}}"]
+
+    horizon [shape=record label="{Snowflake \n Horizon | {Security | Governance}}" fontsize=12]
+    engine [shape=record label="{Query \n Services | {interactive | dynamic | adaptive}}"]
+    
+    
+    analyst [shape=record label="{Cortex \n Context | {Semantic Models | Autopilot Context | Search | AI Functions }}"]
+    agents   [shape=record label="{Cortex \n Agents | {CoWork | AI Gateway | CoCo}}"]
+    spcs [shape=record label="{Workplace \n Constainer \n Services | {Notebook | Spark | Python | SQL}}"]
+    connectors [shape=record label="{Data \n Exchange | { SDK | Openflow | DBT}}"]
+    
+    gcp[shape=record label="{GCP \n Apps | {Looker | Cloud Run | DataFlow | ML Apps }}"]
+    ge [shape=record label="{Gemini \n Enteprise | {Agents | MCP | Assistent}}"]
+    
+    ml [shape=record label="{Machine \n Learning | {Feature Store | Train | Inference}}"]
+    
+    connectors -> gcp
+
+    gcs -> {horizon} 
+
+    bq -> runtime [dir=both]
+    
+    horizon -> runtime [dir=both xlabel="bidirectional sync"  constraint=false penwidth=3]
+    
+    horizon -> engine [weight=100]
+
+    engine -> spcs 
+    engine -> ml
+    engine -> connectors
+    
+    horizon -> analyst
+    analyst -> agents 
+    agents -> ge [weight=0]
+    
+    // horizon -> agents
+
+    geap -> agents [weight=0]
+    
+    
+    
+    
+    
+
+
+    subgraph luster_consumer {
+        label = "GCP Consumer Services"
+        
+        ge
+        spcs
+        agents
+    }
+    
+
+
+
+}

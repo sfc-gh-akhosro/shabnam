@@ -73,9 +73,12 @@ data in, data out, no DOM.
   measured boxes. Graphviz's own pixel sizes and paths are never used. This is why
   an edge keeps touching its boxes after you change a font or a gap.
 
-**The `Stylist` owns style, and it owns one stylesheet.** It holds three layers —
-theme, derived, user — and merges them per property, later winning. Then it feeds
-them to CSSOM: one `CSSStyleRule` per selector, each property a `setProperty`.
+**The `Stylist` owns style, and it owns one stylesheet.** It holds **one book**,
+not three layers: `selector → property → (value, id, source)`, where source is
+theme, dot or user. A write whose source ranks below the entry already there is
+refused, which is what lets a redraw feed derived rules without taking a typed
+row back. Then it feeds CSSOM: one `CSSStyleRule` per selector, each property a
+`setProperty`.
 There is no CSS text on this path. Nothing builds a string to paint with, and
 nothing parses a sheet back to find out what is in it, because the map already
 knows. `@apply` survives as a property whose value names other selectors, and it
@@ -91,7 +94,7 @@ Seven of them, in `src/types.ts`. `interface` means methods; `type` means data.
 ```ts
 interface Vizer   { render(dot) }                        // the only DOT reader
 interface Diagram { bag, frame, derived, clusters, shells, connectors }
-interface Stylist { addRule, removeRule, setDerived, cleanup, rows, save, serialize }
+interface Stylist { addRule, removeRule, reset, cleanup, rows, save, serialize }
 interface Workbench { redraw, inject, measure, place }   // the DOM owner
 interface Files   { loadDot, saveDot, exportHtml, exportPng }
 ```
@@ -99,7 +102,7 @@ interface Files   { loadDot, saveDot, exportHtml, exportPng }
 And the one data shape everything style-related agrees on:
 
 ```ts
-type StyleRules = Map<string, Map<string, string>>   // selector → property → value
+type StyleRules = Map<string, Map<string, Entry>>   // selector → property → (value, id, source)
 ```
 
 A rule is a map entry. The file on disk is the same thing as a nested object. The
@@ -121,40 +124,9 @@ Every one of those refusals has been tried in some form and written down in
 
 # Current task
 
+Nothing open. Iteration 14 closed the derived-margin question by deleting it
+(`docs/archive.md`).
 
-tab "styles":
-
-the row must be similar to /researchlab/stylist/index.html  implementation. 
-css to apply is there too, I like that styling and everything, the solidjs is there, etc. Use that one and just do similar (almost identical): no change of style or things. simple tweaks are enough.
-
-<.row id="5"> 
-  <delete, selector, property, value, add>
-
-add always adds a new empty row to the next line. delete, removes current row.
-
-why many items (insluding :root, svg vars) are repeated in Style tab. It shows the logic is broken, not just a mistake.
-
-we do not have and do not keep any .css file anymore.
-(although we have a simple translator, if needed to translate .css to our styleRules)
-
-as I understood you have a stylist interface with 
-interface stylist:
-    - public add rule (selector: text, property, value)
-    - public cleanup (): removes redudant rules or "soft deleted" rules.
-    - public save (): into disk.
-    - public remove rule (rule index)
-        - remove just makes it null, does not purge it from the array, ask cssom remove the entry. 
-        - Purging them happens during cleanup() often when redraw is triggered.
-
-We need to track and associate our .rows .row element (in #styles_tab) to our styleRules key and CSSOM entry.
-Better not skip it.
-
-our styleRules is the source of truth for styling.
-
-type styleRules: is nested selector => property => (value, id)
-we add, remove, and "traverse and yield" for some tasks.
-
-a counter can create id.
-
-
-
+Next session picks from `docs/technical-debts.md` — S10 (delete is not revert)
+and S11 (a `StyleDocument` is written but nothing loads it) are the two that
+affect a user today.

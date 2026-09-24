@@ -132,6 +132,8 @@ Graphviz is **not** our renderer, our HTML, our CSS, or our geometry. We use its
 
 viz.js is inlined in the page. Redraw calls `renderJSON` again on every run. That is Graphviz doing its one job repeatedly, not a second parser.
 
+**This is today's answer, not the final one.** viz.js gives us layout for free and costs us provenance: Graphviz resolves `node [...]` defaults onto members at parse time, so no JSON format it offers can say *where* an attribute was written. The intended direction is to replace it with a real DOT **AST** plus our own **maths-based layout**, which would make the model say what was assigned rather than what was computed. Until that investigation happens, the rule above stands unchanged — the replacement is a deliberate future project, not a licence to hand-roll a parser now. See debt **M4**.
+
 ---
 
 ## 3. The shape of the design — one traversal, one model
@@ -267,7 +269,9 @@ element nobody draws is inert, and inert output is worse than absent output.
 
 Classes first. `#id` last, and rare. The valuable output is that **every node already carries the right classes**, so the handful of rows a user adds on top is trivial.
 
-**Position margins**: When nodes across ranks have vertical (or horizontal) offsets in Graphviz's layout, `CssBagger` computes quantized slot steps from `pos` coordinates and emits explicit `#id` entries (e.g. `#node_id` → `margin-top` → `calc(N * (var(--vertical-gap) + 2.5em))`). This preserves node alignment across columns while keeping every value inspectable and editable as a row.
+**No derived margins**: nothing about spacing is computed from `pos`. A node takes what the theme gives it, plus whatever the author wrote in the DOT and whatever a Stylist row says. From a node's position we take exactly two things — **which rank it is in, and its order within that rank** (§3.3) — and everything else about the picture is decoration: node, cluster and edge attributes bagged into CSS, and the theme's own layout.
+
+Earlier iterations derived a per-node "weight" margin from the within-rank coordinate. It is gone: every formula tried read as a plausible proxy for isolation and none of them survived contact with real diagrams, and it was the only value in the pipeline that was computed rather than passed through. The pass-through law (§ attr values are passed through, never corrected) now holds with **no exception**.
 
 ### 3.3 `LayoutFramer` + `NodeShaper` — the HTML layer
 
@@ -340,7 +344,9 @@ Four tabs, and one of them is not text. `SetTab` writes a **text tab** (load, se
 
 The coding window is **one `<textarea>`**, and it serves the three text tabs. `tabs.tsx` is a radio strip — four equal buttons, no editor, no store. Workbench owns `active`; when `active` is `styles` it paints the rows table instead of the textarea. No highlighting, no completion, no caret of ours, no component of ours: the textarea is written inline in `workbench.tsx`, because a component that wraps one element and forwards two props is a file for nothing.
 
-**The chrome's own CSS is `src/app.css`, and it is deliberately small.** Tokens on `body`, then a skeleton reached by *element and position* — `body > main`, `body > aside`, `header`, `nav`, `textarea`, `aside > section` — rather than by a hook per box. The four core classes (`.paper` · `.glass` · `.row` · `.col`) are not here: they belong to the theme and arrive through the sink. The markup therefore carries almost no `class` or `id`: a hook is allowed when the layout needs it, when it is a sink the engine writes, or when a test drives it. Nothing is named for decoration, and the semantic element is preferred to a class — `main`, `aside`, `article`, `section`, `header`, `nav`, `output`, and `hidden` rather than a `.hidden`. The styles tab is `research-lab/stylist/index.html` verbatim (`.rows`, `.row`, `.sel`, `.prop`, `.val`, `#selector-list`, `#property-list`) because that prototype is ten lines of CSS, and being restylable in ten lines is the point. The diagram's styling never appears here — it lives in the sinks (§3).
+**The chrome's own CSS is `src/app.css`, and it is deliberately small.** Tokens on `body`, then a skeleton reached by *element and position* — `body > main`, `body > aside`, `nav`, `textarea`, `aside > section` — rather than by a hook per box. The four core classes (`.paper` · `.glass` · `.row` · `.col`) are not here: they belong to the theme and arrive through the sink. The markup therefore carries almost no `class` or `id`: a hook is allowed when the layout needs it, when it is a sink the engine writes, or when a test drives it. Nothing is named for decoration, and the semantic element is preferred to a class — `main`, `aside`, `article`, `section`, `nav`, and `hidden` rather than a `.hidden`. The styles tab is `research-lab/stylist/index.html` less its toolbar (`.rows`, `.row`, `.sel`, `.prop`, `.val`, `#selector-list`, `#property-list`) because that prototype is ten lines of CSS, and being restylable in ten lines is the point. The diagram's styling never appears here — it lives in the sinks (§3).
+
+**One toolbar, and it is `main`'s `nav`.** Every action the app has lives there — Redraw, Load / Save DOT, Save PNG, Export HTML, Save Styles. No panel carries buttons of its own, and there is no status line: a redraw that cannot parse its DOT throws rather than writing a message into a corner of the page.
 
 `redraw` is sync with the DOT tab — the full draw. The styles tab does not need Graphviz: a row edit is a `setProperty` on a live sheet, so the picture repaints with no redraw and no reflow of anything else. The UI may still use one Redraw button that always runs the DOT path.
 
@@ -432,7 +438,7 @@ Fresh start. Do these in order, stop after each for review.
 3. **`LayoutFramer` + `SHAPE_HTML.box`.** `#diagram-html` filled: boxes in the right columns, correct id and classes. Unstyled is fine.
 4. **`Diagram.derived` + `Stylist`.** Derived `StyleRules` per §3.2, merged as the middle layer and fed to CSSOM. Identical input, identical map.
 5. **`Measurer` + `NodeSheller` + `EdgeDrawer`.** `svg/box.svg` as the only shell, `icon/` when `icon=` is set, connectors from measured coordinates.
-6. **Polish.** Export HTML, status line for parse errors.
+6. **Polish.** Export HTML.
 
 Out of this pass: every `shape=`, a second layout engine, float-precision tests treated as the product.
 
@@ -463,7 +469,8 @@ Closed. Do not reopen in code without updating this file.
 | What a rule is | `selector → property → (value, id, source)`. A map entry. Not a line of CSS. |
 | Rule id | A counter on the `Stylist`, minted on first sight of a `(selector, property)` and kept by an accepted overwrite. Live-DOM only: it ties a `.row`, a book entry and a declaration together, and is never written to a file. |
 | Rule source | `0` theme, `1` dot, `2` user. `addRule` refuses a lower source; equal or higher wins. This replaces the three layers. |
-| The style file | `style-rules.json`, the whole book: `{ selector: { property: { value, source } } }`. One shape — the theme is that shape with every source `0`. Map insertion order is row order. |
+| The style file | Two shapes, one grammar. A **document** is what Save Styles writes: `{ theme, style }`, where `style` holds only the user's rules — `{ selector: { property: { value, source } } }` — and `theme` names the theme they were laid over. A **bare file** is that inner shape alone: the theme, and the whole book an export seed carries. The reader tells them apart by `theme` holding a string. Map insertion order is row order. |
+| What Save Styles leaves out | Everything at source `0` and `1`. A theme rule is already in the theme file and a derived rule is rebuilt by the next redraw, so saving either would freeze a copy of something meant to be regenerated. An export is the exception and carries the whole book, because it paints with no theme file to lean on. |
 | CSSOM identity | One `CSSStyleRule` per selector. A property is `setProperty` / `removeProperty`, so no index is ever stored — `deleteRule` renumbers, which is why a *CSSOM* index was dropped. A rule id reaches a declaration through the book, as `(selector, property)`. |
 | Layer merge | None. One book; a repeated key is an overwrite arbitrated by `source`. No `plus` / `minus`, no `lastDerived`, no merge buffer. |
 | An accepted overwrite | Destructive and immediate. The value underneath is not kept, so delete is not revert — except for what `@apply` still supplies. |
@@ -476,6 +483,11 @@ Closed. Do not reopen in code without updating this file.
 | `@apply` | A property whose value is selector keys in the same map. Expanded at feed time, in place, so own later properties win. Expansion is a read — never a book entry. Missing name throws. Cycle throws. |
 | CSS text | Produced only by `Stylist.serialize()`, only for Export HTML and Save PNG. |
 | Attr → CSS property | `ATTR_CSS` registry |
+| Attr values | **Passed through, never corrected.** Graphviz's number plus the unit it measured in, and nothing else. It clamps `height=0` to `0.02in` and `width=0` to `0.01in`; we emit `0.02in`, because laying out DOT is its job and a correction here would be a rule the author cannot see. If a value looks wrong, that is a thing to style in the styles tab, not to fix in the bagger. |
+| Label escapes | `\N` becomes the node's own name and `\G` a cluster's, because `renderJSON` hands Graphviz's default label over unexpanded. Substitution on one parsed field, not a pass over DOT. |
+| Shape | `record` is the one shape with a renderer and a class of its own (`.record`); every other shape is a `.node` that names itself in `data-shape`, verbatim, `box` included. `none`, `box3d` and the rest carry no meaning for us. A class per shape would put a bare DOT word in the class space, where a subgraph of the same name already lives (§3.1). |
+| `style` | Each comma-separated word becomes a class — `style="invis,filled"` → `class="node invis filled"`, on nodes and on edges. What a word *means* is the theme's to say: `.invis { display: none }` lives in `basic-theme.json`, not in any bagger. |
+| Waiting for layout | `painted()` races `requestAnimationFrame` against `setTimeout(0)`. The frame is what the Measurer wants, but `rAF` does not fire in a background tab or under a virtual clock, and waiting on it alone leaves a redraw unfinished. See `docs/archive.md`, iteration 13. |
 | Bag ties | Lexicographically smallest value, for determinism |
 | Bag absence | Counts as a value. Absence winning means no class rule for that key. |
 | App-owned ids | Two hyphenated words, so they cannot collide with a DOT name |
@@ -490,7 +502,10 @@ Closed. Do not reopen in code without updating this file.
 | Shortcuts | A `Map` registry in `workbench/keys.ts`, not a switch |
 | PNG export | `foreignObject` → `<canvas>` → `toBlob`. No rasterizer dependency. |
 | Tab editor | A bare `<textarea>`, inline in `workbench.tsx`. One instance, for the three text tabs. Radio strip selects. No highlighting, no completion. |
-| The styles tab | A rows table, not an editor. Native `input list=` for selector and property. |
+| The styles tab | A rows table, not an editor. Native `input list=` for selector and property. A `header` of three checkboxes hides rows by source — view state only, so nothing is written and nothing is fed. A hidden row keeps its place in the book: the edit verbs address a row by position, so the filter carries the book index with each visible row rather than renumbering them. |
+| The waiting row | The list always ends with an untouched blank row, and `.rows` is `column-reverse`, so that blank sits at the **top** of the screen — a rule is added by typing, never by asking for a row first. Filling it in appends the next one. ➕ opens another blank after any row; a re-read settles back to exactly one. |
+| ❌ | Out of the book, out of CSSOM, and then the element is only **hidden** — not spliced out. The book is the source of truth and the list is rebuilt from it on the next sync, where the row simply will not be. Removing the element as well would be the UI keeping a second opinion about what exists. |
+| A row's id | Minted by the book on first sight of a `(selector, property)` and worn by the element from that moment — `addRule` returns it, so a rule is never live with no way to point at its element. |
 | UI library | SolidJS. Skeleton is JSX, not a string. |
 | viz.js in the page | Inlined. Redraw calls it every run. |
 | `try` / `catch` | Exactly one, around `Vizer.render` |
@@ -519,15 +534,18 @@ Inside `src/`, one package per stage of the design. A package is a subject exper
 
 ```
 src/
-  index.ts          mount the workbench into #root
+  index.ts          mount the workbench into document.body (no #root, §3.1)
   types.ts          all `type` data + all `interface` traits (not counted in the 7)
+  app.css           tokens + four core classes + the chrome skeleton
+  index.html        the one page
+  assets.d.ts       ambient types for the bundler's asset imports
 
   diagram/          Diagram facade + private workers. data in, data out. no DOM.
     diagram.ts        Diagram        — bag / frame / derived / clusters / shells / connectors
     vizer.ts          Vizer          — the only viz.js caller
     diagram-bagger.ts the only VizJson reader
     css-bagger.ts     model → derived StyleRules
-    layout-framer.ts  model → columns → #diagram-html
+    layout-framer.ts  model → rank + order within a rank → #diagram-html
     node-shaper.ts    SHAPE_HTML registry
     node-sheller.ts   boxes + nodes → shell SVG
     edge-drawer.ts    boxes + edges → connector SVG
@@ -595,6 +613,9 @@ type StyleBag   = Map<string, Map<string, string>>
 // what the JSON holds: { selector: { property: { value, source } } }
 type StyleFile  = Record<string, Record<string, { value: string; source: Source }>>
 
+// what Save Styles writes: the user's rules, and the theme they were laid over
+type StyleDocument = { theme: string; style: StyleFile }
+
 type StyleRow = { selector: string; property: string; value: string; id: number; source: Source }
 
 interface Vizer { render(dot: string): Promise<VizJson> }
@@ -609,12 +630,12 @@ interface Diagram {
 }
 
 interface Stylist {
-  addRule(selector: string, property: string, value: string, source: Source): void  // the one door in
+  addRule(selector: string, property: string, value: string, source: Source): number  // the one door in; returns the entry's id, or REFUSED
   removeRule(selector: string, property: string): void
   reset(): void                         // blank book + theme. Load DOT, not Redraw.
   cleanup(): void                       // drop emptied selectors, re-feed
   rows(): StyleRow[]                    // the tab, source-tagged, in order
-  save(): void                          // the book → style-rules.json
+  save(): void                          // your rules + the theme's name → style-rules.json
   serialize(): string                   // CSS text. Export / PNG only.
 }
 

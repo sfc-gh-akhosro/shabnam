@@ -13,7 +13,6 @@
 // Stylist keeps one rule per selector.
 
 import type * as T from "../types.ts";
-import { AXES, bucket, calculateStep } from "./layout-framer.ts";
 
 // Graphviz attribute → CSS property, for the HTML layer.
 const ATTR_CSS: T.AttrCss = new Map([
@@ -40,6 +39,7 @@ const ATTR_UNIT = new Map([
   ["width", "in"],
   ["height", "in"],
 ]);
+
 
 // The keys whose CSS property inherits down the DOM.
 const ATTR_INHERITS = new Set(["fontname", "fontsize"]);
@@ -111,7 +111,6 @@ export class CssBagger {
       this.cluster(out, cluster, model, nodeBag, clusterBags, granted, "");
     }
     this.nodeOverrides(out, model, nodeBag, clusterBags);
-    this.nodePositionMargins(out, model);
     put(out, ".edge", edgeBag, ATTR_SVG);
     for (const edge of model.edges) {
       put(out, `#${edge.id}`, differing(edge.attrs, edgeBag), ATTR_SVG);
@@ -153,52 +152,6 @@ export class CssBagger {
       put(out, `#${node.id}`, differing(node.attrs, inherited));
     }
   }
-
-  private nodePositionMargins(out: T.StyleBag, model: T.DiagramModel): void {
-    const axes = AXES.get(model.rankdir) ?? AXES.get("TB")!;
-    const columns = bucket(model.nodes, axes);
-    for (const column of columns) {
-      column.sort((a, b) => (axes.within(a) - axes.within(b)) * axes.inside);
-    }
-
-    const step = calculateStep(model.nodes, axes);
-    const isHorizontal = model.rankdir === "LR" || model.rankdir === "RL";
-    const property = isHorizontal ? "margin-top" : "margin-left";
-    const gapVar = isHorizontal ? "var(--vertical-gap)" : "var(--horizontal-gap)";
-
-    const topAnchor = isHorizontal
-      ? Math.max(...model.nodes.map((n) => n.y))
-      : Math.min(...model.nodes.map((n) => n.x));
-
-    for (const column of columns) {
-      for (let i = 0; i < column.length; i++) {
-        const node = column[i]!;
-        const slots = slotsBefore(column, i, topAnchor, step, isHorizontal);
-        if (slots > 0) {
-          own(out, `#${node.id}`).set(property, `calc(${slots} * (${gapVar} + 2.5em))`);
-        }
-      }
-    }
-  }
-}
-
-// How many empty rank slots sit between a node and whatever precedes it — the
-// top anchor for the first of a column, its neighbour for the rest.
-function slotsBefore(
-  column: T.Node[],
-  i: number,
-  topAnchor: number,
-  step: number,
-  isHorizontal: boolean,
-): number {
-  const node = column[i]!;
-  if (i === 0) {
-    const drop = isHorizontal ? topAnchor - node.y : node.x - topAnchor;
-    return Math.max(0, Math.round(drop / step));
-  }
-  const prev = column[i - 1]!;
-  const gap = isHorizontal ? prev.y - node.y : node.x - prev.x;
-  return Math.max(0, Math.round(gap / step) - 1);
 }
 
 // -------------------------------------------------------------------- bagging

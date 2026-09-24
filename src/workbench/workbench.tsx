@@ -11,12 +11,15 @@
 // the sinks the engine writes and the one positioned ancestor the coordinate
 // contract names (§3.4) — and every one of them is two hyphenated words, because
 // a bare word is a name a DOT node can also have (§3.1).
+//
+// Every action lives in that one toolbar, including Save Styles — the styles tab
+// is a list of rows and carries no toolbar of its own.
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { Rows } from "../stylist/rows.tsx";
-import { fileEntries, Stylist } from "../stylist/stylist.ts";
-import type { StyleFile, TabId, TabText } from "../types.ts";
+import { documentEntries, Stylist } from "../stylist/stylist.ts";
+import type { StyleDocument, StyleFile, TabId, TabText } from "../types.ts";
 import { Engine } from "./engine.ts";
 import { download, Files } from "./files.ts";
 import { type Command, commandOf } from "./keys.ts";
@@ -53,7 +56,7 @@ const STARTER_TEXT: TabText = {
   annotation: STARTER_HTML,
 };
 
-function seeded(): { text: TabText; styles: StyleFile } {
+function seeded(): { text: TabText; styles: StyleFile | StyleDocument } {
   const seed = document.getElementById("app-seed");
   if (seed === null) return { text: STARTER_TEXT, styles: {} };
   const parsed = JSON.parse(seed.textContent!);
@@ -103,10 +106,10 @@ export function Workbench() {
 
   onMount(() => {
     favicon();
-    // The theme is the floor of the book; an export seed then lays its own
-    // entries over it, each at the source it was saved with.
+    // The theme is the floor of the book; a saved document or an export seed
+    // then lays its own entries over it, each at the source it was saved with.
     stylist.reset();
-    stylist.absorb(fileEntries(seed.styles));
+    stylist.absorb(documentEntries(seed.styles));
     redraw();
     const onKey = (event: KeyboardEvent) => {
       const command = commandOf(event);
@@ -129,10 +132,10 @@ export function Workbench() {
           <button title="Cmd/Ctrl+S" onClick={commands["save-dot"]}>Save DOT</button>
           <button title="Cmd/Ctrl+P" onClick={commands["save-png"]}>Save PNG</button>
           <button title="Cmd/Ctrl+E" onClick={commands["export-html"]}>Export HTML</button>
+          <button onClick={() => stylist.save()}>Save Styles</button>
           {/* `hidden` rather than a class: the picker is opened by `.click()`,
               never seen, and needs no CSS of its own. */}
           <input ref={dotPicker} hidden type="file" accept=".dot,.gv" onChange={(e) => loadDot(e.currentTarget)} />
-          <output id="redraw-status" />
         </nav>
 
         <article id="diagram-canvas">

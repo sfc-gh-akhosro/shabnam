@@ -41,6 +41,16 @@ export function shapeHtml(node: T.Node): string {
   return render(node);
 }
 
+// shape → the node's type class. A `Map`, so the rule reads as the one line it is:
+// `record` is the only shape with a renderer and a class of its own, and every
+// other shape is a `.node` that says which shape it is in `data-shape`.
+//
+// `none`, `box3d`, `cylinder` and the rest carry no meaning for us — they are
+// values the author wrote, passed through so the styles tab can reach them.
+// Giving each one a class would put a bare DOT word in the class space, where a
+// subgraph of the same name already lives (§3.1).
+const SHAPE_CLASS: T.ShapeClass = new Map([["record", "record"]]);
+
 function box(node: T.Node): string {
   return `<div ${identity(node)}><span class="label">${text(node.label)}</span></div>`;
 }
@@ -86,7 +96,7 @@ function record(node: T.Node): string {
   const fields = walk(label, cursor);
   if (cursor.depth !== 0) throw new Error(`unbalanced {} in record label of ${node.id}`);
 
-  return `<div ${identity(node, ["record"])}>${fields}</div>`;
+  return `<div ${identity(node)}>${fields}</div>`;
 }
 
 // Cells come from the text *between* separators, so a separator only ever opens
@@ -215,10 +225,23 @@ const MD = new Map<RegExp, string>([
 
 // --------------------------------------------------------------------- shared
 
-function identity(node: T.Node, extra: string[] = []): string {
-  const kind = extra[0] ?? "node";
-  const classes = [kind, ...node.classes].join(" ");
-  return `id="${node.id}" class="${classes}"`;
+function identity(node: T.Node): string {
+  const kind = SHAPE_CLASS.get(node.shape) ?? "node";
+  const classes = [kind, ...styleWords(node.attrs), ...node.classes].join(" ");
+  const shape = kind === "node" ? ` data-shape="${node.shape}"` : "";
+  return `id="${node.id}" class="${classes}"${shape}`;
+}
+
+// `style="invis,filled"` → `invis filled`. Graphviz's `style` is a comma-list of
+// words, and a word is what a class is, so each one travels as a class and the
+// theme decides what it means — `.invis` is hidden, and the others are there to
+// be styled if we ever want them. Split on the comma, nothing else: the words
+// are the author's.
+export function styleWords(attrs: Map<string, string>): string[] {
+  return (attrs.get("style") ?? "")
+    .split(",")
+    .map((word) => word.trim())
+    .filter((word) => word !== "");
 }
 
 // Escape first, so the author's `<` is text and only our own tags are markup.

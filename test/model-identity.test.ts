@@ -62,3 +62,27 @@ test("two DOT names that sanitize to one id throw", async () => {
   // Silent id collapse produces a malformed page; a stack trace does not (§3.1).
   expect(model('digraph { "a.b"; "a b" }')).rejects.toThrow(/id collision/);
 });
+
+test("the default label `\\N` becomes the node's own name", async () => {
+  // Graphviz hands the placeholder over unexpanded, so a node with no label of
+  // its own would otherwise reach the frame reading the two literal characters.
+  const sample = await model('digraph { "Provider-Services" [shape=none] }');
+  const node = sample.nodes.find((entry) => entry.id === "Provider-Services")!;
+  expect(node.label).toBe("Provider-Services");
+  expect(node.caption).toBe("Provider-Services");
+});
+
+test("an authored label is not expanded — `\\\\N` stays what the author wrote", async () => {
+  // The pair is consumed as a pair, so the `N` after an escaped backslash is
+  // just an `N`. We do not collapse the pair: the label is the author's text and
+  // this is a substitution, not a DOT unescaper.
+  const sample = await model('digraph { a [label="Not \\\\N at all"]; b }');
+  expect(sample.nodes.find((entry) => entry.id === "a")!.label).not.toBe("a");
+  expect(sample.nodes.find((entry) => entry.id === "a")!.label).toContain("N at all");
+  expect(sample.nodes.find((entry) => entry.id === "b")!.label).toBe("b");
+});
+
+test("a cluster's `\\G` becomes the subgraph's own name", async () => {
+  const sample = await model('digraph { subgraph cluster_source { label="\\G" a } }');
+  expect(sample.clusters.find((entry) => entry.name === "cluster_source")!.label).toBe("cluster_source");
+});

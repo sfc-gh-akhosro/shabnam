@@ -200,6 +200,52 @@ it. Author DOT accordingly: declare a node in the cluster you want it classed by
 
 **Cost to close:** not closable. Architectural boundary.
 
+### M4. Replace viz.js with a DOT AST plus our own maths-based layout — investigate
+
+The model records **what Graphviz computed**, never **what the author wrote**. This
+is not a bug in the bagger; it is the input. `node [fontsize=12]` on a subgraph is
+resolved onto every member at *parse* time, inside cgraph, before layout begins —
+so `CssBagger` has to recover ownership statistically (`mode`, `unanimous`,
+`differing` in `src/diagram/css-bagger.ts`) and is sometimes wrong.
+
+Measured, so nobody re-derives it:
+
+| format | keeps provenance | keeps `pos` |
+|---|---|---|
+| `json` (`renderJSON`) — what we use | no | yes |
+| `dot_json` — "structure before layout" | **no** — identical resolution | **no** — node keys are `_gvid`, `name`, `label` only |
+| `canon` | **yes** — `node [fontsize=12];` stays at subgraph scope | yes |
+
+Two DOT files that differ only in *where* `fontsize=12` was written produce
+byte-identical `json` **and** byte-identical `dot_json`. Only `canon` distinguishes
+them, and `canon` is DOT text, so reading it is the parser §2 forbids. `dot_json` is
+strictly worse than what we have: same ambiguity, and it drops the coordinates that
+ranking is entirely built on.
+
+The intended direction is therefore not a better Graphviz output but a different
+engine: **a real DOT AST**, where a subgraph-scoped default is a node in the tree
+and stays one, plus **our own layout maths** instead of consuming `pos`. That would
+make the model say what was assigned, which is what the whole styling story wants,
+and would remove the one dependency we cannot see inside.
+
+What it buys, beyond provenance: ranks we control rather than infer from
+coordinates, no `TOLERANCE` bucketing, no
+`fixedsize` gate to tell an authored size from a measured one, and a `\N` / `\G`
+expansion that happens where labels are resolved rather than as a substitution
+after the fact. Several existing debts are downstream of the same root: **M3**
+(declaration-scoped node lists), and the single-member-subgraph misattribution
+that made `horizon`'s own `fontsize=12` land on `.subgraph_5`.
+
+Not started, and deliberately not started: DOT has a real grammar, layered layout
+is genuinely hard, and viz.js is correct today. Until the investigation happens the
+§2 rule stands as written — this entry is a direction, not permission.
+
+**Cost to close:** large, and in two separable halves. The AST half is the smaller
+one and could land first behind the existing `Vizer` boundary, with viz.js kept for
+geometry only. The layout half is the real project: rank assignment, ordering
+within a rank, and coordinate assignment. Worth a spike on an existing library
+(ELK, dagre) before writing either.
+
 ---
 
 ## Process debt
@@ -283,23 +329,11 @@ CSSOM half. They are not one command, on purpose: the browser run costs a Chrome
 launch and several seconds, and `bun test` is the one that runs constantly. The
 risk is the real one — a command nobody types is a test nobody runs.
 
-The driver also hard-codes the macOS Chrome path, overridable with `CHROME=`, and
-pins `--virtual-time-budget`, so a very slow machine could dump the DOM early;
-that shows up as a missing stage rather than a false pass.
+The driver also hard-codes the macOS Chrome path, overridable with `CHROME=`.
 
-**Confirmed, iteration 9.** Not just slow machines: the budget is *virtual* time,
-and every `await tick()` fast-forwards the page clock by its full 30 ms. A poll
-loop waiting for something to happen therefore burns budget at a rate unrelated
-to how long the run takes, and Chrome dumps the DOM wherever the page has got to.
-It cost a cycle to diagnose because the symptom is identical to a test that
-stopped: all-green checks, stage `"repaint"`, exit 1 — and the same code stopped
-at a different stage on each run. Budget raised to 600 s, and the checks were
-rewritten to stop polling: where a stage needs the book re-read, it clicks
-Cleanup, which is synchronous, rather than waiting on a redraw and a frame.
-
-**Rule of thumb for this harness:** do not wait for anything. Reach for a
-synchronous path, or assert on the part of the pipeline that runs before
-`await painted()`.
+The flakiness that used to live in this entry is gone — the run is deterministic
+now, and why is in `docs/archive.md` under iteration 13. The short version: the
+engine waited on `requestAnimationFrame`, which a virtual clock never delivers.
 
 **Cost to close:** chaining it into `bun run test`, once we mind the seconds
 less than the risk. Not a code change.
@@ -331,3 +365,19 @@ supplies, which is why `removeRule` resolves the expansion before clearing.
 **Cost to close:** not a bug to fix. If it ever needs softening, the honest shape
 is a second entry per key rather than a flag — which is the three layers coming
 back, so it would be a conversation about §1, not a patch.
+
+### S11. A saved style document has no way back in
+
+Save Styles writes `{ theme, style }`, and `documentEntries` / `themeOf` read
+that shape — but nothing in the UI calls them. There is a Load DOT button and no
+Load Styles, so the file you just saved can only be reloaded by pasting it into
+an export seed. The reader exists and is tested; the verb does not.
+
+Nor does the `theme` field do anything yet: `theme/` ships exactly one theme and
+there is no loader for a second, so the name is recorded and reported and never
+consulted. Both halves want the same missing piece — a picker, and somewhere for
+a theme to live (see the working-directory options in `current-task.md`).
+
+**Cost to close:** one toolbar button and an `<input type=file>`, the way Load
+DOT already does it — plus the decision about where themes are stored, which is
+the larger half.

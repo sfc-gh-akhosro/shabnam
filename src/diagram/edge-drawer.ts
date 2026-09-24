@@ -4,11 +4,12 @@
 // coordinate space is the one stated in node-sheller.ts.
 
 import type * as T from "../types.ts";
+import { styleWords } from "./node-shaper.ts";
 import { SHELL_PAD } from "./node-sheller.ts";
 
 const ARROW = `<defs><marker id="connector-arrow" class="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" /></marker></defs>`;
 
-export function getCssConnectorMode(): string | undefined {
+function getCssConnectorMode(): string | undefined {
   if (typeof document === "undefined") return undefined;
   const canvas = document.getElementById("diagram-canvas");
   if (!canvas) return undefined;
@@ -39,7 +40,10 @@ export class EdgeDrawer {
 
 function edgePath(edge: T.Edge, from: T.Box, to: T.Box, mode: string): string {
   const [tail, head] = anchors(from, to);
-  const classes = ["edge", ...edge.classes].join(" ");
+  // The same rule the nodes use: a `style` word is a class, and the theme says
+  // what it means. `edge [style=invis]` is how DOT holds a rank in place without
+  // drawing anything, so this is the one that earns its keep.
+  const classes = ["edge", ...styleWords(edge.attrs), ...edge.classes].join(" ");
   const d = route(tail, head, mode);
 
   return (

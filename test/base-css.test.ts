@@ -159,3 +159,29 @@ test("a node needs no rule for what it inherits from the wrapper", async () => {
   expect(sample.get(".diagram")?.get("font-family")).toBe("Helvetica");
   expect(sample.get(".node, .record")?.get("font-family")).toBeUndefined();
 });
+
+test("a size is passed through exactly as Graphviz reported it", async () => {
+  // Graphviz clamps `height=0` to `0.02` and `width=0` to `0.01` before
+  // `renderJSON` shows them. We do not correct that: the number we were given is
+  // the number we emit. Laying out DOT is Graphviz's job, and second-guessing its
+  // output here would put a rule in the bagger that the author cannot see (§3.2).
+  const sample = await rules(`digraph {
+    ghost [height=0 width=0 fixedsize=true]
+    ghost -> real
+  }`);
+  const passed = sample.get("#ghost")!;
+  expect(passed.get("height")).toBe("0.02in");
+  expect(passed.get("width")).toBe("0.01in");
+  // And nothing is invented alongside it.
+  expect(passed.get("padding")).toBeUndefined();
+  expect(passed.get("overflow")).toBeUndefined();
+});
+
+test("a non-zero size keeps the inches Graphviz measured it in", async () => {
+  const sample = await rules(`digraph {
+    wide [width=3 height=2 fixedsize=true]
+    wide -> other
+  }`);
+  expect(sample.get("#wide")?.get("width")).toBe("3in");
+  expect(sample.get("#wide")?.get("height")).toBe("2in");
+});

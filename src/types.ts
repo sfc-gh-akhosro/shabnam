@@ -99,6 +99,14 @@ export type StyleBag = Map<string, Map<string, string>>;
 /** What a style JSON file holds. One shape, sourced; the theme is all `0`. */
 export type StyleFile = Record<string, Record<string, { value: string; source: Source }>>;
 
+/**
+ * What Save Styles writes: your rules, and the name of the theme they were laid
+ * over. Only source 2 travels — a theme row is already in the theme file and a
+ * derived row is rebuilt by the next redraw, so saving either would freeze a
+ * copy of something that is supposed to be regenerated.
+ */
+export type StyleDocument = { theme: string; style: StyleFile };
+
 export type StyleRow = {
   selector: string;
   property: string;
@@ -126,8 +134,10 @@ export interface Diagram {
 
 export interface Stylist {
   /** The one door into the book. Refused when `source` is lower than the entry
-   * already there; an accepted overwrite keeps that entry's id. */
-  addRule(selector: string, property: string, value: string, source: Source): void;
+   * already there; an accepted overwrite keeps that entry's id. Returns the id the
+   * entry carries — minted on first sight, kept on overwrite — or `REFUSED`, so a
+   * caller that has just created a rule can label its row with it at once. */
+  addRule(selector: string, property: string, value: string, source: Source): number;
   removeRule(selector: string, property: string): void;
   /** Back to a blank book holding the theme. Load DOT, not Redraw. */
   reset(): void;
@@ -160,5 +170,7 @@ export interface Files {
 // ---------------------------------------------------------------------------
 
 export type ShapeHtml = Map<string, (node: Node) => string>;
+/** shape → the node's type class. Absent means `.node` plus `data-shape`. */
+export type ShapeClass = Map<string, string>;
 export type ShellSvg = Map<string, string>;
 export type AttrCss = Map<string, string>;

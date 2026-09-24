@@ -36,6 +36,20 @@ export function resolve(rules: T.StyleRules): T.StyleBag {
   return out;
 }
 
+/**
+ * A declaration value split from its priority.
+ *
+ * `!important` is `setProperty`'s third argument, not part of the value, so a
+ * value still carrying it is not a valid value of anything and CSSOM drops the
+ * whole declaration without a word. The book keeps the text as typed — that is
+ * what the user wrote, and `serialize` emits correct CSS for it — so the split
+ * happens here, on the way to the sheet, and nowhere else.
+ */
+export function priority(value: string): [value: string, priority: string] {
+  const match = /^(.*?)\s*!\s*important\s*$/i.exec(value);
+  return match === null ? [value, ""] : [match[1]!.trim(), "important"];
+}
+
 /** CSS text. Export HTML and Save PNG only — see `Stylist.serialize`. */
 export function serialize(rules: T.StyleRules): string {
   return [...resolve(rules)]
@@ -64,12 +78,12 @@ export class Sheet {
       const at = sheet.insertRule(`${selector} {}`, sheet.cssRules.length);
       const rule = sheet.cssRules[at] as CSSStyleRule;
       this.handles.set(selector, rule);
-      for (const [property, value] of own) rule.style.setProperty(property, value);
+      for (const [property, value] of own) rule.style.setProperty(property, ...priority(value));
     }
   }
 
   set(selector: string, property: string, value: string): void {
-    this.rule(selector).style.setProperty(property, value);
+    this.rule(selector).style.setProperty(property, ...priority(value));
   }
 
   clear(selector: string, property: string): void {

@@ -38,6 +38,9 @@ body {
   --glass-background: color-mix(in srgb, var(--theme-color) 30%, transparent);
 }
 
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
@@ -52,7 +55,8 @@ body {
 }
 
 
-button, input {
+button,
+input, .checkbox label {
   font: inherit;
   border: 0;
   border-radius: 3px;
@@ -75,7 +79,7 @@ main {
 
 
 
-nav {
+nav, .checkbox {
   display: flex;
   gap: var(--horizontal-pad);
   align-items: center;
@@ -96,22 +100,40 @@ aside {
 
   gap: var(--vertical-gap);
 
-    background-color: var(--glass-background);
+  background-color: var(--glass-background);
 
+  position: relative;
 }
 
 
 /* radio buttons push effect: tight buttons with inset when active */
-aside>nav {
+aside nav {
   gap: 0
 }
 
-aside>nav>button {
+aside nav button,
+.checkbox label {
   flex: 1;
   border-radius: 0;
+  text-align: center;
 }
 
-.active {
+
+.checkbox input[type="checkbox"] {
+  display: none;
+}
+
+aside .checkbox {
+  background-color: var(--theme-color);
+  position: absolute;
+  top: 0em;
+  left: 10em;
+  width: 10em;
+  gap: 0;
+}
+
+.active,
+.checkbox label:has(input:checked) {
   box-shadow: inset var(--flat-shadow);
 }
 
@@ -120,7 +142,6 @@ article {
   display: flex;
   flex: 1;
   overflow: auto;
-
 }
 
 
@@ -133,7 +154,7 @@ textarea {
   padding: 1em;
 }
 
-aside > :last-child {
+aside> :last-child {
   flex: 1;
 }
 
@@ -153,54 +174,62 @@ aside > :last-child {
 
 
   overflow: auto;
-  padding: var(--horizontal-pad) var(--vertical-pad);
+  padding: 10em var(--horizontal-pad);
 
 
   .row {
-  flex: 1;
-  min-width: 0;
+    flex: 1;
+    min-width: 0;
 
-  height: 1.5em;
-      box-shadow: var(--raised-shadow);
+    height: 1.5em;
+    box-shadow: var(--raised-shadow);
 
     button {
       width: 3em;
       background-color: var(--paper-background);
-    };
+    }
+
+    ;
 
     input {
       width: 10em;
-            background-color: var(--paper-background);
+      background-color: var(--paper-background);
+      height: auto;
+    }
 
-    };
-  };
+    ;
+  }
+
+  ;
 
 }
 
 
 
 
+
+/* A dropped row is out of the book and out of CSSOM; the element stays until the
+   next sync rebuilds the list (§4). `.row` sets `display: flex`, which beats the
+   UA sheet's `[hidden]`, so the hiding has to be said here. */
+.rows>.row[hidden] {
+  display: none;
+}
 
 /* Source is the only thing distinguishing one row from another (§1): 0 theme,
    1 dot, 2 user. Theme is the floor and says nothing. */
 .rows>.row[data-source="1"] {
 
-  background-color: color-mix(in srgb, var(--accent-color), var(--theme-color));  
+  background-color: color-mix(in srgb, var(--accent-color), var(--theme-color));
 }
 
 .rows>.row[data-source="0"] {
-  background-color: var(--accent-color);  
+  background-color: var(--accent-color);
 }
 
 
 
-aside > section {
+aside>section {
   display: contents;
-}
-
-header {
-  display: flex;
-  justify-content: space-between;
 }
 
 
@@ -209,7 +238,7 @@ header {
 }
 
 #diagram-html {
-  display: contents;
+  width: 100%;
 }
 
 #annotation-html,
@@ -224,4 +253,3 @@ header {
   padding: var(--vertical-gap) var(--horizontal-gap);
   flex: 1;
 }
-

@@ -71,6 +71,12 @@ const chrome = Bun.spawn(
     "--disable-gpu",
     "--no-first-run",
     "--window-size=1440,900",
+    // The engine waits one `requestAnimationFrame` before it measures (§3.4), and
+    // under a virtual clock a frame is not guaranteed to happen at all — so that
+    // await could hang, the SVG layer would never be injected, and the run died
+    // in `mounted()` with no report. This is the flag that makes Chrome finish a
+    // compositor frame under virtual time, which is what rAF is waiting for.
+    "--run-all-compositor-stages-before-draw",
     `--virtual-time-budget=${BUDGET}`,
     "--dump-dom",
     `http://localhost:${PORT}/`,

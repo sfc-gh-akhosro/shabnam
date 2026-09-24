@@ -83,7 +83,7 @@ export class DiagramBagger {
   private bagNodes(raw: RawGraph, classes: Map<number, string[]>): T.Node[] {
     return nodeEntries(raw).map(([gvid, object]) => {
       const [x, y] = object.pos!.split(",");
-      const label = String(object.label ?? "");
+      const label = named(String(object.label ?? ""), "N", object.name);
       return {
         id: this.id(object.name),
         classes: classes.get(gvid) ?? [],
@@ -139,7 +139,7 @@ function bagClusters(
 ): T.Cluster[] {
   return subgraphs(raw).map(([gvid, object]) => ({
     name: groups.get(gvid)!,
-    label: String(object.label ?? ""),
+    label: named(String(object.label ?? ""), "G", groups.get(gvid)!),
     isInvis: String(object.style ?? "").split(",").includes("invis"),
     nodes: (object.nodes ?? []).map((member) => sanitize(names.get(member)!)),
     clusters: (object.subgraphs ?? []).map((nested) => groups.get(nested)!),
@@ -149,6 +149,18 @@ function bagClusters(
 
 function sanitize(name: string): string {
   return name.replace(/[^A-Za-z0-9_-]/g, "-");
+}
+
+// Graphviz's label escapes. A node whose label was never set gets the default
+// `\N`, and `renderJSON` hands that placeholder over unexpanded — so a node with
+// no label of its own reaches the frame reading the two literal characters
+// instead of its own name. `\G` is the same story for a cluster.
+//
+// A substitution on one already-parsed field, not a pass over DOT: the escape
+// arrives in the JSON. Matching whole `\x` pairs is what keeps `\\N` out of it —
+// the `\\` is consumed as its own pair, so the `N` that follows is just an `N`.
+function named(label: string, escape: string, name: string): string {
+  return label.replace(/\\(.)/g, (whole, char) => (char === escape ? name : whole));
 }
 
 // Graphviz names anonymous subgraphs `%1`, `%3`, `%5` — its own numbering, with

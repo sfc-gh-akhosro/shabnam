@@ -628,3 +628,96 @@ rule is emitted.
 It did surface one thing — SVG markers scale with `stroke-width` by default, so
 the thick edge grew a triple-size arrowhead until `EdgeDrawer` pinned
 `markerUnits="userSpaceOnUse"`.
+
+
+## Iteration 13 — the browser suite stopped being a coin flip
+
+For four iterations `bun run test:browser` failed perhaps one run in three with
+`no report in the dumped DOM`, and the standing advice (debt S9) was "do not wait
+for anything": reach for a synchronous path, or assert only on what runs before
+`await painted()`. That advice treated the symptom. The cause was one line in the
+engine:
+
+```ts
+function painted(): Promise<void> {
+  return new Promise((done) => requestAnimationFrame(() => done()));
+}
+```
+
+`rAF` is the right way to ask "has the browser laid this out yet", and the
+Measurer (§3.4) genuinely needs the answer before it reads geometry. But `rAF` is
+a promise the browser does not always keep. It does not fire in a background tab,
+and — the part that cost the cycles — it does not reliably fire under
+`--virtual-time-budget`, because a virtual clock advances timers without
+necessarily producing a compositor frame. When it did not fire, `await painted()`
+never resolved: the SVG layer was never injected, `mounted()` polled until it gave
+up, and the page died before publishing a single check. Hence "no report", and
+hence a *different* stage on each run — it was never really about which stage.
+
+Two changes, and the run went to 45 pass / 0 fail on every attempt:
+
+- `run.ts` passes `--run-all-compositor-stages-before-draw`, which is what makes
+  Chrome finish a frame under a virtual clock. (`--enable-begin-frame-control`
+  looks related and makes it strictly worse: frames then wait for an explicit
+  BeginFrame over DevTools, which nothing sends.)
+- `painted()` races the frame against `setTimeout(0)` instead of waiting on it.
+  Layout is synchronous by the time a macrotask runs, so the fallback measures the
+  same boxes; it is a floor under the frame, not a substitute for it.
+
+The second one is a real fix, not a test accommodation: without it, a Redraw
+started in a hidden tab never finishes, and the diagram stays half-drawn until the
+user presses Redraw again.
+
+**The lesson that replaces the old rule of thumb.** "Never wait" was scar tissue.
+The harness can wait now — what it must not do is wait on something the platform
+only *usually* provides. If a test hangs under virtual time, suspect a frame, not
+a timer.
+
+---
+
+## Iteration 14 — the derived margin is gone
+
+Graphviz `pos` bought a node a per-node margin for several iterations. It no
+longer buys anything but **rank membership and order within the rank**.
+
+Three formulas were tried in one session, each an honest attempt at the real
+goal — give an isolated node a little "puff" without pinning it:
+
+1. **Offset within the rank, normalised per rank.** The lightest node of *every*
+   rank weighed nothing, so no rank could be heavier than another. Rejected: it
+   reads as "how far down the rank are you", so in a tidy stack the fifth node
+   got the most margin purely for being fifth.
+2. **Same, normalised against the diagram's minimum.** Fixes the per-rank
+   flattening and keeps a rank's offset. Same defect, plus a new one: it is
+   origin-dependent, and under LR (where Graphviz's y grows upward) the
+   *visually bottom* node is the light one.
+3. **Nearest-gap sharing.** Per rank, the gaps between consecutive nodes, minus
+   the tightest gap anywhere, each node taking half the net gap before it and
+   half after. Closest to the intent — it measures neighbour distance, and the
+   tightest pair emits nothing so the theme stays in charge. Still wrong in
+   practice: the leading node's gap is measured from coordinate zero, which is
+   a distance to the origin and not to a neighbour, so the top node of each rank
+   collected puff for being near the top.
+
+**The conclusion is the interesting part.** Every candidate was a proxy for
+"isolation" reverse-engineered from coordinates that were never computed to
+express it. Graphviz spaced those nodes to route edges, not to signal that a
+node stands alone, so any reading of the spacing is a guess about intent. The
+guess is cheap to write and expensive to keep: it was the only value in the
+whole pipeline that was *computed* rather than passed through, and it needed a
+named exception in the architecture to exist at all.
+
+So it was deleted rather than tuned a fourth time. Puff, if it is wanted, is a
+theme concern — CSS can space a rank, and a row can space one node.
+
+What left with it: `nodeWeightMargins` and `leadingGaps` from `css-bagger.ts`,
+`calculateStep` (a 19-line delta heuristic) from `layout-framer.ts`, and
+`test/weight-margin.test.ts`. `AXES`, `Axes`, `TOLERANCE` and `bucket` stopped
+being exports and are now private to `layout-framer.ts` — `css-bagger.ts` no
+longer imports from it at all, so the bagger and the framer are fully
+decoupled. The pass-through law in `app-architecture.md` now holds with **no
+exception**, and debt M4 shed one of the coordinate heuristics it owed a
+replacement for.
+
+The test that replaced the suite asserts the inverse: derived CSS must contain
+no `margin*` property at all. 79 pure + 52 browser, green.

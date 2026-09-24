@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { applyBound, expand, resolve, serialize } from "../src/stylist/sheet.ts";
-import { asFile, fileEntries, REFUSED, writeRule } from "../src/stylist/stylist.ts";
+import { applyBound, expand, priority, resolve, serialize } from "../src/stylist/sheet.ts";
+import {
+  asDocument,
+  asFile,
+  documentEntries,
+  fileEntries,
+  REFUSED,
+  themeOf,
+  writeRule,
+} from "../src/stylist/stylist.ts";
 
 import basicTheme from "../theme/basic-theme.json";
 import * as T from "../src/types.ts";
@@ -174,5 +182,82 @@ describe("@apply — expansion over the book", () => {
     ]));
     expect(css).toContain(".node {\n  background: white;\n  padding: 1em;\n}");
     expect(css).not.toContain("@apply");
+  });
+});
+
+describe("the saved document — your rules, over a named theme", () => {
+  const mixed = () =>
+    book([
+      theme(".node", "background", "white"),
+      dot(".node", "border-color", "grey"),
+      user(".node", "background", "pink"),
+      user("#lake", "color", "red"),
+    ]);
+
+  test("only source 2 travels; the theme and the DOT are left to regenerate", () => {
+    const saved = asDocument("basic-theme.json", mixed());
+    expect(saved.style).toEqual({
+      ".node": { background: { value: "pink", source: T.SOURCE.user } },
+      "#lake": { color: { value: "red", source: T.SOURCE.user } },
+    });
+  });
+
+  test("the document names the theme its rules were laid over", () => {
+    expect(asDocument("basic-theme.json", mixed()).theme).toBe("basic-theme.json");
+  });
+
+  test("a selector the user never touched leaves no empty husk behind", () => {
+    const saved = asDocument("basic-theme.json", book([theme(".only-theme", "color", "red")]));
+    expect(saved.style).toEqual({});
+  });
+
+  test("the whole book still serialises when no source is asked for", () => {
+    // The export seed wants every entry, theme included — it has no theme file
+    // to lean on when it paints (§Files).
+    expect(Object.keys(asFile(mixed()))).toEqual([".node", "#lake"]);
+    expect(asFile(mixed())[".node"]).toHaveProperty("border-color");
+  });
+
+  test("a document round-trips: save, read back, same rules", () => {
+    const saved = asDocument("basic-theme.json", mixed());
+    const reread = book(documentEntries(saved));
+    expect(asDocument("basic-theme.json", reread).style).toEqual(saved.style);
+  });
+
+  test("a bare file still reads, and reports the founding theme", () => {
+    // What an exported page carries. No `theme` key, so it is not a document.
+    const file: T.StyleFile = { ".node": { padding: { value: "1em", source: T.SOURCE.user } } };
+    expect([...documentEntries(file)]).toEqual([[".node", "padding", "1em", T.SOURCE.user]]);
+    expect(themeOf(file)).toBe("basic-theme.json");
+    expect(themeOf(asDocument("other.json", mixed()))).toBe("other.json");
+  });
+});
+
+describe("\!important — a priority, not part of the value", () => {
+  test("a trailing \!important is lifted out of the value", () => {
+    expect(priority("0\!important")).toEqual(["0", "important"]);
+    expect(priority("0 \!important")).toEqual(["0", "important"]);
+    expect(priority("0 \! important")).toEqual(["0", "important"]);
+    expect(priority("1em 2em \!IMPORTANT")).toEqual(["1em 2em", "important"]);
+  });
+
+  test("a plain value is handed back untouched, with no priority", () => {
+    expect(priority("0")).toEqual(["0", ""]);
+    expect(priority("var(--main-font)")).toEqual(["var(--main-font)", ""]);
+  });
+
+  test("the word only counts at the end", () => {
+    // A content string may say it, and a font may be named it. Neither is a
+    // priority, and neither may be eaten.
+    expect(priority('"\!important"')).toEqual(['"\!important"', ""]);
+    expect(priority("important")).toEqual(["important", ""]);
+  });
+
+  test("the book keeps the text as typed, so serialised CSS still carries it", () => {
+    // `serialize` feeds Export HTML and Save PNG, where the declaration is text
+    // again and `\!important` belongs in it. Only the CSSOM path splits.
+    expect(serialize(book([user(".record", "margin", "0 \!important")]))).toContain(
+      "margin: 0 \!important;",
+    );
   });
 });

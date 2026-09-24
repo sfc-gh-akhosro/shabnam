@@ -9,6 +9,7 @@ import { Vizer } from "../src/diagram/vizer.ts";
 import type { StyleRow, TabText } from "../src/types.ts";
 import { SOURCE } from "../src/types.ts";
 import { bookFile } from "../src/workbench/files.ts";
+import basicTheme from "../theme/basic-theme.json";
 
 const BARE_BONE_DOT = `digraph barebone {
   rankdir=LR
@@ -91,7 +92,7 @@ describe("UI & Workbench Integration Suite", () => {
     expect(html).not.toContain("style=");
   });
 
-  test("CssBagger emits quantized position margin rules under #id in derived CSS", async () => {
+  test("CssBagger derives no margin — a node is spaced by the theme alone", async () => {
     const vizer = new Vizer();
     const bagger = new DiagramBagger();
     const cssBagger = new CssBagger();
@@ -103,14 +104,12 @@ describe("UI & Workbench Integration Suite", () => {
     const derived = cssBagger.bag(model);
 
     expect(derived.has(":root, svg")).toBe(true);
-    // Verify that staggered nodes carry a quantized margin under their own id
-    const margins = [...derived]
-      .filter(([selector]) => selector.startsWith("#"))
-      .flatMap(([, properties]) => [...properties])
-      .filter(([property]) => property === "margin-top");
-    expect(margins.length).toBeGreaterThan(0);
-    for (const [, value] of margins) {
-      expect(value).toMatch(/^calc\(\d+ \* \(var\(--vertical-gap\) \+ 2\.5em\)\)$/);
+    // `pos` buys a rank and an order in it, nothing else. Spacing is the theme's
+    // and the author's — no margin is computed from the layout.
+    for (const [, properties] of derived) {
+      for (const property of properties.keys()) {
+        expect(property).not.toStartWith("margin");
+      }
     }
   });
 
@@ -143,5 +142,46 @@ describe("UI & Workbench Integration Suite", () => {
       "#a": { "border-width": { value: "2px", source: 2 } },
     });
     expect(parsed.theme).toBeUndefined();
+  });
+});
+
+// Shape and style are carried, not interpreted (§3.1). `record` is the one shape
+// with a renderer and a class of its own; every other shape is a `.node` that
+// says which shape it is. A `style` word becomes a class and the theme decides
+// what it means — `.invis` is the theme's, not the bagger's.
+describe("shape and style reach the DOM as themselves", () => {
+  async function frame(dot: string): Promise<string> {
+    const model = new DiagramBagger().bag(await new Vizer().render(dot));
+    return new LayoutFramer().frame(model);
+  }
+
+  test("shape=record is a class, and carries no data-shape", async () => {
+    const html = await frame('digraph { r [shape=record label="{a|b}"]; r -> x }');
+    expect(html).toContain('id="r" class="record"');
+    expect(html).not.toContain('id="r" class="record" data-shape');
+  });
+
+  test("every other shape is a .node that names itself in data-shape", async () => {
+    const html = await frame("digraph { n [shape=none]; d [shape=box3d]; n -> d }");
+    expect(html).toContain('id="n" class="node" data-shape="none"');
+    expect(html).toContain('id="d" class="node" data-shape="box3d"');
+  });
+
+  test("the default shape says so too, rather than being a special case", async () => {
+    // Graphviz resolves the default onto every node, so `box` arrives like any
+    // other value. Suppressing it would be a rule the author cannot see.
+    const html = await frame("digraph { plain; plain -> other }");
+    expect(html).toContain('id="plain" class="node" data-shape="box"');
+  });
+
+  test("a style word is a class, one per word", async () => {
+    const html = await frame("digraph { g [style=invis]; f [style=\"filled,dashed\"]; g -> f }");
+    expect(html).toContain('id="g" class="node invis"');
+    expect(html).toContain('id="f" class="node filled dashed"');
+  });
+
+  test("the theme is what makes .invis mean hidden", async () => {
+    // The bagger never emits `display`. Hiding is the theme's word on the class.
+    expect(basicTheme[".invis"]!.display!.value).toBe("none");
   });
 });

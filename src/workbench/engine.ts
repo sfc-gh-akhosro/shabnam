@@ -13,10 +13,6 @@ const asHtml = (element: Element, text: string) => {
   element.innerHTML = text;
 };
 
-const asText = (element: Element, text: string) => {
-  element.textContent = text;
-};
-
 const asScript = (element: Element, text: string) => {
   const script = document.createElement("script");
   script.id = element.id;
@@ -31,7 +27,6 @@ const SINK_WRITE = new Map<string, (element: Element, text: string) => void>([
   ["connector-paths", asHtml],
   ["annotation-html", asHtml],
   ["action-js", asScript],
-  ["redraw-status", asText],
 ]);
 
 export class Engine implements T.Workbench {
@@ -44,9 +39,7 @@ export class Engine implements T.Workbench {
   ) {}
 
   async redraw(): Promise<void> {
-    const started = performance.now();
-    const json = await this.parse(this.text.dot);
-    if (json === null) return;
+    const json = await this.vizer.render(this.text.dot);
 
     const model = this.diagram.bag(json);
     // The book is kept, not flushed (§1). The DOT's rules arrive at source 1 and
@@ -63,7 +56,6 @@ export class Engine implements T.Workbench {
     this.inject("node-shells", this.diagram.shells(boxes, model));
     this.inject("connector-paths", this.diagram.connectors(boxes, model));
     this.place(boxes);
-    this.inject("redraw-status", `${model.nodes.length} nodes, ${model.edges.length} edges — redrawn in ${Math.round(performance.now() - started)} ms`);
     this.inject("action-js", this.text.action);
   }
 
@@ -93,19 +85,26 @@ export class Engine implements T.Workbench {
       mark.style.top = `${at.y + offset.y}px`;
     }
   }
-
-  private async parse(dot: string) {
-    try {
-      return await this.vizer.render(dot);
-    } catch (error) {
-      this.inject("redraw-status", String(error));
-      return null;
-    }
-  }
 }
 
+// One frame, or a turn of the event loop — whichever comes first.
+//
+// The wait exists because the SVG layer is drawn around *measured* boxes (§3.4),
+// and the boxes are only real once the browser has laid the HTML out. `rAF` is
+// how you ask for that. But `rAF` is also a promise the browser does not always
+// keep: it does not fire in a background tab, and it does not fire under a
+// virtual clock. Waiting on it alone means a redraw started in a hidden tab never
+// finishes and leaves the picture half-drawn, with no way back but another
+// Redraw.
+//
+// So it is a race, not a wait. Layout is synchronous by the time a macrotask
+// runs, so the fallback measures the same boxes; it is a floor under the frame,
+// not a substitute for it.
 function painted(): Promise<void> {
-  return new Promise((done) => requestAnimationFrame(() => done()));
+  return new Promise((done) => {
+    requestAnimationFrame(() => done());
+    setTimeout(() => done(), 0);
+  });
 }
 
 function pair(spec: string): T.Point {
