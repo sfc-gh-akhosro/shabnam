@@ -24,12 +24,15 @@ type Report = { results: { name: string; ok: boolean; detail: string }[]; errors
 
 // Console and uncaught errors are collected before the app loads, so a check can
 // assert on them. The two modules are ordered: the app mounts, the checks wait.
+// The two ids `Files` reaches for are real ids in `src/index.html` — the picture
+// export inlines the stylesheet and Export HTML inlines the bundle — so the
+// harness page has to carry them too, or the export verbs find nothing.
 const PAGE = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>Shabnam — browser checks</title>
-    <link rel="stylesheet" href="./app.css" />
+    <link id="app-css" rel="stylesheet" href="./app.css" />
   </head>
   <body>
         <script>
@@ -39,7 +42,7 @@ const PAGE = `<!doctype html>
       addEventListener("error", (e) => window.TEST_ERRORS.push(String(e.message)));
       addEventListener("unhandledrejection", (e) => window.TEST_ERRORS.push(String(e.reason)));
     </script>
-    <script type="module" src="./index.js"></script>
+    <script type="module" id="app-js" src="./index.js"></script>
     <script type="module" src="./checks.js"></script>
   </body>
 </html>

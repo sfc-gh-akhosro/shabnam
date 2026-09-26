@@ -61,6 +61,22 @@ export type Box = {
   height: number;
 };
 
+/**
+ * What the connector router needs that only the page knows (§3.4).
+ *
+ * Both are measured pixels, so they travel in from the workbench the way `Box[]`
+ * does. A `diagram/` worker is pure: one that called `getComputedStyle` to decide
+ * how to draw would be reading the page it exists to describe.
+ *
+ * `clearance` is how far a route prefers to stay off a node it does not belong to
+ * — a preference with a floor, not a refusal. `radius` curves the snake's bends;
+ * `0` is sharp ortho.
+ */
+export type ConnectorMetrics = {
+  clearance: number;
+  radius: number;
+};
+
 /** Four workbench tabs, in order. `styles` is a rows view, not text. */
 export type TabId = "dot" | "styles" | "annotation" | "action";
 
@@ -129,7 +145,7 @@ export interface Diagram {
   derived(model: DiagramModel): StyleBag;
   clusters(boxes: Box[], model: DiagramModel): string;
   shells(boxes: Box[], model: DiagramModel): string;
-  connectors(boxes: Box[], model: DiagramModel): string;
+  connectors(boxes: Box[], model: DiagramModel, metrics: ConnectorMetrics): string;
 }
 
 export interface Stylist {
@@ -147,8 +163,6 @@ export interface Stylist {
   rows(): StyleRow[];
   /** The book → `style-rules.json`. */
   save(): void;
-  /** CSS text. Export HTML and Save PNG only. */
-  serialize(): string;
 }
 
 export interface Workbench {
@@ -158,11 +172,23 @@ export interface Workbench {
   place(boxes: Box[]): void;
 }
 
+export type PictureFormat = "svg" | "png";
+
+/** What the export dialog decides. */
+export type PictureOptions = {
+  format: PictureFormat;
+  /** Drop the diagram's own background so the picture sits on nothing. */
+  transparent: boolean;
+  /** PNG only — an SVG carries no resolution to scale. */
+  scale: number;
+};
+
 export interface Files {
   loadDot(text: string): void;
   saveDot(): string;
   exportHtml(): Promise<string>;
-  exportPng(): Promise<Blob>;
+  /** The painted canvas as a standalone picture (§4.1), as the options ask. */
+  exportPicture(options: PictureOptions): Promise<Blob>;
 }
 
 // ---------------------------------------------------------------------------

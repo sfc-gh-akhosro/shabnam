@@ -8,6 +8,8 @@ Before writing or changing code, and before proposing a design, read and follow:
 
 1. [`app-architecture.md`](app-architecture.md) — the product contract. Graphviz is the only DOT consumer. No parser, tokenizer, or AST.
 2. [`coding-rules.md`](coding-rules.md) — how we write TypeScript. Happy path. Fail fast and loud. Soft 7. Type-driven (`interface` = methods, `type` = data, `Map` = enum).
+3. [`user-story.md](user-story.md) - tells the story from the perspective of user-designer-architect persona. It is an interwoven story tells what user wants to do, how uses the ui, might tell about ui components, even major types and interfaces included, libraries or major built-in algo that we implement, etc.
+This should be the most revealing for someone like "me" that oh this app is this. LLM's
 
 If a conversation or a patch disagrees with those two files, stop. Update the file with the user, or change the work to match. Do not invent a third design.
 

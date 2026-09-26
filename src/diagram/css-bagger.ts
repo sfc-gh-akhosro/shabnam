@@ -5,7 +5,7 @@
 // order.
 //
 // When a DOT diagram is bare-bone (no presentation overrides), the derived layer
-// holds ONLY the `:root, svg` token block, leaving all presentation and
+// holds ONLY the `#diagram-canvas, svg` token block, leaving all presentation and
 // structure to the theme.
 //
 // Nothing here builds CSS text. Selectors are composed flat — a cluster member
@@ -44,10 +44,20 @@ const ATTR_UNIT = new Map([
 // The keys whose CSS property inherits down the DOM.
 const ATTR_INHERITS = new Set(["fontname", "fontsize"]);
 
-// The token block extracted from the DOT model on each Redraw. `svg` joins
-// `:root` because the SVG layer is a sibling document fragment and custom
-// properties set on `:root` alone do not reach it.
-const TOKENS = ":root, svg";
+// The token block extracted from the DOT model on each Redraw. `svg` joins the
+// canvas because the SVG layer is a sibling document fragment and custom
+// properties set on the canvas alone do not reach it.
+//
+// The canvas, and not `:root`, is the token root — in both documents. A picture
+// export renders the canvas inside a `<foreignObject>`, where there is no `body`
+// for the chrome's own `body { --main-font: … }` block to land on. Rooted at
+// `:root`, the tokens therefore lost to `app.css` on screen (a nearer ancestor
+// wins an inherited value, whatever the specificity) and won in the exported
+// file — two token sets, and an export that did not match what you were looking
+// at. Naming the canvas makes it the nearest ancestor in both places. The theme
+// roots itself here too, and the two must always agree: the derived block is
+// source 1 and has to stay at least as near as the theme's source 0.
+const TOKENS = "#diagram-canvas, svg";
 
 function preamble(model: T.DiagramModel, nodeBag: Bag, edgeBag: Bag): Bag {
   const primaryColor =

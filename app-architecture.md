@@ -10,6 +10,14 @@ This file is the blueprint. It describes the app we are building from scratch. W
 
 Bun (ESM packaging only) + viz.js + TypeScript + SolidJS + HTML + CSS.
 
+**Target: Chromium.** Users are corporate and technical, and Chromium is what they
+run. The rule this buys us is not "other engines are unsupported" — it is that
+**no code in `src/` exists to accommodate them.** No fallbacks, no polyfills, no
+feature detection, and no declining a platform feature because a non-Chromium
+engine is slow to it. `<foreignObject>` export (§4.1) is exactly such a feature:
+WebKit has rendered it badly for years, and that is not a debt on this list. A
+browser-compatibility branch in `src/` is the thing this policy forbids.
+
 A library means we accept its whole dependency tree. Adding, removing, or rescoping anything on this list is a conversation that lands here first.
 
 **The stack is a lock, not carved stone.** "Discussed first" means *bring it up*, not *do without*. If a feature is genuinely better served by a library — a real parser instead of a hand-rolled scanner, a real AST instead of string surgery — say so, make the case, and we amend this section. Hand-rolling something a mature library does properly, in order to avoid a conversation, is the worse outcome: it is more code, less correct, and ours to maintain forever. The tab window is a plain `<textarea>` — CodeJar was on this list and was removed, because highlighting cost a library, a highlighter file, nine `hl-*` classes and a `contenteditable` div, and it bought nothing the diagram needs. What stays forbidden is a library that changes the *design* — a second DOT reader, a second layout engine, a second UI framework — and that ban is about the design, not about the dependency count.
@@ -65,8 +73,9 @@ neither should a theme.
 
 **There is one sheet and it is not text.** `#style-css` is owned by the
 `Stylist`, which mutates `.sheet` through CSSOM — `insertRule`, `setProperty`,
-`removeProperty`. Nothing writes its `textContent`. `Stylist.serialize()` exists
-for export and PNG only, and is the single place CSS text is produced at all.
+`removeProperty`. Nothing writes its `textContent`. `sheet.ts`'s `serialize()` reads
+it back for the picture exports only (§4.1), which have to carry the CSS inside the
+file, and it is the single place CSS text is produced at all.
 
 **Style parity.** The picture is exactly **one book of rules**, and every entry
 carries who wrote it:
@@ -317,7 +326,31 @@ The subgraph class is the styling surface that matters. `#id` is left over for o
 Once the browser has painted `#diagram-html`, `Measurer` reads the real geometry into `Box[]`. Then:
 
 - **`NodeSheller`** draws visual cluster bounding boxes (`clusters(...)`) under `#cluster-shells` around measured member nodes of `subgraph cluster_...` with cluster labels, and draws shells around each node box (`shells(...)`). Shell files live in `svg/`; `SHELL_SVG` maps `shell=` to a file, defaulting to `svg/box.svg`. Icon comes from `icon/` when `icon=` is set. Caption is `caption=`, falling back to `label`.
-- **`EdgeDrawer`** draws connectors from **measured** box coordinates — never Graphviz `_draw_` paths — so edges keep following our boxes after CSS changes a gap, a font, or a width.
+- **`EdgeDrawer`** draws connectors from **measured** box coordinates — never Graphviz `_draw_` paths — so edges keep following our boxes after CSS changes a gap, a font, or a width. It attaches and renders; it does not decide the route.
+- **`EdgeRouter`** decides the route: one shape, an **ortho snake**, and no modes.
+
+**The snake, and why the corridors are free.** A route attaches **perpendicular to a box side** and then crawls through the gaps between nodes. It does not need to discover corridors from obstacle geometry, because the layout is already a grid of ranks and rows and therefore the empty space is already a set of lines: **vertical corridors are the gutters between ranks, horizontal corridors are the gaps between rows inside a rank.** A snake alternates between the two — out of a side, along a gutter, across a row gap, along the next gutter, into the destination side. A walk over those intersections preferring **fewest turns, then shortest** is a few dozen nodes on a real diagram, which is why this is a heuristic and not a search over an obstacle-edge visibility graph.
+
+Attachment follows the rank relationship, and both cases are perpendicular to a side:
+
+| pair | attaches on | first / last segment |
+|---|---|---|
+| different ranks | left / right | horizontal |
+| same rank | top / bottom | vertical |
+
+Same-rank is decided from the **measured x-overlap** of the two boxes, not from `pos`, because measured geometry is the single source of truth here. A side attachment for a same-rank pair would have to leave the right edge and loop back to the left to get in, which is worse than the vertical it would replace.
+
+**Clearance is a preference with a floor, never a refusal.** Obstacles are every box except the edge's own two endpoints, inflated by `clearance`. A corridor narrower than the clearance stays *usable* but is ordered last, behind any roomier option. Arbitrary user CSS can always close a corridor, and an edge that declines to render is worse than a tight one.
+
+**Bends are curvable, and that is the only knob.** The corner radius is a parameter: `0` is sharp ortho, a large value is a rounded snake. It is clamped to half the shorter adjacent segment, so a tight corridor cannot produce a corner that crosses itself.
+
+`splines` is **not** consulted — not the graph attribute, not the per-edge override — and `line` / `straight` / `curved` / `spline` are not modes. There is one router. Radius `0` is the old sharp ortho and a large radius is close to the old curve, so nothing is lost but an author-visible attribute did go quiet.
+
+Both numbers are **measured**, so they arrive as an argument the way the boxes do. `diagram/` is pure (§3): a worker that reached for `getComputedStyle` to find out how to draw would be reading the page it is supposed to be describing.
+
+```ts
+type ConnectorMetrics = { clearance: number; radius: number }
+```
 
 Measured geometry is the single source of truth for size and position. The model deliberately does **not** carry Graphviz's `width` / `height`; two sources of size would guarantee that someone eventually uses the wrong one.
 
@@ -346,7 +379,7 @@ The coding window is **one `<textarea>`**, and it serves the three text tabs. `t
 
 **The chrome's own CSS is `src/app.css`, and it is deliberately small.** Tokens on `body`, then a skeleton reached by *element and position* — `body > main`, `body > aside`, `nav`, `textarea`, `aside > section` — rather than by a hook per box. The four core classes (`.paper` · `.glass` · `.row` · `.col`) are not here: they belong to the theme and arrive through the sink. The markup therefore carries almost no `class` or `id`: a hook is allowed when the layout needs it, when it is a sink the engine writes, or when a test drives it. Nothing is named for decoration, and the semantic element is preferred to a class — `main`, `aside`, `article`, `section`, `nav`, and `hidden` rather than a `.hidden`. The styles tab is `research-lab/stylist/index.html` less its toolbar (`.rows`, `.row`, `.sel`, `.prop`, `.val`, `#selector-list`, `#property-list`) because that prototype is ten lines of CSS, and being restylable in ten lines is the point. The diagram's styling never appears here — it lives in the sinks (§3).
 
-**One toolbar, and it is `main`'s `nav`.** Every action the app has lives there — Redraw, Load / Save DOT, Save PNG, Export HTML, Save Styles. No panel carries buttons of its own, and there is no status line: a redraw that cannot parse its DOT throws rather than writing a message into a corner of the page.
+**One toolbar, and it is `main`'s `nav`.** Every action the app has lives there — Redraw, Load / Save DOT, Save SVG, Save PNG, Export HTML, Save Styles. No panel carries buttons of its own, and there is no status line: a redraw that cannot parse its DOT throws rather than writing a message into a corner of the page.
 
 `redraw` is sync with the DOT tab — the full draw. The styles tab does not need Graphviz: a row edit is a `setProperty` on a live sheet, so the picture repaints with no redraw and no reflow of anything else. The UI may still use one Redraw button that always runs the DOT path.
 
@@ -384,9 +417,75 @@ Autocomplete is not part of the fiddle. Do not put `suggestions` on `Workbench`.
 | `Cmd+O` / `Cmd+S` | Load / Save DOT |
 | `Cmd+P` | Save PNG |
 | `Cmd+E` | Export HTML |
+| `Cmd+Shift+E` | Save SVG |
 | `Cmd+1` … `Cmd+4` | the four tabs |
 
-**Save PNG** rasterizes the canvas with browser APIs only: HTML + annotation in one `<foreignObject>` with stylesheets inlined, SVG after it, then `Image` → `<canvas>` → `toBlob`. It and **Export** are the only callers of `Stylist.serialize()` — the one place a rule becomes text.
+**Save SVG and Save PNG are one path.** Both ask for the same `<foreignObject>`
+snapshot (§4.1); PNG then rasterizes that string through `Image` → `<canvas>` →
+`toBlob`. Nothing is translated on either.
+
+### 4.1 The snapshot — HTML out as itself
+
+A picture export is a **wrapper**, not a translation. `<foreignObject>` is SVG's
+own escape hatch: it means *this region holds content from another language, go
+ask that language's engine to render it*. So the file carries the cloned canvas
+plus its stylesheets and contains **no shapes at all** — it is a pointer to a
+renderer. Chromium opens it and lays it out with the engine that painted the
+screen, which is why fidelity is structural rather than maintained: shadows,
+`color-mix()`, gradients and subpixel text are all simply correct, and a CSS
+feature nobody has thought of yet will be correct too.
+
+That is the whole argument. A translator — boxes to `<rect>`, text to `<text>` —
+is a **dictionary with one entry per CSS feature**, and it is never finished.
+Shabnam ships a CSS editor, so its users can always reach a property the
+dictionary lacks, and the export would then quietly disagree with the screen.
+We built that translator and measured it; see `docs/archive.md`.
+
+**The file must be self-contained, and it carries the book and nothing else.** An
+SVG loaded through `<img>` — which is how PNG rasterizes — is sandboxed: no
+network, no scripts. So icons travel as data URIs (they already do, §3.3), the
+stylesheet is inlined rather than linked, and fonts come from the local machine. A
+cross-origin reference would taint the canvas and make `toBlob` throw.
+
+The inlined stylesheet is **the Stylist's sheet alone**, read back with `cssText`.
+Everything the diagram needs is in the book — including the layer scaffolding
+(`#diagram-svg { position: absolute; inset: 0 }` and friends), which lives in the
+theme for exactly this reason. `src/app.css` is chrome, so it has no business in a
+picture: inlining it shipped the export dialog's stylesheet inside the diagram, at
+roughly four times the CSS. Asking CSSOM to serialize also means there is one
+implementation of "the book as CSS" rather than two that can drift, and `cssText`
+yields *declared* values, so `var()` and `color-mix()` survive and the file stays
+re-themeable.
+
+**The XML rule.** A `<foreignObject>` document is parsed as **XML**, where `<`
+opens a tag. The cloned HTML is safe by construction because `XMLSerializer`
+escapes it; the one place we splice raw text is the inlined CSS, and a style row's
+value can hold a `<` — `content: "<"` is ordinary CSS. One `<` ends the `<style>`
+element and the file renders as nothing.
+
+So the CSS sits inside `<![CDATA[ … ]]>`. That is **how text enters XML**, in the
+same family as `encodeURIComponent` on a URL — no branches, and not predicated on
+anyone misbehaving. There is no validator around it and no guard after it: those
+would be what-ifs, and `coding-rules.md` sends what-ifs here rather than into
+`src/`.
+
+**The size is the canvas's scroll size, and there is no crop.** `scrollWidth` and
+`scrollHeight` rather than `getBoundingClientRect`, because the canvas is a scroll
+container and the rect reports the *visible pane*: a diagram wider than the pane
+came out cut off at whatever happened to be scrolled into view, and the same wrong
+number clipped twice — once as the SVG viewport, once through `width="100%"` on the
+`<foreignObject>`. The whole canvas is what a reader means by the diagram, and
+whitespace around it is the theme's to give as padding, not the exporter's to invent.
+
+An earlier version measured the ink instead and nested two boxes to clip to it. It
+was deleted: the measurement was four selectors wide and each one was a chance to be
+wrong, which it was four times over. See `docs/archive.md`.
+
+**Transparency is one CSS rule, not a rect.** The dialog offers a single checkbox,
+on by default, and when it is checked the snapshot appends
+`#diagram-canvas { background: transparent }` after the book. A `<rect>` cannot do
+this — it paints *behind*, and you cannot remove a background by painting behind it.
+The background is a declaration, so overriding it is a declaration too.
 
 There is no config model. Behavior that wants to be configuration goes to `:root` or to `action.js`.
 
@@ -455,6 +554,11 @@ Closed. Do not reopen in code without updating this file.
 | Who lays out columns | Graphviz `pos` + `rankdir`, bucketed within 2pt |
 | Who owns size and position | `Workbench.measure`. Graphviz `width` / `height` / `_draw_` are unused. |
 | Who draws | Us: HTML (`SHAPE_HTML`) + SVG (`svg/` shells, `icon/`) |
+| Connector shape | One: an **ortho snake**. No modes. `splines` is not consulted, and neither is a per-edge override. Radius `0` is sharp ortho; a large radius is the old curve. |
+| How a connector routes | Corridors are the layout's own gaps — gutters between ranks, row gaps within a rank — walked for fewest turns, then shortest. Not a visibility graph over obstacle edges: the connections are simple and the grid is already there. |
+| Connector attachment | Perpendicular to a box side. Left/right across ranks, top/bottom within a rank, decided from measured x-overlap. No axis heuristic. |
+| Connector clearance | A preference with a floor. A corridor narrower than the clearance is used last, not refused — user CSS can always close one, and a missing edge is worse than a tight one. |
+| Connector metrics | `ConnectorMetrics = { clearance, radius }`, **measured** by the workbench and passed in. A `diagram/` worker never calls `getComputedStyle`. |
 | Who touches the DOM | The `workbench/` package and the `Stylist` (its own sheet). `diagram/` workers are pure. |
 | How derived rules are built | `Diagram.derived` on the model, returning a `StyleBag`. Flat selectors, shortest that identifies. Classes first, `#id` last. Almost empty if DOT has no style. |
 | CSS naming | Identical to DOT naming (§3.1). No prefix, no `cluster_` stripping. |
@@ -478,10 +582,15 @@ Closed. Do not reopen in code without updating this file.
 | Editing a row | Writes at source `2`, in place, keeping the row's id. No shadow row, and no read-only row. |
 | Tab vs sink | `SetTab` writes the three text tabs. `inject` writes sinks. The styles tab edits the `Stylist`. |
 | Who parses CSS | **Nobody, at runtime.** CSSOM receives rules; it is never asked to read a sheet back. The one-shot decomposition lives in `build/` and is not shipped. |
+| Who writes CSS text | Nobody — `sheet.ts`'s `serialize()` asks CSSOM for `cssText` off the Stylist's own sheet, for Save SVG and Save PNG only. It is a free function, not a `Stylist` method: the sheet module owns the sheet, so wrapping it on the class was a hop that carried nothing. Export HTML does not need it: it carries the book as data. |
+| How the picture becomes a file | A `<foreignObject>` wrapper, not a translation. The file holds the cloned canvas and its CSS, and Chromium renders it with the engine that painted the screen. No `rect`/`text` translation, no dictionary to maintain. |
+| Inlined CSS in the file | The Stylist's sheet alone, inside `<![CDATA[ … ]]>`. `app.css` is chrome and stays out. XML reserves `<`, and a style row's value may hold one — that is correct serialization at a boundary, not a guard, so there is no validator and no post-parse check. |
+| PNG export | The same snapshot string → `Image` → `<canvas>` → `toBlob`, at 3x. No rasterizer dependency. |
+| Target browser | Chromium (§0). Not a support matrix — a ban on compatibility code in `src/`. |
 | Theme catalog | None. One shipped theme: `theme/basic-theme.json`. No dropdown, no locked base, no overlay, no theme file verbs. |
 | Cascade | One live sheet, `#style-css`, driven by CSSOM. Conflicts resolve in the map, not the cascade. |
 | `@apply` | A property whose value is selector keys in the same map. Expanded at feed time, in place, so own later properties win. Expansion is a read — never a book entry. Missing name throws. Cycle throws. |
-| CSS text | Produced only by `Stylist.serialize()`, only for Export HTML and Save PNG. |
+| CSS text | Produced only by `sheet.ts`'s `serialize()`, only for the picture exports. |
 | Attr → CSS property | `ATTR_CSS` registry |
 | Attr values | **Passed through, never corrected.** Graphviz's number plus the unit it measured in, and nothing else. It clamps `height=0` to `0.02in` and `width=0` to `0.01in`; we emit `0.02in`, because laying out DOT is its job and a correction here would be a rule the author cannot see. If a value looks wrong, that is a thing to style in the styles tab, not to fix in the bagger. |
 | Label escapes | `\N` becomes the node's own name and `\G` a cluster's, because `renderJSON` hands Graphviz's default label over unexpanded. Substitution on one parsed field, not a pass over DOT. |
@@ -500,7 +609,6 @@ Closed. Do not reopen in code without updating this file.
 | Config tab | Never existed. Behavior → `:root` or action.js |
 | Workbench tabs | diagram.dot, styles, annotation.html, action.js |
 | Shortcuts | A `Map` registry in `workbench/keys.ts`, not a switch |
-| PNG export | `foreignObject` → `<canvas>` → `toBlob`. No rasterizer dependency. |
 | Tab editor | A bare `<textarea>`, inline in `workbench.tsx`. One instance, for the three text tabs. Radio strip selects. No highlighting, no completion. |
 | The styles tab | A rows table, not an editor. Native `input list=` for selector and property. A `header` of three checkboxes hides rows by source — view state only, so nothing is written and nothing is fed. A hidden row keeps its place in the book: the edit verbs address a row by position, so the filter carries the book index with each visible row rather than renumbering them. |
 | The waiting row | The list always ends with an untouched blank row, and `.rows` is `column-reverse`, so that blank sits at the **top** of the screen — a rule is added by typing, never by asking for a row first. Filling it in appends the next one. ➕ opens another blank after any row; a re-read settles back to exactly one. |
@@ -536,7 +644,7 @@ Inside `src/`, one package per stage of the design. A package is a subject exper
 src/
   index.ts          mount the workbench into document.body (no #root, §3.1)
   types.ts          all `type` data + all `interface` traits (not counted in the 7)
-  app.css           tokens + four core classes + the chrome skeleton
+  app.css           tokens + the chrome skeleton (the core classes live in the theme)
   index.html        the one page
   assets.d.ts       ambient types for the bundler's asset imports
 
@@ -548,7 +656,8 @@ src/
     layout-framer.ts  model → rank + order within a rank → #diagram-html
     node-shaper.ts    SHAPE_HTML registry
     node-sheller.ts   boxes + nodes → shell SVG
-    edge-drawer.ts    boxes + edges → connector SVG
+    edge-router.ts    boxes + edges → the ortho snake's waypoints
+    edge-drawer.ts    waypoints → connector SVG, with curvable bends
 
   stylist/          the book and the one live sheet. CSSOM only (§3).
     stylist.ts        Stylist        — addRule / removeRule / reset / cleanup / rows / save / feed
@@ -559,7 +668,8 @@ src/
     workbench.tsx     SolidJS shell: canvas + radio strip + one textarea
     tabs.tsx          four equal buttons. No editor. Workbench owns the window.
     engine.ts         Workbench: redraw / inject / measure / place
-    files.ts          Files: DOT, export
+    files.ts          Files: DOT, export HTML, the picture snapshot (§4.1)
+    export-dialog.tsx format, transparency, scale — in a native <dialog>, unstyled
     keys.ts           KEY_COMMAND registry
 ```
 
@@ -582,7 +692,7 @@ An organization idea. Can be broken if needed — occasionally, not routinely.
 | Lines in a block | `{}` or `()` or `<>` — about 7 inside |
 | Blocks in a function / method | about 7 |
 | Methods on an `interface` | 7. A class implements an interface. |
-| Code files per package | 7. Does **not** count `types.ts` or build / config (`.json`, lockfiles). |
+| Code files per package | 7. Does **not** count `types.ts` or build / config (`.json`, lockfiles). `diagram/` deliberately runs over: routing a connector and drawing one are separate jobs, and merging them to hit the number would be the bigger file this table exists to prevent. |
 | Major class per file | preferably **one**, plus a few helpers |
 | Enums / `Map` entries | **no limit** |
 | Folders / packages per app | **no limit** |
@@ -626,7 +736,7 @@ interface Diagram {
   derived(model: DiagramModel): StyleBag
   clusters(boxes: Box[], model: DiagramModel): string
   shells(boxes: Box[], model: DiagramModel): string
-  connectors(boxes: Box[], model: DiagramModel): string
+  connectors(boxes: Box[], model: DiagramModel, metrics: ConnectorMetrics): string
 }
 
 interface Stylist {
@@ -636,7 +746,6 @@ interface Stylist {
   cleanup(): void                       // drop emptied selectors, re-feed
   rows(): StyleRow[]                    // the tab, source-tagged, in order
   save(): void                          // your rules + the theme's name → style-rules.json
-  serialize(): string                   // CSS text. Export / PNG only.
 }
 
 interface Workbench {
@@ -650,10 +759,12 @@ interface Files {
   loadDot(text: string): void
   saveDot(): string
   exportHtml(): Promise<string>
+  exportSvg(): string
   exportPng(): Promise<Blob>
 }
 ```
 
-`Node` / `Edge` / `Cluster` / `DiagramModel` / `Box` / `Layout` are unchanged. `TabText` covers the three text tabs only — the styles tab is not text. Registries (`SHAPE_HTML`, `SHELL_SVG`, `ATTR_CSS`) live with the workers that consult them.
+`Node` / `Edge` / `Cluster` / `DiagramModel` / `Box` / `Layout` are unchanged. `ConnectorMetrics` (§3.4) is the measured pair the router needs, and it is data the workbench supplies — the same arrangement as `Box[]`, for the same reason. `TabText` covers the three text tabs only — the styles tab is not text. Registries (`SHAPE_HTML`, `SHELL_SVG`, `ATTR_CSS`) live with the workers that consult them.
 
-The `Stylist` is seven methods, which is the budget. A new verb replaces one or goes to a registry — it does not become the eighth.
+The `Stylist` is seven methods, which is the budget. A new verb replaces one or
+goes to a registry — it does not become the eighth.

@@ -721,3 +721,131 @@ replacement for.
 
 The test that replaced the suite asserts the inverse: derived CSS must contain
 no `margin*` property at all. 79 pure + 52 browser, green.
+
+---
+
+## Iteration 16 — the export stopped translating
+
+Save SVG did not exist; Save PNG rasterized a `<foreignObject>`. The first pass
+built a real translator — `vectorizer.ts`, 508 lines, HTML turned into `<rect>` /
+`<text>` / `<image>` — and moved PNG onto it. Then a bake-off replaced it with
+the `<foreignObject>` snapshot it had deleted. What the measurements showed is
+worth keeping, because the argument recurs every time someone says "surely
+there's a library for this".
+
+**Three candidates, one diagram, same moment** (`research-lab/dom-to-svg/`, since
+deleted; the parked translator is in `research-lab/vectorizer/`).
+
+| | translation | foreignObject | dom-to-image-more |
+|---|---|---|---|
+| size | 8.2 KB | **9.4 KB** | 26 KB |
+| labels kept | **none** | all | all |
+| shadows | dropped | exact | exact |
+| dependency | 3 (incl. postcss) | none | 1 |
+
+**`dom-to-svg` silently drops content.** On a `shape=record` diagram all four
+`.cell` groups were emitted and only the first had children: `Head`, `One`,
+`Two`, `Tail`, `Plain` all absent. Reproduced on a plain two-node diagram —
+first label kept, second dropped. Byte-identical across runs, and on the final
+run **no exception at all**. It returns well-formed, plausible-looking SVG with
+the diagram missing. Last published April 2022.
+
+**Why translating is structurally the wrong shape for this app.** A translator is
+a dictionary with one entry per CSS feature, and CSS has hundreds of visual
+properties against SVG's dozen primitives. Shabnam *ships a CSS editor*, so a
+user can always reach a property the dictionary lacks — and then the export
+quietly disagrees with the screen. Our own 508 lines had already lost shadows and
+per-side borders once each. `<foreignObject>` inverts the economics: it carries
+no shapes, only the HTML and a pointer to a renderer, so Chromium paints the file
+with the engine that painted the screen and unknown CSS is correct for free.
+
+The trade accepted knowingly: the file only opens in a browser, which is the
+whole use case, and the target is Chromium (§0).
+
+**Two real bugs found on the way, both worth remembering.**
+
+`Stylist.serialize()` was deleted during the translation pass, because baking
+computed values onto elements left it with no callers. It had to come back: a
+`<foreignObject>` file carries its own stylesheet. Deleting a documented
+interface method as "dead" is a signal the design moved, not that the method was
+waste.
+
+And the one with teeth: **a `<foreignObject>` document is parsed as XML, so a
+single `<` anywhere in the inlined CSS renders the whole file blank.** Found when
+the demo produced a broken image. The culprit was a *comment* — `src/app.css:246`,
+`/* An \`<svg>\` is a **replaced** element… */`. `git show HEAD:src/app.css` had no
+`<` at all, so the shipped PNG export had been working by luck and the next
+comment would have broken it silently. Fixed with CDATA plus a `DOMParser` guard
+that throws, and written into §4.1 as a rule rather than a comment. A commit hook
+was considered and rejected: it would lint `app.css` but cannot reach CSS a user
+types into the styles tab at runtime, which is the case that matters.
+
+Colour notes from the translator, kept because they are non-obvious: Chrome
+computes `color-mix()` to CSS Color 4 `color(srgb …)`, and canvas `fillStyle`
+hands it straight back — normalising needs `fillRect` plus `getImageData`.
+Testing transparency on the *string* (`endsWith(", 0)")`) also matches
+`rgb(0, 0, 0)` and `rgb(255, 255, 0)`, so black and yellow were briefly invisible.
+
+PNG is now 3x and transparent; SVG keeps a white floor, because a transparent one
+renders black in Chrome's dark standalone viewer.
+
+**Three crop defects, all found by looking at the file rather than by a test.** The
+ink selector was written from memory of the layer structure and was wrong in three
+places at once: `#connector-paths path` matched the arrowhead `<path>` inside
+`<defs>`, which has no layout box and reports itself 49px above the diagram, so
+every export carried a band of dead space at the top; `#cluster-shells` was left
+out altogether; and `#node-shells > g` matched **nothing**, because shell content
+is bare `<text>` that was never wrapped in a `<g>`. Then, with the selector fixed,
+the cluster label still came out cut in half — it renders at x = −8.7, outside the
+canvas box, and the `<foreignObject>` was canvas-sized with `overflow:hidden`, so
+it clipped the overhang before the crop applied. Hence the `page`-inside-`frame`
+pair. Worth recording because all four were invisible to every green check we had,
+and obvious in one glance at the picture.
+
+**The crop, the ink union, and the two-box frame were then all deleted.** Not
+because they were wrong — the fixed selector did crop correctly — but because the
+whole apparatus was answering a question nobody had asked. Four selectors is four
+chances to be wrong about a layer, and it had already been wrong four times; the
+shadow margin was a number chosen to look right; `page`-inside-`frame` existed only
+to undo a clip the crop had introduced. What replaced it is `canvas.scrollWidth` and
+`canvas.scrollHeight` on a single `<foreignObject>`. The whole canvas *is* the
+diagram, and padding around it is the theme's to give.
+
+`scrollWidth` rather than `getBoundingClientRect().width` is the load-bearing part.
+The canvas is a scroll container, so the rect returns the **visible pane** — 255px
+where the content was 280px — and that number clipped the picture twice, once as the
+SVG viewport and once through `width="100%"` on the `<foreignObject>`. Every export
+was cut off at whatever happened to be scrolled into view. The bug survived a
+correct crop, a correct ink measurement, and every green check, because nothing in
+the suite exports a diagram wider than its pane.
+
+**Transparency is a CSS rule, and a `<rect>` can never be one.** The export had a
+`paper` option carrying a CSS colour or `"none"`, which painted a background rect
+behind the clone. But the diagram has its own background, declared on
+`#diagram-canvas` — and you cannot remove a background by painting behind it. The
+rect made the *file's* backdrop opaque while the diagram's own wash stayed exactly
+where it was. One appended declaration does what the rect could not:
+`#diagram-canvas { background: transparent }`. The dialog is now a checkbox, on by
+default, and `PICTURE_DEFAULTS` — a per-format table of paper colours — is gone.
+
+**Reading CSS off the live sheet removed the `@apply` problem rather than solving
+it.** The question was how an export should handle `@apply`, given that a rule may
+name another rule. It turned out not to be a question: `feed()` runs `resolve()` on
+the way in, so the live sheet has never held an `@apply` at all. `.record`'s
+`cssText` already contains `.node`'s three declarations followed by its own.
+Verified rather than assumed — `anyApplyInSheet: false`. `cssText` also yields
+*declared* values, so `var()` and `color-mix()` survive verbatim and the exported
+file stays re-themeable.
+
+Scoping the CSS to the diagram is a matter of **sheet ownership**, not of filtering
+by subtree. There is no browser API for "the rules that match this element and its
+children": `getMatchedCSSRules()` was removed from the platform, and
+`el.matches(rule.selectorText)` silently drops every state selector — `:hover`,
+`:focus-within`, `::before`. The Stylist drives exactly one `<style id="style-css">`,
+so "the diagram's CSS" is that sheet's `cssRules`, and the question dissolves.
+
+**Written down because the shape of this session is the lesson:** every deletion
+above was requested, none was discovered by a test, and the working version is
+smaller than the version it replaced at every step. `files.ts` went 246 → 147 lines,
+`export-dialog.tsx` 184 → 97, and 83 lines of dialog CSS left `app.css` entirely.
+The rule that came out of it is now `coding-rules.md` § *No "what if"*.

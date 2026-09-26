@@ -16,7 +16,7 @@ svg {
 
   --vertical-gap: 2em;
   --horizontal-gap: 2em;
-  --connector-style: spline;
+  --connector-radius: 6px;
 
   --raised-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
   --flat-shadow: 0 0 2px;
@@ -67,7 +67,12 @@ svg {
 
   justify-content: stretch;
 
-  gap: calc(2 * var(--horizontal-gap));
+  /* A literal 4em, not calc() over --horizontal-gap. The chrome declares that
+     token on `body`, a nearer ancestor of .diagram than :root, so the theme's own
+     value never reaches the diagram. This width is also load-bearing: a connector
+     needs a corridor between ranks, and 1em of clearance on each side of a 2em
+     gutter leaves none. */
+  gap: 4em;
   font-family: var(--main-font);
   font-size: var(--base-font-size);
 
@@ -97,6 +102,7 @@ svg {
 
 .cell._1 {
   @apply .glass;
+  text-align: center;
 }
 
 .record > div {

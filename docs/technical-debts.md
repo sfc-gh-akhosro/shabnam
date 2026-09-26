@@ -182,6 +182,112 @@ wasm will not move.
 
 ---
 
+### V7. `.icon` has no size rule, so a markdown icon fills its node
+
+`![star](star.svg)` becomes `<img class="icon">`, and **nothing in `src/app.css`
+or `theme/basic-theme.json` selects `.icon`.** The icon files carry a `viewBox`
+and no `width` / `height`, so they have no intrinsic size, and `width: auto`
+resolves against the container — the star in the starter diagram is drawn at 93px
+inside a 93px-wide node, with the label pushed underneath it.
+
+Found while verifying Save SVG, which reproduced it exactly — as it should, since
+the export is the browser drawing the same page (§4.1). An export that disagreed
+with the screen would be the worse bug.
+
+The shell layer's `icon=` badge is unaffected: `NodeSheller` sets `ICON_SIZE`
+explicitly.
+
+**Cost to close:** one theme entry — `.icon { height: 1.1em; width: auto }` or
+similar. It is a theme decision, not a code one, which is why it is here and not
+fixed in passing.
+
+### V8. A cluster label inherits the cluster's `fill`, so it is nearly invisible
+
+`#cluster_source`'s group takes `fill` from `.cluster_`, and the `<text
+class="label">` inside it inherits that — the 10%-opacity green. "Source" is
+legible only against white. Visible on screen and faithfully reproduced in the
+SVG export.
+
+**Cost to close:** one theme entry giving `.cluster_ .label` a `fill` of its own.
+
+### V10. The picture *files* have no automated coverage
+
+The export dialog is covered (`checks.ts`, stage `export`): the four options and the
+defaults each format brings with it. What is still verified by eye is the file that
+comes out. A browser-suite stage for that was written and removed: reading a
+download back inside headless Chrome needed a patched `URL.createObjectURL` plus a
+clicked anchor, and it **hung the suite** under virtual time — the run never
+published a report. The pure half cannot help, since the whole verb is DOM.
+
+Left open deliberately. "Does the file open and look right" is one glance from a
+human, and a harness that costs more than the thing it guards is not worth
+keeping. The regression that mattered — a `<` in the inlined CSS — is closed by
+construction now (CDATA, §4.1), not by a test.
+
+What replaced it in practice is a **computed-style walk**, run by hand in the live
+page: clone the canvas into the export, render the result in an iframe, and diff
+every computed property of every element against the live one. That is what found
+V11, after weeks of "some borders are missing" being unexplainable. It is not in
+the suite — it needs a blob iframe and two frames of settling — but it is the tool
+to reach for when an export disagrees with the screen.
+
+Since the export moved to `cssText`, `sheet.ts`'s `serialize()` is DOM-bound too, so
+the two pure tests that asserted on its old hand-rolled text format are gone as
+well. `@apply` expansion is still covered directly through `resolve`, and the
+`!important` case is asserted on the book instead.
+
+**Cost to close:** a way to intercept a download that does not fight virtual time.
+Probably not worth it.
+
+### V11. ~~The tokens were declared twice, and the export picked the other set~~ — **closed**
+
+Kept because the failure was invisible and the reasoning is reusable.
+
+`app.css` declared the design tokens on `body`; the theme and the DOT-derived layer
+declared them on `:root, svg`. An inherited value resolves to the **nearest**
+ancestor that sets it, specificity be damned — so on screen `body` won and the
+theme was silently ignored, while in a `<foreignObject>` export there is no `body`
+at all and the theme won. Two token sets, two pictures: different fonts, gaps,
+pads, shadow colours, and `color-mix` borders that went from near-white to green.
+It read as "the SVG export loses some borders".
+
+Closed by rooting both the theme and `CssBagger.TOKENS` at `#diagram-canvas, svg`,
+which is the nearest ancestor in both documents. The two must always move together:
+the derived block is source 1 and has to stay at least as near as the theme's
+source 0, or a redraw would stop overriding the theme.
+
+The lesson worth keeping: **an export that disagrees with the screen is not
+necessarily an export bug.** `<foreignObject>` hands the clone to the same engine,
+so it cannot render it differently — it can only be handed a different stylesheet.
+Look there first.
+
+### V12. ~~`Stylist.serialize()` is a second implementation of the live sheet~~ — **closed by implementation**
+
+The picture exports used to ship `app.css` plus CSS text re-printed from the book,
+while `snapshot()` deleted the live `<style id="style-css">` from the clone. So the
+file carried a parallel rendering of the book rather than the stylesheet the
+browser was painting with — and the drift was silent in one direction by
+construction, since `setProperty` discards a declaration CSSOM rejects while a
+printer emits whatever the book holds.
+
+`serialize()` now returns `cssText` off that live sheet, and `sheet.ts`'s
+hand-rolled `serialize`/`declarations` are gone. One implementation, no drift
+possible. `app.css` left the picture path at the same time: the diagram's layer
+scaffolding moved into `theme/basic-theme.json`, so the book is self-sufficient and
+the chrome's stylesheet no longer rides along. CSS in the file went from 8427 bytes
+to 2705.
+
+The `Stylist.serialize()` wrapper that fronted it is gone too: the sheet module owns
+the sheet, so a method on the class that did nothing but call the free function was
+a hop carrying nothing. `files.ts` imports `serialize` from `sheet.ts` directly, and
+the `T.Stylist` interface is six methods rather than seven.
+
+The §3 rule that nothing reads a sheet back still stands for *state* — the book
+remains the source of truth. An export is a projection, not state, and doing it
+this way removes a second implementation rather than adding one.
+
+---
+
 ## Model debt
 
 ### M1. ~~`Cluster.isInvis` and `Cluster.label` are bagged and never read~~ — **closed by implementation**

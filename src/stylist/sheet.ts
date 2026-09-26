@@ -50,11 +50,15 @@ export function priority(value: string): [value: string, priority: string] {
   return match === null ? [value, ""] : [match[1]!.trim(), "important"];
 }
 
-/** CSS text. Export HTML and Save PNG only — see `Stylist.serialize`. */
-export function serialize(rules: T.StyleRules): string {
-  return [...resolve(rules)]
-    .map(([selector, own]) => `${selector} {\n${declarations(own)}\n}`)
-    .join("\n\n");
+/**
+ * The book as CSS text. The picture exports only — see `Stylist.serialize`.
+ *
+ * Read off the live sheet, because `feed` already expanded every `@apply` on the
+ * way in — the sheet holds none, so there is nothing to resolve here. `cssText`
+ * gives declared values, so `var()` and `color-mix()` survive as written.
+ */
+export function serialize(): string {
+  return [...live().cssRules].map((rule) => rule.cssText).join("\n");
 }
 
 /** True when some `@apply` names this selector, so a change to it must re-feed. */
@@ -104,9 +108,7 @@ export class Sheet {
 // A <style> element has no `.sheet` until it is in the document, so the element
 // is found on first use — which is after mount — rather than in a constructor.
 function live(): CSSStyleSheet {
-  const element = document.getElementById(SINK) as HTMLStyleElement;
-  if (element.sheet === null) throw new Error(`#${SINK} has no sheet: not in the document yet`);
-  return element.sheet;
+  return (document.getElementById(SINK) as HTMLStyleElement).sheet!;
 }
 
 function flatten(selector: string, rules: T.StyleRules, seen: string[]): Map<string, string> {
@@ -127,6 +129,3 @@ function flatten(selector: string, rules: T.StyleRules, seen: string[]): Map<str
   return out;
 }
 
-function declarations(own: Map<string, string>): string {
-  return [...own].map(([property, value]) => `  ${property}: ${value};`).join("\n");
-}

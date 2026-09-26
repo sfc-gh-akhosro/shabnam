@@ -26,6 +26,56 @@
 
 ---
 
+## No "what if"
+
+**The codebase is a temple and we are its monks.** Every line is a debt. Every
+abstraction is a larger debt. Every branch, flag, guard and fallback is a debt
+someone else will service. A line that works, handles its case, and shows green is
+still a debt if nobody asked for it.
+
+A **"what if"** is code written for a state nobody has observed. It is the most
+common way a clean codebase silently becomes a large one, because each individual
+one is cheap, reasonable, and defensible on its own.
+
+**A what-if does not belong in code. It belongs in the design.** That is what the
+design files are for, in this order:
+
+1. `user-story.md` — who the user is and what they do
+2. `app-architecture.md` — what the app therefore does, and refuses
+3. `types.ts` — the shapes that make the refusals unrepresentable
+
+If a state cannot happen, say so in the types and **delete the check**. If it can
+happen and we choose not to serve it, say so in the architecture and **delete the
+code**. Either way what survives in `src/` is the happy path.
+
+**Three questions before a defensive line lives.** Same bar as the `try` / `catch`
+rule above, and for the same reason:
+
+1. Has it actually happened, in a real run?
+2. Did we look at it together?
+3. Did we agree this line is the fix?
+
+Anything less and the honest answer is: don't write it. If the mistake ever
+arrives, it arrives with a stack trace and we fix the real thing.
+
+**Correct is not the same as defensive.** Encoding a value properly at a boundary
+is not a what-if — `encodeURIComponent` on a URL, CDATA on text entering XML,
+escaping a label into HTML. Those are how the boundary works, they have no
+branches, and they are not predicated on anyone misbehaving. A *guard against an
+unobserved state* is the what-if. Know which one you are writing.
+
+**The unwritten agreement is real, and it is allowed to be unwritten.** Our user
+writes `background: red`. A nerdier one writes `oklch(…)`, and we neither mind nor
+care, because CSS handles it. A user who reaches for a data-URI SVG inside a
+`background` has left the path this app was designed for — that is their business,
+not our code's. We do not add a line for them. We do not pre-apologise for them in
+a comment. "Don't do that" is a complete answer, and so is "ask an AI to help
+you".
+
+**"It could happen" is not a reason. "It happened" is.**
+
+---
+
 ## Trust in default (Do Nothing)
 
 I trust a lot that "doing nothing (trusting default)" will do the job "good enough". We go further only when we need and consciously decide about it. This rule (trust in default) does not mean we are careless (especially for critical decision points), it just means "hey, let's do nothing to see what happens, maybe it is good enough".

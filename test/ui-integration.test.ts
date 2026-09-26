@@ -47,8 +47,8 @@ describe("UI & Workbench Integration Suite", () => {
     const model = bagger.bag(json);
     const derived = cssBagger.bag(model);
 
-    expect([...derived.keys()]).toEqual([":root, svg"]);
-    const tokens = derived.get(":root, svg")!;
+    expect([...derived.keys()]).toEqual(["#diagram-canvas, svg"]);
+    const tokens = derived.get("#diagram-canvas, svg")!;
     expect(tokens.get("--primary-color")).toBeDefined();
     expect(tokens.get("--secondary-color")).toBeDefined();
     expect(tokens.get("--accent-color")).toBeDefined();
@@ -103,7 +103,7 @@ describe("UI & Workbench Integration Suite", () => {
     const model = bagger.bag(json);
     const derived = cssBagger.bag(model);
 
-    expect(derived.has(":root, svg")).toBe(true);
+    expect(derived.has("#diagram-canvas, svg")).toBe(true);
     // `pos` buys a rank and an order in it, nothing else. Spacing is the theme's
     // and the author's — no margin is computed from the layout.
     for (const [, properties] of derived) {

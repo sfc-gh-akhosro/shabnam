@@ -1,5 +1,5 @@
 {
-  ":root, svg": {
+  "#diagram-canvas, svg": {
     "--theme-color": {
       "value": "white",
       "source": 0
@@ -36,10 +36,6 @@
       "value": "2em",
       "source": 0
     },
-    "--connector-style": {
-      "value": "spline",
-      "source": 0
-    },
     "--raised-shadow": {
       "value": "0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)",
       "source": 0
@@ -62,6 +58,48 @@
     },
     "--paper-background": {
       "value": "color-mix(in srgb, var(--primary-color) 10%, var(--theme-color))",
+      "source": 0
+    },
+    "--connector-radius": {
+      "value": "6px",
+      "source": 0
+    }
+  },
+  "#diagram-canvas": {
+    "position": {
+      "value": "relative",
+      "source": 0
+    }, 
+    "@apply": {
+      "value": ".glass",
+      "source": 0
+    }
+  },
+  "#annotation-html, #diagram-svg": {
+    "position": {
+      "value": "absolute",
+      "source": 0
+    },
+    "inset": {
+      "value": "0",
+      "source": 0
+    }
+  },
+  "#diagram-svg": {
+    "width": {
+      "value": "100%",
+      "source": 0
+    },
+    "height": {
+      "value": "100%",
+      "source": 0
+    },
+    "overflow": {
+      "value": "visible",
+      "source": 0
+    },
+    "pointer-events": {
+      "value": "none",
       "source": 0
     }
   },
@@ -121,7 +159,15 @@
   },
   ".diagram": {
     "@apply": {
-      "value": ".row .glass",
+      "value": ".row",
+      "source": 0
+    },
+    "padding": {
+      "value": "var(--vertical-gap) var(--horizontal-gap)",
+      "source": 0
+    },
+    "flex": {
+      "value": "1",
       "source": 0
     },
     "justify-content": {
@@ -129,11 +175,15 @@
       "source": 0
     },
     "gap": {
-      "value": "calc(2 * var(--horizontal-gap))",
+      "value": "4em",
       "source": 0
     },
     "font-family": {
       "value": "var(--main-font)",
+      "source": 0
+    },
+    "line-height": {
+      "value": "1.5",
       "source": 0
     },
     "font-size": {
@@ -148,6 +198,10 @@
     },
     "gap": {
       "value": "var(--vertical-gap)",
+      "source": 0
+    },
+    "justify-content": {
+      "value": "space-evenly",
       "source": 0
     }
   },
@@ -175,7 +229,7 @@
       "source": 0
     },
     "width": {
-      "value": "16em",
+      "value": "18em",
       "source": 0
     },
     "height": {
@@ -193,7 +247,7 @@
     "flex": {
       "value": "1",
       "source": 0
-    }, 
+    },
     "border-bottom": {
       "value": "thin solid",
       "source": 0
@@ -207,11 +261,17 @@
       "source": 0
     }
   },
-
-
   ".cell._1": {
     "@apply": {
       "value": ".glass",
+      "source": 0
+    },
+    "padding": {
+      "value": "1em",
+      "source": 0
+    },
+    "text-align": {
+      "value": "center",
       "source": 0
     }
   },
@@ -222,6 +282,36 @@
     },
     "flex": {
       "value": "1.6",
+      "source": 0
+    }
+  },
+  ".shell": {
+    "fill": {
+      "value": "none",
+      "source": 0
+    },
+    "stroke": {
+      "value": "var(--secondary-color)",
+      "source": 0
+    }
+  },
+  ".edge": {
+    "fill": {
+      "value": "none",
+      "source": 0
+    },
+    "stroke": {
+      "value": "var(--secondary-color)",
+      "source": 0
+    },
+    "stroke-width": {
+      "value": "1.5",
+      "source": 0
+    }
+  },
+  ".arrow": {
+    "fill": {
+      "value": "var(--secondary-color)",
       "source": 0
     }
   }

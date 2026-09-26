@@ -22,6 +22,7 @@ import { documentEntries, Stylist } from "../stylist/stylist.ts";
 import type { StyleDocument, StyleFile, TabId, TabText } from "../types.ts";
 import { Engine } from "./engine.ts";
 import { download, Files } from "./files.ts";
+import { ExportDialog, showExportDialog } from "./export-dialog.tsx";
 import { type Command, commandOf } from "./keys.ts";
 import { TAB_IDS, Tabs } from "./tabs.tsx";
 
@@ -96,7 +97,7 @@ export function Workbench() {
     redraw,
     "load-dot": () => dotPicker.click(),
     "save-dot": () => download("diagram.dot", files.saveDot(), "text/vnd.graphviz"),
-    "save-png": async () => download("diagram.png", await files.exportPng(), "image/png"),
+    "export-picture": () => showExportDialog(),
     "export-html": async () => download("diagram.html", await files.exportHtml(), "text/html"),
     "tab-1": () => setActive(TAB_IDS[0]!),
     "tab-2": () => setActive(TAB_IDS[1]!),
@@ -130,7 +131,11 @@ export function Workbench() {
           <button title="Cmd/Ctrl+Enter" onClick={redraw}> Redraw Diagram </button>
           <button title="Cmd/Ctrl+O" onClick={commands["load-dot"]}>Load DOT</button>
           <button title="Cmd/Ctrl+S" onClick={commands["save-dot"]}>Save DOT</button>
-          <button title="Cmd/Ctrl+P" onClick={commands["save-png"]}>Save PNG</button>
+          <ExportDialog
+            onExport={async (options, type, name) =>
+              download(name, await files.exportPicture(options), type)
+            }
+          />
           <button title="Cmd/Ctrl+E" onClick={commands["export-html"]}>Export HTML</button>
           <button onClick={() => stylist.save()}>Save Styles</button>
           {/* `hidden` rather than a class: the picker is opened by `.click()`,
@@ -164,6 +169,8 @@ export function Workbench() {
             />
           )}
         </Show>
+              <button id="close-aside">➡️</button>
+
       </aside>
     </>
   );

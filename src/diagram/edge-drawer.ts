@@ -1,159 +1,118 @@
-// Boxes + edges → the connector layer (§3.4). Coordinates come from the measured
+// Waypoints → the connector layer (§3.4). Coordinates come from the measured
 // boxes and never from Graphviz `_draw_` paths, which is the whole reason a CSS
 // change to a gap, a font, or a width leaves the picture still joined up. The
 // coordinate space is the one stated in node-sheller.ts.
+//
+// This file attaches and renders; `edge-router.ts` decides the route. There is
+// one shape — an ortho snake — and no modes: `splines` is not consulted, and the
+// only knob is how far the bends are rounded.
 
 import type * as T from "../types.ts";
+import { EdgeRouter } from "./edge-router.ts";
 import { styleWords } from "./node-shaper.ts";
-import { SHELL_PAD } from "./node-sheller.ts";
 
 const ARROW = `<defs><marker id="connector-arrow" class="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" /></marker></defs>`;
 
-function getCssConnectorMode(): string | undefined {
-  if (typeof document === "undefined") return undefined;
-  const canvas = document.getElementById("diagram-canvas");
-  if (!canvas) return undefined;
-  const style = getComputedStyle(canvas);
-  const val =
-    style.getPropertyValue("--connector-style") ||
-    style.getPropertyValue("--connector-type");
-  const trimmed = val ? val.trim().replace(/^['"]|['"]$/g, "").toLowerCase() : "";
-  return trimmed || undefined;
-}
-
 export class EdgeDrawer {
-  draw(boxes: T.Box[], model: T.DiagramModel): string {
+  private router = new EdgeRouter();
+
+  draw(boxes: T.Box[], model: T.DiagramModel, metrics: T.ConnectorMetrics): string {
     const byId = new Map(boxes.map((box) => [box.id, box]));
-    const cssMode = getCssConnectorMode();
-    const defaultMode = cssMode ?? model.attrs.get("splines") ?? "spline";
 
     const paths = model.edges.map((edge) => {
       const from = byId.get(edge.from)!;
       const to = byId.get(edge.to)!;
-      const mode = edge.attrs.get("splines") ?? defaultMode;
-      return edgePath(edge, from, to, mode);
+      // Everything the route must avoid is every box but its own two ends — a
+      // connector has to be allowed to touch the things it joins.
+      const obstacles = boxes.filter((box) => box.id !== edge.from && box.id !== edge.to);
+      const waypoints = this.router.route(from, to, obstacles, metrics.clearance);
+
+      return edgePath(edge, waypoints, metrics.radius);
     });
 
     return ARROW + paths.join("");
   }
 }
 
-function edgePath(edge: T.Edge, from: T.Box, to: T.Box, mode: string): string {
-  const [tail, head] = anchors(from, to);
+function edgePath(edge: T.Edge, waypoints: T.Point[], radius: number): string {
   // The same rule the nodes use: a `style` word is a class, and the theme says
   // what it means. `edge [style=invis]` is how DOT holds a rank in place without
   // drawing anything, so this is the one that earns its keep.
   const classes = ["edge", ...styleWords(edge.attrs), ...edge.classes].join(" ");
-  const d = route(tail, head, mode);
 
   return (
     `<path id="${edge.id}" class="${classes}"` +
-    ` d="${d}"` +
+    ` d="${snake(waypoints, radius)}"` +
     ` marker-end="url(#connector-arrow)" />`
   );
 }
 
-function route(tail: T.Point, head: T.Point, mode: string): string {
-  switch (mode) {
-    case "ortho":
-    case "step":
-    case "polyline":
-      return orthoPath(tail, head);
-    case "line":
-    case "straight":
-      return `M ${round(tail.x)} ${round(tail.y)} L ${round(head.x)} ${round(head.y)}`;
-    case "spline":
-    case "curved":
-    default:
-      return splinePath(tail, head);
+/**
+ * One polyline, with its corners rounded by `radius`.
+ *
+ * `0` is sharp ortho. The radius is clamped to half of the shorter of the two
+ * segments meeting at a corner, so a route squeezing through a tight corridor
+ * cannot produce a curve that overshoots into the segment beyond it.
+ */
+export function snake(waypoints: T.Point[], radius: number): string {
+  const points = straighten(waypoints);
+  const [first, ...rest] = points;
+  if (!first) return "";
+
+  let d = `M ${round(first.x)} ${round(first.y)}`;
+  for (const [index, point] of rest.entries()) {
+    const next = rest[index + 1];
+    const previous = rest[index - 1] ?? first;
+    d += next ? corner(previous, point, next, radius) : ` L ${round(point.x)} ${round(point.y)}`;
   }
+  return d;
 }
 
-function splinePath(tail: T.Point, head: T.Point): string {
-  const dx = head.x - tail.x;
-  const dy = head.y - tail.y;
+function corner(from: T.Point, at: T.Point, to: T.Point, radius: number): string {
+  const r = Math.min(radius, distance(from, at) / 2, distance(at, to) / 2);
+  if (r < 0.5) return ` L ${round(at.x)} ${round(at.y)}`;
 
-  if (Math.abs(dx) < 1 || Math.abs(dy) < 1) {
-    return `M ${round(tail.x)} ${round(tail.y)} L ${round(head.x)} ${round(head.y)}`;
-  }
-
-  const isHorizontal = Math.abs(dx) >= Math.abs(dy);
-  const cp1 = isHorizontal
-    ? { x: tail.x + dx * 0.5, y: tail.y }
-    : { x: tail.x, y: tail.y + dy * 0.5 };
-  const cp2 = isHorizontal
-    ? { x: head.x - dx * 0.5, y: head.y }
-    : { x: head.x, y: head.y - dy * 0.5 };
-
+  const entry = along(at, from, r);
+  const exit = along(at, to, r);
   return (
-    `M ${round(tail.x)} ${round(tail.y)}` +
-    ` C ${round(cp1.x)} ${round(cp1.y)}, ${round(cp2.x)} ${round(cp2.y)}, ${round(head.x)} ${round(head.y)}`
+    ` L ${round(entry.x)} ${round(entry.y)}` +
+    ` Q ${round(at.x)} ${round(at.y)}, ${round(exit.x)} ${round(exit.y)}`
   );
 }
 
-function orthoPath(tail: T.Point, head: T.Point): string {
-  const dx = head.x - tail.x;
-  const dy = head.y - tail.y;
+// `r` pixels from `at`, in the direction of `towards`. Segments are axis-aligned,
+// so one of the two terms is always zero.
+function along(at: T.Point, towards: T.Point, r: number): T.Point {
+  const span = distance(at, towards);
+  return {
+    x: at.x + ((towards.x - at.x) / span) * r,
+    y: at.y + ((towards.y - at.y) / span) * r,
+  };
+}
 
-  if (Math.abs(dx) < 1 || Math.abs(dy) < 1) {
-    return `M ${round(tail.x)} ${round(tail.y)} L ${round(head.x)} ${round(head.y)}`;
-  }
-
-  const isHorizontal = Math.abs(dx) >= Math.abs(dy);
-  const r = Math.min(6, Math.abs(dx) / 2, Math.abs(dy) / 2);
-  const signX = dx >= 0 ? 1 : -1;
-  const signY = dy >= 0 ? 1 : -1;
-
-  if (isHorizontal) {
-    const midX = tail.x + dx / 2;
-    return (
-      `M ${round(tail.x)} ${round(tail.y)}` +
-      ` L ${round(midX - signX * r)} ${round(tail.y)}` +
-      ` Q ${round(midX)} ${round(tail.y)}, ${round(midX)} ${round(tail.y + signY * r)}` +
-      ` L ${round(midX)} ${round(head.y - signY * r)}` +
-      ` Q ${round(midX)} ${round(head.y)}, ${round(midX + signX * r)} ${round(head.y)}` +
-      ` L ${round(head.x)} ${round(head.y)}`
+// Three points on one line are one segment. The walk emits a point per corridor
+// it crosses, and the attachment stub adds another, so most of these are not
+// corners at all — rounding one would put a degenerate curve in the middle of a
+// straight run.
+function straighten(points: T.Point[]): T.Point[] {
+  return points.filter((point, index) => {
+    const before = points[index - 1];
+    const after = points[index + 1];
+    if (!before || !after) return true;
+    if (same(before, point) || same(point, after)) return false;
+    return !(
+      (before.x === point.x && point.x === after.x) ||
+      (before.y === point.y && point.y === after.y)
     );
-  }
-
-  const midY = tail.y + dy / 2;
-  return (
-    `M ${round(tail.x)} ${round(tail.y)}` +
-    ` L ${round(tail.x)} ${round(midY - signY * r)}` +
-    ` Q ${round(tail.x)} ${round(midY)}, ${round(tail.x + signX * r)} ${round(midY)}` +
-    ` L ${round(head.x - signX * r)} ${round(midY)}` +
-    ` Q ${round(head.x)} ${round(midY)}, ${round(head.x)} ${round(midY + signY * r)}` +
-    ` L ${round(head.x)} ${round(head.y)}`
-  );
+  });
 }
 
-function anchors(from: T.Box, to: T.Box): [T.Point, T.Point] {
-  const a = center(from);
-  const b = center(to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    const way = dx >= 0 ? 1 : -1;
-    return [
-      { x: a.x + way * half(from.width), y: a.y },
-      { x: b.x - way * half(to.width), y: b.y },
-    ];
-  }
-  const way = dy >= 0 ? 1 : -1;
-  return [
-    { x: a.x, y: a.y + way * half(from.height) },
-    { x: b.x, y: b.y - way * half(to.height) },
-  ];
+function same(a: T.Point, b: T.Point): boolean {
+  return a.x === b.x && a.y === b.y;
 }
 
-function center(box: T.Box): T.Point {
-  return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
-}
-
-// Connectors meet the shell, not the box it stands off from.
-function half(extent: number): number {
-  return extent / 2 + SHELL_PAD;
+function distance(a: T.Point, b: T.Point): number {
+  return Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
 }
 
 function round(value: number): string {

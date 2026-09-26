@@ -1,8 +1,18 @@
 // The checks, running inside the page, next to the real app. They touch nothing
 // but the DOM: the rows tab is driven the way a person drives it (set the box,
-// dispatch the event the component listens for), and every assertion is read
-// back off the live sheet or out of `getComputedStyle`. No app internals, so
-// this cannot pass by agreeing with the Stylist about something wrong.
+// dispatch the event the component listens for), and every assertion is read back
+// off the live sheet or out of `getComputedStyle`. No app internals, so this
+// cannot pass by agreeing with the Stylist about something wrong.
+//
+// The picture *files* are **not** covered here — see `docs/technical-debts.md`.
+// Reading a download back out of headless Chrome needed a patched
+// `URL.createObjectURL` and a clicked anchor, and it hung the suite under virtual
+// time. "Does the file open and look right" is one glance from a human, and a
+// harness that costs more than the thing it guards is not worth keeping.
+//
+// The export *dialog* is covered, because it is DOM and costs nothing: the three
+// options are the ones the two old buttons hard-coded, and a wrong default is how a
+// PNG came out on transparency with the theme's 10%-alpha borders invisible.
 //
 // The report leaves as base64 in `#test-report[data-report]`, which survives
 // HTML serialization untouched. `run.ts` picks it up from there.
@@ -132,8 +142,8 @@ function stylesheet(): void {
 
   const nodeBg = background("core");
   check("the theme paints a node", nodeBg !== "rgba(0, 0, 0, 0)" && nodeBg !== "", nodeBg);
-  const token = getComputedStyle(document.documentElement).getPropertyValue("--primary-color");
-  check("derived tokens reach :root", token.trim() !== "", token);
+  const token = getComputedStyle(document.getElementById("diagram-canvas")!).getPropertyValue("--primary-color");
+  check("derived tokens reach the canvas", token.trim() !== "", token);
 }
 
 async function rowsTab(): Promise<void> {
@@ -146,14 +156,15 @@ async function rowsTab(): Promise<void> {
   }, {});
   check("the styles tab lists the book, source-tagged", rows().length > 0 && sources["0"]! > 0 && sources["1"]! > 0, JSON.stringify(sources));
 
-  // The whole point of one book: the theme and the DOT both write `:root, svg`
-  // and `.node`, and a repeated key is an overwrite — so it cannot be two rows.
+  // The whole point of one book: the theme and the DOT both write
+  // `#diagram-canvas, svg` and `.node`, and a repeated key is an overwrite — so
+  // it cannot be two rows.
   const keys = ruleRows().map((row) => `${box(row, "selector").value}\u0000${box(row, "property").value}`);
   const repeated = keys.filter((key, at) => keys.indexOf(key) !== at);
   check("no rule appears twice", repeated.length === 0, repeated.length === 0 ? `${keys.length} rows, all distinct` : JSON.stringify(repeated));
 
-  const tokens = rows().filter((row) => box(row, "selector").value === ":root, svg");
-  check("the token block is one run of rows", tokens.length > 0, `${tokens.length} :root, svg rows`);
+  const tokens = rows().filter((row) => box(row, "selector").value === "#diagram-canvas, svg");
+  check("the token block is one run of rows", tokens.length > 0, `${tokens.length} token rows`);
 
   // Every row the book produced points at its entry. The waiting blank is not in
   // the book and carries no id — that is how it says so.
@@ -263,11 +274,14 @@ async function liveRepaint(): Promise<void> {
  *  standing at the end: deleting it would take the theme's entry with it, which
  *  is the design (§1) and not something to do behind a later stage's back. */
 async function survivesRedraw(): Promise<void> {
-  const token = () => getComputedStyle(document.documentElement).getPropertyValue("--primary-color").trim();
+  const token = () =>
+    getComputedStyle(document.getElementById("diagram-canvas")!)
+      .getPropertyValue("--primary-color")
+      .trim();
   const derived = token();
 
   const row = blankRow();
-  await type(box(row, "selector"), ":root, svg", "change");
+  await type(box(row, "selector"), "#diagram-canvas, svg", "change");
   await type(box(row, "property"), "--primary-color", "change");
   await type(box(row, "value"), "#ff00ff", "input");
   check("a user row overwrites what the DOT derived", token() === "#ff00ff", `${derived} → ${token()}`);
@@ -366,6 +380,55 @@ async function importantAndInvalid(): Promise<void> {
 // draw to finish: under `--virtual-time-budget` a poll loop fast-forwards the
 // page's clock and the run gets cut off wherever it happens to be, so this stage
 // stays cheap on purpose (debt S3).
+/**
+ * The export dialog: format, transparency, scale.
+ *
+ * No file is produced — a download hangs this harness (see the header). What is
+ * checked is that the controls exist, carry the right opening state, and that the
+ * one control that is conditional becomes so.
+ */
+async function exportDialog(): Promise<void> {
+  const dialog = $("#export-dialog") as HTMLDialogElement;
+  const radio = (name: string) => $$(`#export-dialog input[name="${name}"]`) as HTMLInputElement[];
+  const scale = () => $('#export-dialog input[type="number"]') as HTMLInputElement;
+  const transparent = () => $('#export-dialog input[type="checkbox"]') as HTMLInputElement;
+
+  check("the dialog starts closed", !dialog.open, dialog.open);
+
+  $("#export-picture").click();
+  await tick();
+  check("the Export button opens it", dialog.open, dialog.open);
+
+  const svg = radio("format").find((one) => one.value === "svg")!;
+  check("it opens on SVG", svg.checked, svg.checked);
+
+  // Transparency is one rule appended to the book, and it is on by default: these
+  // are architecture diagrams, and one that drops onto any slide is the useful one.
+  check("transparent is on by default", transparent().checked, transparent().checked);
+  check("scale is inapplicable to SVG", scale().disabled, scale().disabled);
+  check("there is no margin control", $$("#export-margin").length === 0, $$("#export-margin").length);
+  check("and no paper control", radio("paper").length === 0, radio("paper").length);
+
+  const png = radio("format").find((one) => one.value === "png")!;
+  await flip(png);
+  check("choosing PNG enables scale", !scale().disabled, scale().disabled);
+  check("at 3x", scale().value === "3", scale().value);
+
+  // A typed value is the user's, and stays the user's — scale is one signal now,
+  // not a per-format default that reaches in and overwrites what you typed.
+  await type(scale(), "1", "input");
+  check("scale takes a value", scale().value === "1", scale().value);
+  await flip(svg);
+  await flip(png);
+  check("switching format leaves it alone", scale().value === "1", scale().value);
+
+  // Escape and the backdrop are the browser's; Cancel is ours, and it must not
+  // leave a modal open over the rest of the suite.
+  ($('#export-dialog button[type="button"]') as HTMLButtonElement).click();
+  await tick();
+  check("Cancel closes it", !dialog.open, dialog.open);
+}
+
 async function redrawStillWorks(): Promise<void> {
   tabs()[0]!.click();
   await tick();
@@ -429,10 +492,16 @@ async function sourceFilter(): Promise<void> {
   const selector = box(probe(), "selector").value;
   const property = box(probe(), "property").value;
   const original = box(probe(), "value").value;
-  await type(box(probe(), "value"), "1px", "input");
+  // `initial`, not a length. The probe is whichever rule happens to be last, so
+  // its property is not known here — typing `1px` passed only as long as that
+  // property accepted a length, and quietly became a console error (and so a
+  // suite failure) the day a `text-align` rule landed at the end of the list. A
+  // CSS-wide keyword is valid for every property, which is what this check needs:
+  // it is asserting *where* the write lands, not what the value means.
+  await type(box(probe(), "value"), "initial", "input");
   check(
     "editing a row under a filter writes to that row",
-    probe().id === id && box(probe(), "selector").value === selector && box(probe(), "property").value === property && box(probe(), "value").value === "1px",
+    probe().id === id && box(probe(), "selector").value === selector && box(probe(), "property").value === property && box(probe(), "value").value === "initial",
     `#${id} ${selector} ${property}: ${box(probe(), "value").value}`,
   );
 
@@ -460,6 +529,8 @@ await applyAndResync();
 publish("apply");
 await importantAndInvalid();
 publish("important");
+await exportDialog();
+publish("export");
 await redrawStillWorks();
 check("no console or uncaught errors", errors.length === 0, JSON.stringify(errors));
 publish("done");

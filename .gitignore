@@ -36,9 +36,11 @@
 !/AGENTS.md
 !/CLAUDE.md
 !/README.md
+!/user-story.md
 !/app-architecture.md
 !/coding-rules.md
 !/current-task.md
+!/human-scratch-pad.md
 !/package.json
 !/tsconfig.json
 !/bunfig.toml

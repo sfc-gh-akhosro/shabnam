@@ -1,10 +1,8 @@
-// File verbs: DOT load/save, export HTML / PNG.
+// File verbs: DOT load/save, export HTML, and the picture snapshot (§4.1).
 
+import { serialize } from "../stylist/sheet.ts";
 import { Stylist } from "../stylist/stylist.ts";
 import type * as T from "../types.ts";
-
-const PNG_SCALE = 2;
-const PNG_MARGIN = 12;
 
 export class Files implements T.Files {
   constructor(
@@ -29,12 +27,45 @@ export class Files implements T.Files {
     return page(css, app, seed(this.text, bookFile(this.stylist.rows())));
   }
 
-  async exportPng(): Promise<Blob> {
-    const canvas = document.getElementById("diagram-canvas")!;
-    const frame = framing(canvas);
-    const svg = snapshot(canvas, frame, [await asset("app-css"), this.stylist.serialize()]);
-    return raster(svg, frame.crop);
+  async exportPicture(options: T.PictureOptions): Promise<Blob> {
+    const svg = snapshot(options.transparent);
+    if (options.format === "svg") return new Blob([svg], { type: "image/svg+xml" });
+    return raster(svg, options.scale);
   }
+}
+
+/**
+ * The canvas as an SVG that carries HTML rather than shapes (§4.1).
+ *
+ * `<foreignObject>` is SVG's own escape hatch: it says *this region holds another
+ * language, go ask that engine*. So nothing is translated — Chromium lays the clone
+ * out with the engine that painted the screen, and every CSS feature is correct by
+ * construction, including ones nobody has thought of yet.
+ *
+ * `scrollWidth`/`scrollHeight` rather than the bounding rect: the canvas is a
+ * scroll container, and the rect measures the visible pane. A diagram wider than
+ * the pane was cut off at the edge of what happened to be scrolled into view.
+ *
+ * `XMLSerializer` rather than `innerHTML`, because this file is parsed as XML:
+ * HTML serialization leaves `<img>` unclosed and emits `&nbsp;`, either of which
+ * blanks the document. It also declares the XHTML namespace by itself, since the
+ * clone came from an HTML document and is already in it.
+ *
+ * The CSS sits in `<![CDATA[ … ]]>` for the same reason — `<` opens a tag in XML,
+ * and a style row's value may hold one. That is how text enters XML, not a guard.
+ */
+function snapshot(transparent: boolean): string {
+  const canvas = document.getElementById("diagram-canvas")!;
+  const html = new XMLSerializer().serializeToString(canvas.cloneNode(true));
+  const css = transparent
+    ? `${serialize()}\n#diagram-canvas { background: transparent }`
+    : serialize();
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.scrollWidth}" height="${canvas.scrollHeight}">` +
+    `<style><![CDATA[${css}]]></style>` +
+    `<foreignObject width="100%" height="100%">${html}</foreignObject>` +
+    `</svg>`
+  );
 }
 
 export function download(name: string, body: string | Blob, type: string): void {
@@ -54,59 +85,15 @@ export function bookFile(rows: T.StyleRow[]): T.StyleFile {
   return file;
 }
 
-type Framing = { page: { width: number; height: number }; crop: T.Box };
-
-function framing(canvas: HTMLElement): Framing {
-  const origin = canvas.getBoundingClientRect();
-  const painted = [...canvas.querySelectorAll(".rank > [id], #node-shells > g, #connector-paths path, #annotation-html *")];
-  const boxes = painted.map((element) => element.getBoundingClientRect());
-  const left = Math.min(...boxes.map((box) => box.left)) - origin.left + canvas.scrollLeft;
-  const top = Math.min(...boxes.map((box) => box.top)) - origin.top + canvas.scrollTop;
-  const right = Math.max(...boxes.map((box) => box.right)) - origin.left + canvas.scrollLeft;
-  const bottom = Math.max(...boxes.map((box) => box.bottom)) - origin.top + canvas.scrollTop;
-  return {
-    page: { width: canvas.scrollWidth, height: canvas.scrollHeight },
-    crop: {
-      id: "canvas",
-      left: left - PNG_MARGIN,
-      top: top - PNG_MARGIN,
-      width: right - left + PNG_MARGIN * 2,
-      height: bottom - top + PNG_MARGIN * 2,
-    },
-  };
-}
-
-function snapshot(canvas: HTMLElement, frame: Framing, styles: string[]): string {
-  const clone = canvas.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll("style, script").forEach((element) => element.remove());
-  const wrapper = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
-  wrapper.setAttribute("id", "diagram-canvas");
-  wrapper.setAttribute(
-    "style",
-    `position:relative;overflow:hidden;font:${getComputedStyle(canvas).font};` +
-      `width:${frame.page.width}px;height:${frame.page.height}px`,
-  );
-  wrapper.append(...clone.childNodes);
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${frame.crop.width}" height="${frame.crop.height}">` +
-    `<style>${styles.join("\n")}</style>` +
-    `<rect width="100%" height="100%" fill="#ffffff" />` +
-    `<foreignObject x="${-frame.crop.left}" y="${-frame.crop.top}"` +
-    ` width="${frame.page.width}" height="${frame.page.height}">` +
-    new XMLSerializer().serializeToString(wrapper) +
-    `</foreignObject></svg>`
-  );
-}
-
-async function raster(svg: string, crop: T.Box): Promise<Blob> {
+async function raster(svg: string, scale: number): Promise<Blob> {
   const image = new Image();
   image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   await image.decode();
   const target = document.createElement("canvas");
-  target.width = Math.ceil(crop.width * PNG_SCALE);
-  target.height = Math.ceil(crop.height * PNG_SCALE);
+  target.width = Math.ceil(image.naturalWidth * scale);
+  target.height = Math.ceil(image.naturalHeight * scale);
   const pen = target.getContext("2d")!;
-  pen.scale(PNG_SCALE, PNG_SCALE);
+  pen.scale(scale, scale);
   pen.drawImage(image, 0, 0);
   return new Promise((done) => target.toBlob((blob) => done(blob!), "image/png"));
 }

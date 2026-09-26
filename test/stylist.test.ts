@@ -36,8 +36,8 @@ const user = (selector: string, property: string, value: string) =>
 
 describe("the book — one entry per key, arbitrated by source", () => {
   test("a repeated key is one entry, not two rows", () => {
-    const rules = book([theme(":root, svg", "--main-font", "serif"), dot(":root, svg", "--main-font", "Inter")]);
-    expect([...rules.get(":root, svg")!.keys()]).toEqual(["--main-font"]);
+    const rules = book([theme("#diagram-canvas, svg", "--main-font", "serif"), dot("#diagram-canvas, svg", "--main-font", "Inter")]);
+    expect([...rules.get("#diagram-canvas, svg")!.keys()]).toEqual(["--main-font"]);
   });
 
   test("an accepted overwrite keeps the entry's id", () => {
@@ -87,12 +87,12 @@ describe("the book — one entry per key, arbitrated by source", () => {
 
   test("a file round-trips through the book, order and source kept", () => {
     const file: T.StyleFile = {
-      ":root, svg": { "--primary-color": { value: "red", source: 0 } },
+      "#diagram-canvas, svg": { "--primary-color": { value: "red", source: 0 } },
       ".node": { "@apply": { value: ".paper", source: 0 }, padding: { value: "1em", source: 2 } },
     };
     const rules = book(fileEntries(file));
     expect(asFile(rules)).toEqual(file);
-    expect([...rules.keys()]).toEqual([":root, svg", ".node"]);
+    expect([...rules.keys()]).toEqual(["#diagram-canvas, svg", ".node"]);
   });
 });
 
@@ -170,19 +170,10 @@ describe("@apply — expansion over the book", () => {
     const resolved = resolve(rules);
     expect(resolved.get(".node")!.get("background")).toContain("color-mix(");
     expect(resolved.get(".cluster_")!.get("fill")).toBe("var(--glass-background)");
-    expect(resolved.get(":root, svg")!.get("--primary-color")).toBe("#0b3d91");
+    expect(resolved.get("#diagram-canvas, svg")!.get("--primary-color")).toBe("#0b3d91");
     for (const own of resolved.values()) expect(own.has("@apply")).toBe(false);
   });
 
-  test("serialize is the one place a rule becomes text", () => {
-    const css = serialize(book([
-      theme(".paper", "background", "white"),
-      user(".node", "@apply", ".paper"),
-      user(".node", "padding", "1em"),
-    ]));
-    expect(css).toContain(".node {\n  background: white;\n  padding: 1em;\n}");
-    expect(css).not.toContain("@apply");
-  });
 });
 
 describe("the saved document — your rules, over a named theme", () => {
@@ -253,11 +244,12 @@ describe("\!important — a priority, not part of the value", () => {
     expect(priority("important")).toEqual(["important", ""]);
   });
 
-  test("the book keeps the text as typed, so serialised CSS still carries it", () => {
-    // `serialize` feeds Export HTML and Save PNG, where the declaration is text
-    // again and `\!important` belongs in it. Only the CSSOM path splits.
-    expect(serialize(book([user(".record", "margin", "0 \!important")]))).toContain(
-      "margin: 0 \!important;",
+  test("the book keeps the text as typed, `!important` and all", () => {
+    // The picture exports turn the book back into text, where `\!important`
+    // belongs. Only the CSSOM path splits it off. Asserted on the book rather than
+    // on serialized CSS because `serialize` now reads a live sheet (§4.1).
+    expect(book([user(".record", "margin", "0 \!important")]).get(".record")!.get("margin")!.value).toBe(
+      "0 \!important",
     );
   });
 });

@@ -54,7 +54,7 @@ export class Engine implements T.Workbench {
     const boxes = this.measure();
     this.inject("cluster-shells", this.diagram.clusters(boxes, model));
     this.inject("node-shells", this.diagram.shells(boxes, model));
-    this.inject("connector-paths", this.diagram.connectors(boxes, model));
+    this.inject("connector-paths", this.diagram.connectors(boxes, model, this.metrics()));
     this.place(boxes);
     this.inject("action-js", this.text.action);
   }
@@ -73,6 +73,16 @@ export class Engine implements T.Workbench {
       width: node.offsetWidth,
       height: node.offsetHeight,
     }));
+  }
+
+  // The other half of measuring: the two numbers the router needs are CSS, and a
+  // pure worker cannot read CSS (§3.4). `1em` is the clearance a route prefers to
+  // keep off a foreign node; `--connector-radius` curves its bends.
+  private metrics(): T.ConnectorMetrics {
+    const canvas = document.getElementById("diagram-canvas")!;
+    const style = getComputedStyle(canvas);
+    const em = parseFloat(style.fontSize);
+    return { clearance: em, radius: px(style.getPropertyValue("--connector-radius"), em) };
   }
 
   place(boxes: T.Box[]): void {
@@ -114,4 +124,16 @@ function pair(spec: string): T.Point {
 
 function center(box: T.Box): T.Point {
   return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+}
+
+// A CSS length in the two units a theme actually writes a radius in. Anything
+// else, or nothing at all, falls back to the default rather than throwing: a
+// missing token is a theme that did not say, not a broken diagram.
+const RADIUS_DEFAULT = 6;
+
+function px(value: string, em: number): number {
+  const text = value.trim();
+  const measure = parseFloat(text);
+  if (Number.isNaN(measure)) return RADIUS_DEFAULT;
+  return text.endsWith("em") ? measure * em : measure;
 }

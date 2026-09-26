@@ -137,10 +137,8 @@ aside .checkbox {
   box-shadow: inset var(--flat-shadow);
 }
 
-
 article {
   display: flex;
-  flex: 1;
   overflow: auto;
 }
 
@@ -237,19 +235,50 @@ aside>section {
   position: relative;
 }
 
-#diagram-html {
-  width: 100%;
-}
 
 #annotation-html,
 #diagram-svg {
-  flex: 1;
   position: absolute;
   inset: 0;
+}
 
+/* An `<svg>` is a **replaced** element, so `inset: 0` cannot size it: with
+   width/height still `auto` the over-constrained absolute-positioning equation
+   keeps the intrinsic 300x150 and throws `right`/`bottom` away. `#annotation-html`
+   is a div and stretches; this one has to be told. Say it, or the outermost svg's
+   UA `overflow: hidden` clips the whole connector layer to a 300x150 corner.
+
+   `overflow: visible` on top, because 100% is only the scroll *viewport* — the
+   canvas scrolls, so a diagram wider than the pane would be clipped again at the
+   edge. The coordinate contract is untouched either way: a node's offsetParent
+   and this layer's containing block are both #diagram-canvas, at one origin, with
+   no viewBox (node-sheller.ts).
+
+   `pointer-events: none` because this layer covers the HTML one. The nodes below
+   stay hoverable and selectable; a child that wants the mouse asks for it. */
+#diagram-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
 }
 
 .diagram {
   padding: var(--vertical-gap) var(--horizontal-gap);
   flex: 1;
 }
+
+#close-aside {
+  top: 0.25em;
+  width: 3em;
+  height: 2em;
+  left: -3em;
+  position: absolute;
+}
+
+.closed {
+  width: 0.5em;
+}
+
+
+

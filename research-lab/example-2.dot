@@ -54,7 +54,7 @@ digraph snowflake_gcp_integration {
     
 
 
-    gcs [shape=record label="{GCS | {Iceberg Tables | Data | Metadata}}"]
+    gcs [shape=record label="{Google Cloud Storage | {Iceberg Tables | Data | Metadata}}"]
     ge  [shape=record label="Gemini Enterprise | {Agents}"  ]
     bq [shape=record label="{GCP \n Services | {Managed Spark | BigQuery | VertexAI}}"]
     runtime [shape=record label="Open Lakehouse \n Runtime Catalog "]

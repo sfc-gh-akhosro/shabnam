@@ -20,7 +20,7 @@
 // needs neither — that is the short path.
 
 import * as T from "../types.ts";
-import { applyBound, expand, Sheet, serialize } from "./sheet.ts";
+import { applyBound, expand, Sheet } from "./sheet.ts";
 import basicTheme from "../../theme/basic-theme.json";
 
 const APPLY = "@apply";
@@ -78,10 +78,6 @@ export class Stylist implements T.Stylist {
 
   save(): void {
     download(STYLE_FILE, JSON.stringify(asDocument(THEME_NAME, this.rules), null, 2));
-  }
-
-  serialize(): string {
-    return serialize(this.rules);
   }
 
   /**

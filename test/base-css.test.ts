@@ -66,10 +66,11 @@ test("the most common value becomes the class rule", async () => {
   expect(sample.get(".node, .record")?.get("background-color")).toBe("#BBDEFB");
 });
 
-test("tokens land on :root and on svg, not on :root alone", () => {
-  expect(out.has(":root, svg")).toBe(true);
-  expect(out.has(":root")).toBe(false);
-  expect(out.get(":root, svg")?.get("--primary-color")).toBeDefined();
+test("tokens land on the canvas and on svg, not on the canvas alone", () => {
+  expect(out.has("#diagram-canvas, svg")).toBe(true);
+  expect(out.has("#diagram-canvas")).toBe(false);
+  expect(out.has(":root, svg")).toBe(false);
+  expect(out.get("#diagram-canvas, svg")?.get("--primary-color")).toBeDefined();
 });
 
 test("selectors are DOT names, and as short as still identifies the place", async () => {

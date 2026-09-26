@@ -34,7 +34,7 @@ export class Diagram implements T.Diagram {
     return this.sheller.shells(boxes, model);
   }
 
-  connectors(boxes: T.Box[], model: T.DiagramModel): string {
-    return this.edger.draw(boxes, model);
+  connectors(boxes: T.Box[], model: T.DiagramModel, metrics: T.ConnectorMetrics): string {
+    return this.edger.draw(boxes, model, metrics);
   }
 }
