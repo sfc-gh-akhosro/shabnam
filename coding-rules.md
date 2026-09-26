@@ -136,14 +136,14 @@ svg/           shells
 icon/          borrowed logos
 theme/         themes
 build/         build scripts
-research-lab/  discover, experiments, development testing, prototypes
+research-lab/  DOT fixtures the tests load
 dist/          build output
 docs/           documentations, project management files, some reports.
 ```
 
 Root files: `.gitignore`, `app-architecture.md`, `coding-rules.md`, `AGENTS.md`, `CLAUDE.md`, `package.json`, `tsconfig.json`, `bunfig.toml`, lockfile.
 
-Not source: `input/`, `output/`, `local/`, `temp/`, `etc/`, leftover `dot-parser.ts`. Experiments go in `research-lab/`, not in `src/`. Parked drafts that are not the fiddle (the loose completer) live in untracked `temp/`.
+Not source: `input/`, `output/`, `local/`, `temp/`, `etc/`, leftover `dot-parser.ts`. Experiments are not kept in the tree at all — `research-lab/` holds only the DOT fixtures the tests load. Nothing is parked: a draft that is not being finished is deleted, and `temp/` is scratch rather than a shelf.
 
 `.gitignore` is the canary. A file that should not be tracked will not be. Do not weaken the ignore to sneak a file in — move the file or change the rule on purpose.
 
@@ -153,7 +153,7 @@ Not source: `input/`, `output/`, `local/`, `temp/`, `etc/`, leftover `dot-parser
 
 - Do not add a **new major library** — a new runtime dependency that changes the design — without writing it into `app-architecture.md` §0 first. A library means we accept its whole tree. See Dependencies below.
 - Do not hand-roll a library that is already on §0 (or should be) to avoid that conversation.
-- Do not write a code editor, a formatter-on-type, autocomplete, or syntax highlighting on `Workbench`. The tab window is a bare `<textarea>`. A loose completer may come later — park drafts in untracked `temp/`, not in `src/`.
+- Do not write a code editor, a formatter-on-type, autocomplete, or syntax highlighting on `Workbench`. The tab window is a bare `<textarea>`. A loose completer may come later; it is not parked anywhere, so it starts from scratch if it ever starts.
 - Do not confuse `SetTab` (text tabs) with `inject` (sinks). The textarea holds the three text tabs and does nothing to them. The styles tab is not text: it is a rows view onto the `Stylist`.
 - Do not add a config tab, a second Graphviz grammar, a second theme mechanism, or “while we’re here” refactors.
 - Do not give a chrome element a `class` or an `id` that the CSS does not need. `app.css` is small because the markup is reachable by element and position; every hook you add is a line someone has to read before they can restyle anything. A hook exists for one of three reasons: the layout, a sink the engine writes, or a state a test drives. Decoration is not one of them.
@@ -161,6 +161,29 @@ Not source: `input/`, `output/`, `local/`, `temp/`, `etc/`, leftover `dot-parser
 - Do not write tests that chase float precision or other noise as if they were the product.
 - Do not implement every `shape=` in the first pass. `box` is enough until we say otherwise.
 - Do not change root files (especially `.gitignore`, `app-architecture.md`, `coding-rules.md`) or root folders without review and user discussion and approval.
+
+## Browser verification is deliberate, not routine
+
+`bun test` is the loop — 84 pure tests, under half a second, run constantly.
+`bun run test:browser` launches Chrome for the CSSOM half. They are **two commands
+on purpose**, and chaining them was considered and rejected: the browser half slows
+the loop enough to change how you work, and an agent that starts driving Chrome
+tends to stay there instead of finishing the task. Run it when a change is actually
+DOM-shaped — CSSOM, the rows tab, the sinks, an export — not by habit. Most changes
+go without it.
+
+When you do reach for a browser:
+
+- **Drive it directly. Never through a subagent.** One iteration's verification was
+  handed to a browser subagent as a click-by-click script: every interaction became
+  a separate approval prompt — hundreds of them — while nothing that actually
+  mattered got asked. Read values in bulk instead, one `browser_evaluate` per
+  question, one JSON blob back. A full Done-when list is about a dozen calls.
+- **The agent sandbox intercepts the `Bun.serve` bind and reports a false
+  `EADDRINUSE`** — port 3000 for `build/dev.ts`, 3101 for the browser suite. `lsof`
+  shows nothing listening and retrying never clears it, because there is no
+  contention to clear. Both need the sandbox disabled. Do not go hunting a phantom
+  process.
 
 
 ## Dependencies
@@ -202,7 +225,7 @@ Before we close the workshop for a session. Not deep — a stop-and-check, so th
 
 1. **Sync the root files with the code.** `app-architecture.md`, `coding-rules.md`, `current-task.md`, `.gitignore`. Does the tree in §8 still match `src/`? Did a decision land in the code but not in §7? Is an ignore rule pointing at a file that no longer exists? Fix, or say why not.
 2. **Archive what is done.** Finished work moves out of `current-task.md` into `docs/archive.md` — what was built, what was decided, what turned out wrong. `current-task.md` ends the session empty or holding only what is genuinely next.
-3. **Record the debts.** New ones into `docs/technical-debts.md`; mark the ones this session closed. That file holds *open* debts — a record of completed work belongs in the archive.
+3. **File what this session decided.** There is no debts ledger; it was retired once every entry in it had a proper home, and recreating one is how it grows back. A decision the code already implements goes into `app-architecture.md` — that is the contract, and a behaviour described nowhere gets "fixed" by the next session. Finished work, and anything that cannot be closed and never will be, goes into `docs/archive.md` with the reasoning that makes it worth re-reading. Wanted-but-unscheduled work goes into `current-task.md` under **For Later**. A ledger comes back only if we deliberately defer something real, and that is a conversation.
 4. **Clean the desk.** Delete dead code, unused exports, one-off scripts, and tests that no longer test anything. A test that has stopped earning its place is deleted, not kept out of politeness.
 5. **Check the canary.** `git status`. Anything unexpected means the ignore rules caught something — fix the cause, never the canary.
 6. **Commit and push,** with the identity the repo expects, then report: what shipped, what is open, what the next session should pick up.

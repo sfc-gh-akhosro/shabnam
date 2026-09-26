@@ -4,7 +4,7 @@
 // off the live sheet or out of `getComputedStyle`. No app internals, so this
 // cannot pass by agreeing with the Stylist about something wrong.
 //
-// The picture *files* are **not** covered here — see `docs/technical-debts.md`.
+// The picture *files* are **not** covered here — see `docs/archive.md`, V10.
 // Reading a download back out of headless Chrome needed a patched
 // `URL.createObjectURL` and a clicked anchor, and it hung the suite under virtual
 // time. "Does the file open and look right" is one glance from a human, and a

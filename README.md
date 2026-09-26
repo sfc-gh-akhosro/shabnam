@@ -77,12 +77,11 @@ Everything is client-side: no server, no build step at runtime, no telemetry. Gr
 |---|---|
 | `app-architecture.md` | The product contract. Start here. |
 | `coding-rules.md` | House style, and the closing-ceremony routine. |
-| `current-task.md` | Orientation for a new contributor, plus what is next. |
+| `current-task.md` | Orientation for a new contributor, what is next, and what is For Later. |
 | `docs/archive.md` | How it was built, and why closed decisions were closed. |
-| `docs/technical-debts.md` | Open debts, each with what closing it costs. |
 
 ## Status
 
-Early but working. Fixture: `research-lab/example-1.dot`. Open debts in `docs/technical-debts.md`. The most visible: `shape=record` still renders as a box, `icon/` files are placeholders, and derived `#id` rules outrank a class you type in the styles tab.
+Early but working. Fixture: `research-lab/example-1.dot`. What is early rather than broken: `shape=record` renders as a box with its label braces intact, the `icon/` files are placeholder glyphs, and nothing in the theme styles annotations, labels or edges yet — all three are stated positions in `app-architecture.md` rather than oversights. Wanted next is in `current-task.md`.
 
 The name is Persian for *dew* — the thin layer that makes a shape visible.

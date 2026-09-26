@@ -2,7 +2,7 @@
 // selector · property · value, which is all a style rule has ever been, with a
 // delete on the left and an add on the right.
 //
-// The markup is `research-lab/stylist/index.html` less its toolbar — `.rows`,
+// The markup came from a ten-line prototype, less its toolbar — `.rows`,
 // `.row`, `.sel`, `.prop`, `.val`, and the two datalists, named in full here so
 // no DOT node can collide with them (§3.1). That prototype is styled by ten lines
 // of CSS, and it is the only reason this tab is cheap to restyle. The three box

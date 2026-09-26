@@ -5,8 +5,15 @@
 
 The record of finished work: what was built, what was decided, and what turned
 out wrong. Iterations 1–5 were the original build plan, which lived in
-`current-task.md` until it was done; 6 and 7 came after. Open debts are **not**
-here — they live in `docs/technical-debts.md`.
+`current-task.md` until it was done; 6 and 7 came after.
+
+There is no separate debts ledger any more. A decision the code already implements
+lives in `app-architecture.md`; work that is wanted but unscheduled lives in
+`current-task.md` under **For Later**; work that is finished, or that cannot be
+closed and never will be, is here. Entries below that name
+`docs/technical-debts.md` are quoting a file that was retired once every entry in
+it had found one of those three homes — the names are left as written because they
+record what was true at the time.
 
 **Status: iterations 1–7 all done, each verified in a browser. The as-is → to-be
 plan (sessions A–D) is closed. CodeJar is accepted. The Stylist rewrite
@@ -629,6 +636,114 @@ It did surface one thing — SVG markers scale with `stroke-width` by default, s
 the thick edge grew a triple-size arrowhead until `EdgeDrawer` pinned
 `markerUnits="userSpaceOnUse"`.
 
+### V5. ~~My Style cannot override an `#id` rule that Base CSS emitted~~ — **closed by decision**
+
+**Specificity mirrors intent.** If the DOT styled one node specifically, that is an
+`#id` and it is meant to be emphatic, so an id rule outranking a class rule is the
+correct outcome rather than a limit to engineer around. To override it, reach for
+the same id in a row: `#runtime { … }` wins on sheet order.
+
+Found in a browser in iteration 5: `.diagram .node { background-color: #ffe0b2 }`
+recoloured every node **except** the six carrying `#n-runtime { background-color:
+#ddffdd }` and friends.
+
+This is also what keeps the effects library safe. Derived output emits no
+`transform`, `animation`, `filter` or `transition`, so class-based effects never
+compete with generated id rules at all — colour and theme stay separate from
+effects precisely to preserve that. The rejected options were demoting per-object
+overrides to a generated class, and emitting an `#id` only when no class could have
+carried the value. What was never an option: `!important` in derived output.
+
+### M1. ~~`Cluster.isInvis` and `Cluster.label` are bagged and never read~~ — **closed by implementation**
+
+Both are consumed by `NodeSheller.clusters(...)`: `isInvis` suppresses drawing an
+invisible cluster (`style=invis`), and `label` renders as `.cluster-label` text atop
+the cluster box.
+
+### V6. An export is ~3.4 MB, and that is the floor — **not closable**
+
+The exported file inlines the whole bundle, viz.js wasm included, as base64: ~3.4 MB
+for a three-node diagram. That is the price of "depends on nothing but a browser".
+
+**Base64 rather than raw text is a separate price, and the reason matters.** The
+bundle contains `themer.ts`, which contains a template that writes `</script>` — so
+inlined as text, the HTML parser closes the script early and the page dies on
+`Uncaught SyntaxError: Unexpected identifier 'digraph'`. Escaping it in the source
+did not survive the bundler, which normalised `<\/script>` back to the literal.
+
+Recorded so nobody "optimises" the base64 away and reintroduces that. A minified
+export bundle would trim the total; the wasm will not move.
+
+### V10. The picture *files* have no automated coverage — **left open deliberately, then retired**
+
+The export *dialog* is covered (`test/browser/checks.ts`, stage `export`): the four
+options and the defaults each format brings. What was never covered is the file that
+comes out. A stage for it was written and removed — reading a download back inside
+headless Chrome needed a patched `URL.createObjectURL` plus a clicked anchor, and it
+**hung the suite** under virtual time, so the run never published a report. The pure
+half cannot help; the whole verb is DOM.
+
+"Does the file open and look right" is one glance from a human, and a harness that
+costs more than the thing it guards is not worth keeping. The regression that
+mattered — a `<` in the inlined CSS — is closed by construction now (CDATA, §4.1),
+not by a test.
+
+**What replaced it is a computed-style walk**, run by hand in the live page: clone
+the canvas into the export, render the result in an iframe, and diff every computed
+property of every element against the live one. That is what found V11 after weeks
+of "some borders are missing" being unexplainable. It is not in the suite — it needs
+a blob iframe and two frames of settling — but it is the tool to reach for when an
+export disagrees with the screen.
+
+### V11. ~~The tokens were declared twice, and the export picked the other set~~ — **closed**
+
+The single most reusable lesson in the old ledger.
+
+`app.css` declared the design tokens on `body`; the theme and the derived layer
+declared them on `:root, svg`. An inherited value resolves to the **nearest**
+ancestor that sets it, specificity be damned — so on screen `body` won and the theme
+was silently ignored, while in a `<foreignObject>` export there is no `body` at all
+and the theme won. Two token sets, two pictures: different fonts, gaps, pads, shadow
+colours, and `color-mix` borders that went from near-white to green. It read as "the
+SVG export loses some borders".
+
+Closed by rooting both the theme and `CssBagger.TOKENS` at `#diagram-canvas, svg`,
+the nearest ancestor in both documents. **The two must always move together:** the
+derived block is source 1 and has to stay at least as near as the theme's source 0,
+or a redraw would stop overriding the theme.
+
+The lesson: **an export that disagrees with the screen is not necessarily an export
+bug.** `<foreignObject>` hands the clone to the same engine, so it cannot render it
+differently — it can only be handed a different stylesheet. Look there first.
+
+### V12. ~~`Stylist.serialize()` is a second implementation of the live sheet~~ — **closed by implementation**
+
+The picture exports used to ship `app.css` plus CSS text re-printed from the book,
+while `snapshot()` deleted the live `<style id="style-css">` from the clone. So the
+file carried a parallel rendering of the book rather than the stylesheet the browser
+was painting with — and the drift was silent in one direction by construction, since
+`setProperty` discards a declaration CSSOM rejects while a printer emits whatever the
+book holds.
+
+`serialize()` now returns `cssText` off that live sheet, and `sheet.ts`'s hand-rolled
+`serialize` / `declarations` are gone. One implementation, no drift possible.
+`app.css` left the picture path at the same time: the diagram's layer scaffolding
+moved into `theme/basic-theme.json`, so the book is self-sufficient. CSS in the file
+went from 8427 bytes to 2705.
+
+The `Stylist.serialize()` wrapper is gone too — the sheet module owns the sheet, so a
+method that did nothing but call the free function was a hop carrying nothing.
+`files.ts` imports `serialize` from `sheet.ts` directly, and `T.Stylist` is six
+methods rather than seven.
+
+The §3 rule that nothing reads a sheet back still stands for *state*. An export is a
+projection, not state, and doing it this way removed a second implementation rather
+than adding one.
+
+Two pure tests that asserted on the old hand-rolled text format are gone with it.
+`@apply` expansion is still covered directly through `resolve`, and `!important` is
+asserted on the book instead.
+
 
 ## Iteration 13 — the browser suite stopped being a coin flip
 
@@ -733,8 +848,9 @@ the `<foreignObject>` snapshot it had deleted. What the measurements showed is
 worth keeping, because the argument recurs every time someone says "surely
 there's a library for this".
 
-**Three candidates, one diagram, same moment** (`research-lab/dom-to-svg/`, since
-deleted; the parked translator is in `research-lab/vectorizer/`).
+**Three candidates, one diagram, same moment** (`research-lab/dom-to-svg/` and
+`research-lab/vectorizer/`, both since deleted — nothing is parked, so the
+translator survives only as the numbers below).
 
 | | translation | foreignObject | dom-to-image-more |
 |---|---|---|---|

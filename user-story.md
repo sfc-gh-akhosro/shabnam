@@ -1,200 +1,167 @@
 # Shabnam
 
-This document tells the story from the perspective of user-designer-architect persona. It is an interwoven story tells what user wants to do, how uses the ui, might tell about ui components (casual and scatter version of silidJS arch), even major types and interfaces (casual and scatter version of types.ts), libraries or major built-in algo that we implement (arch.md), etc.
+This document tells the storyof the app from the perspective of a user-designer-architect persona. It is an interwoven story tells what the user/prsona wants to do, how they use the ui, might tell about major ui components (casual and scattered version of SolidJS components), Major types and interfaces involved (casual and scattered version of types.ts), talks about major libraries or major built-in algorithms that we implemented (brief version of app-architecture.md), etc.
 
-Then as you can imagine, recreating types.ts, soldijs compoennts, major classes (that implement mentioned interfaces), major methods (that have logic), and architecture is consequential to this document. It explains Shabnam as it is (at the moment of closing ceremony) but mention briefly (while telling the story) the major technical debts as well (Decisions we delayed).
+Then as you can imagine, recreating our other "app defining files" types.ts, soldijs compoennts, major classes (that implement mentioned interfaces), major methods (that have logic), and architecture are consequential to this document. It explains Shabnam as it is (at the moment of closing ceremony) but might mentions briefly (while telling the story) the major technical debts as well (decisions that we delayed).
 
-As you see, while very informal, is the gateway to our app. 
+As you see, while very informal, it is the gateway to our app. 
 
-his should be the most revealing for someone like "me" that oh this app is this. LLM and most docs have tendency to cateate "technical" categorization, being precisely accurate in saying, and using jargo a lot. It is like a lawyer speaking: noone can say he is wrong but noone can say what he is talking about.
+This should be the most revealing for someone like "me" that "Oh! I got it this app does this in this way". LLM and most docs have tendency to cateate "technical" categorizations, being precisely accurate in saying although unclear what they are saying, and using jargo a lot. It is like a lawyer speaking: nobody can say he is wrong but noone can say what he is talking about.
 
-I want it how "I" would explain it to my peer. Just the core but wholestic, intersting, revealing, and focusing on parts that "define" this app.
+I want it to be how "I" would explain it to my peers. Just the "cores" but wholestic, intersting, revealing, and focusing on parts that "define" this app.
 
 
 # The story
 
-## What it feels like to use
+This is a single page app:
+- On the left (<main>) it has 
+  - top bar for action buttons, 
+  - and the main view is a canvas (#diagram-canvas) to draw our diagram in html/svg. 
+- on the right (<aside>) we have tabs that user selects (DOT, style, annotation, and js for scripting). Tabs are similar to radio button functionality but designed to look tightly and .raised-shadow next to each other. Selecting one would make it .flat-shadow which gives like old radio button push look.
 
-You open one page. On the left, a picture of a diagram. On the right, a small
-stack of tabs. You type in the first tab, in DOT — the same language you would
-use for any architecture diagram, `a -> b`, a `subgraph cluster_source`, a label.
-You press Redraw. The picture appears.
+(indeed, we have bunch of "basic" components that we will develop and reuse):
+- radio buttons: (raised and tight, active becomes flat).
+- check boxes: (...)
+- .glass, .paper, .row, .col
+etc. 
 
-That much is Graphviz's job, and Shabnam does not compete with it. What happens
-next is the whole point. The diagram on screen is not an image. It is HTML boxes
-and an SVG layer drawn on top, and **every part of it is addressable by the names
-you already wrote**. The node you called `lake` is `#lake`. The subgraph you
-called `cluster_source` is `.cluster_source` on each of its members. There is no
-second vocabulary to learn and nothing to look up: if you can read your DOT, you
-can style your diagram.
+The idea is that:
+User draws the semantic of the graph in DOT (Bring Your Own Dot), style it here with css (but easier form), add annotation and script that is difficult in diagrams, and voila! you've got a beautiful technical diagram for your blog or research paper or ....
 
-So you move to the **styles** tab. It is not a text editor; it is a list of rows.
-Each row is three things — a selector, a property, a value — and that is all a
-style rule has ever been. You pick `.node` from the selector box, `background`
-from the property box, and type a colour. The picture changes as you type. No
-Redraw, no flicker, no waiting: the row you edited became one `setProperty` call
-on a live stylesheet, and the browser repainted the one thing that changed.
+CLever theming and vry small styling classes and options makes working wiht style much more fun and less technical.
 
-The list does not wait for you to ask for a row. There is always a blank one
-sitting at the top, and you make a rule by typing into it. A rule leaves by its
-❌. If you type something CSS refuses — `margin: 0px0` — the row marks itself and
-says so once in the console, and nothing enters the book. Mistakes are cheap.
+Then you can export it to SVG and PNG. 
+- SVG uses foreign objcts. Just arrang it in foreign objct, then attach the <style> which comes from "CSSOM" printing all css we need. Since it is using this way the result is identical to html version. 
+- user can choose to export in "transparent", which means just add #diagram-canvas to be trasparent background (on css rule added to end of <style> )
 
-The rows you see are not all yours. They arrive tagged with where they came from:
-the **theme** first, then what Shabnam **derived** from your DOT — if you wrote
-`fillcolor=lightblue`, that is sitting there as a row you can read — and then your
-own on top. Three checkboxes hide any of those groups when the list gets long.
-Typing over a theme row does not damage the theme file; your own file only ever
-holds your rows, which is why a redraw can rebuild everything it derived last time
-without touching a thing you typed.
 
-One honest wrinkle, and it is written down as a debt: **deleting a row is not an
-undo.** The book holds one entry per selector-and-property, so when you type over
-the theme's value the old one is gone rather than hidden underneath. Delete the
-row and the rule simply stops existing — it does not spring back to what the theme
-said. Load DOT is the reset. (Debt S10. It is on the list because it surprises
-people, including me.)
+Shabnam does not compete with graphviz (vizjs), indeed we use it to build our DiagramModel, to traverse and do cssBagger (picking up the css rules) and feed our styleRuls. W ealso travrse diagramModel to get the node arrangemnt.
 
-Two more tabs: `annotation.html`, for the one kind of label DOT cannot express —
-a note parked at a coordinate — and `action.js`, which runs last, for when you
-want the picture to do something.
+We have 3 representation of styles:
+- our styleRules which is the source of truth for us.
+- the browser CSSOM that we interact dirctly through add and remove rules (no css file or css text is used in styling the graphs, however for the chrome of the app we have app.css, which we keep it extrmely lean.)
+- the ui .rows of .row in "style" tab view. It is user interaction.
 
-Then you get it out, three ways, all from the one toolbar:
 
-- **Export HTML** — one standalone file that paints the same diagram on a machine
-  that has never heard of Shabnam. It carries the whole bundle, viz.js included,
-  which is why it is about 3.4 MB (debt V6). That is the price of depending on
-  nothing.
-- **Save SVG** — opens in a browser.
-- **Save PNG** — goes in a slide. Transparent, at 3x, so it lands on any theme.
+type styleRules: Map(selector: string, Map(property, {value: string, source: 1 or 2, id: counter}))
 
-## How it is built
+to add a style (liek user entered in "style" ui tab or we read it from theme json file):
+we add it to cssom, if it rejected, we attach .invalid to that .row, and do not enter it in our styleRules (since it is source of truth and that style is not applied).
+If accepted, we add to styleRules.
+To associate the rule, we have a counter that we use to get an ID and then give it to cssom, styleRules, and to the row id=#${counter}
 
-The pipeline is short and each stage has exactly one owner.
 
-**Graphviz reads the DOT, and nothing else does.** `Vizer.render` calls
-`renderJSON` and hands back one JSON blob. That is the only DOT consumer in the
-codebase — no tokenizer, no AST, no regex over statements. When DOT is malformed
-mid-keystroke, one `try` / `catch` — the only one in the app — shows the message
-and leaves the last good picture standing.
+Since DOT deines the semantic of the diagram, we religiously use DOT namings:
+- subgraph <name> becomes .name class for all its membr nodes.
+- subgraph cluster_... on top of that would have its box drawn as svg around member nodes.
+- nodes gets .node class, if shape=record, instead it gets .record
+Also we will have data-shape=<shape>
+- nodes have their id so do the cluster_. like node `bq` bcomes `#bq` in html and css. Edge from bq to catalog becomes #bq_catalog
+- all classes from styleRules will be as selectors too.
 
-**`Diagram.bag` reads that JSON, and nothing else does.** It produces a
-`DiagramModel`: nodes, edges, clusters, `rankdir`, with positions already turned
-into numbers. Graphviz's peculiar shape is quarantined in one file. This is also
-where identity is decided once for everybody — ids sanitized, subgraph names
-turned into classes, a collision made loud instead of silent.
+Let me answer the factual question first — I'll actually probe Graphviz rather than assert.Confirmed — no `rank` on nodes. One more probe on how subgraph rank constraints surface, since that's your future-release question.Two answers first, then the rewrite.
 
-From the model, three workers build the picture, and they are all pure functions:
-data in, data out, no DOM.
+## 1. Is there a rank property? No — I checked
 
-- `Diagram.frame` lays nodes into ranks and emits the HTML layer. It carries
-  **zero inline styles** — just ids and classes, so it is measurable and stylable.
-- `Diagram.derived` walks the model and returns the rules implied by your DOT
-  attributes. It never invents a colour: every value traces back to something you
-  wrote or a `:root` token.
-- Once the browser has painted, `Workbench.measure` reads the **real** geometry,
-  and `clusters` / `shells` / `connectors` draw the SVG layer around those
-  measured boxes. Graphviz's own pixel sizes and paths are never used. This is why
-  an edge keeps touching its boxes after you change a font or a gap.
+I ran `renderJSON` on a graph with `rank=same`, a cluster, nesting, and `rank=max`:
 
-Graphviz's positions buy exactly two things, by the way: which rank a node is in,
-and its order inside that rank. Everything else about the picture is CSS. We tried
-deriving per-node spacing from the coordinates and deleted it — it was the only
-number in the pipeline that was computed rather than passed through.
-
-**The `Stylist` owns style, and it owns one stylesheet.** The part worth
-understanding: there is **one book, not three layers**.
-
-```ts
-StyleRules = Map<selector, Map<property, { value, id, source }>>
-source: 0 theme · 1 dot · 2 user
+```
+{"name":"grp_a","rank":"same","nodes":[5,6]}
+{"name":"cluster_box","rank":"same","label":"Box","nodes":[7,8],"bb":"82,46,152,177"}
+{"name":"deep","nodes":[9],"subgraphs":[3]}
+{"name":"%1","rank":"max","nodes":[10]}
+{"name":"a","pos":"27,126"}
+{"name":"b","pos":"27,72"}
 ```
 
-Every entry remembers who wrote it, and `addRule` is the only door in. It
-**refuses a write whose source ranks below the entry already there.** That single
-guard is what the three layers used to be for: a redraw feeds the DOT's rules at
-source 1 and simply cannot take a row back off you at source 2. No merge step, no
-plus/minus, no second map. Then it feeds CSSOM: one rule per selector, each
-property a `setProperty`.
+A node object has `pos` and no `rank` — the only `rank` keys in the whole blob sit on subgraph objects, and the only other match is `rankdir`. So the bucketing is not us ignoring a field Graphviz offers; the rank is genuinely implicit, recoverable only from coordinates. Your instinct was the right one to check, though: `xdot` output *does* carry rank information in some tools, just not here.
 
-There is no CSS text on that path. Nothing builds a string to paint with and
-nothing parses a sheet back to find out what is in it, because the map already
-knows. `@apply` survives as a property whose value names other selectors, and it
-is resolved at the moment of feeding — expansion is a read, so an expanded
-declaration never becomes a row you did not write.
+On local ranks, and this is useful for your subgraph plans — there are two halves, and they arrive separately:
 
-The one place a rule becomes text again is `serialize()` in `sheet.ts`, and only the
-picture exports call it, because an SVG file has to carry its own stylesheet.
+- The effect is already baked into `pos`. `rank=same` on `c; d` puts them at the same `x` under `LR`, so our 2pt bucketing lands them in one `.rank` div for free. `rank=min/max/source/sink` likewise just moves the coordinates. We get the outcome without knowing the cause.
+- The declaration survives verbatim on the subgraph object: `rank: "same"`, `rank: "max"`, next to `nodes: [gvid…]` and `subgraphs: [gvid…]` for nesting. Anonymous ones are named `%1`.
 
-**Export is a wrapper, not a translation — and this is the decision I would most
-want a newcomer to understand.** Save SVG clones the canvas into a
-`<foreignObject>`, which is SVG's own way of saying *this region holds another
-language, go ask that engine*. The file contains no shapes at all. Chromium opens
-it and lays it out with the same engine that painted the screen, so shadows,
-`color-mix()`, gradients and text are all simply correct — including CSS features
-nobody has thought of yet. PNG is that same string handed to `Image` → `<canvas>`
-→ `toBlob`.
+That second half is worth writing down, because it is one of the very few places Graphviz hands us the author's intent rather than its own computation — the whole reason M4 exists is that node attributes lose that. So a future release can style or draw *on the basis of a rank constraint* (a "these belong together" band, a sink lane), and read nesting depth from `subgraphs`, without a parser. Also note `bb` appears only on `cluster_*` subgraphs, which is why non-cluster subgraphs give classes and no box.
 
-We built the alternative first: a real translator, boxes into `<rect>`, text into
-`<text>`, 508 lines. It is parked in `research-lab/vectorizer/` with the reason it
-lost, and the reason is short. **A translator is a dictionary with one entry per
-CSS feature, and this app ships a CSS editor.** Users can always reach a property
-the dictionary lacks, and then the export quietly disagrees with the screen. Ours
-had already dropped shadows and per-side borders once each. The library everyone
-recommends for it, `dom-to-svg`, silently dropped *every label* in a record
-diagram when we measured it.
+## 2. "clearance is a preference with a floor"
 
-The trade we accept knowingly: the SVG opens in a browser and nowhere else. That
-is the use case. **We target Chromium**, and that is not a support matrix — it is a
-ban on compatibility code in `src/`. No fallbacks, no polyfills, no declining a
-platform feature because some other engine is slow to it.
+Clearance is how much empty space a route wants to keep between itself and a box it passes. Measured from CSS (`1em`), so your styling sets it.
 
-## The interfaces worth knowing
+The trouble is arithmetic: clearance `c` on both sides of a gutter `g` leaves `g - 2c`. At a 28px gutter, `1em` leaves zero — the corridor closes, and a strict router would answer "no route" and drop the edge. Since your CSS controls the gutter, you can close every corridor in the diagram by tightening a gap.
 
-Five of them, in `src/types.ts`. `interface` means methods; `type` means data.
+So the router degrades instead of refusing:
 
 ```ts
-interface Vizer     { render(dot) }                      // the only DOT reader
-interface Diagram   { bag, frame, derived, clusters, shells, connectors }
-interface Stylist   { addRule, removeRule, reset, cleanup, rows, save, serialize }
-interface Workbench { redraw, inject, measure, place }   // the DOM owner
-interface Files     { loadDot, saveDot, exportHtml, exportSvg, exportPng }
+for (const inflate of [clearance, 0]) { … }   // try roomy, then touching
+return [tail, tailStub, ...dogleg(…), headStub, head];   // last resort
 ```
 
-A rule is a map entry. The file on disk is the same thing as a nested object. The
-row in the tab is the same thing wearing its source. There is one representation,
-which is the reason this design is smaller than the one it replaced.
+- try the walk with obstacles inflated by the asked-for clearance,
+- if nothing gets through, try again with none — allowed to graze boxes,
+- if still nothing, emit a plain two-bend dog-leg, ignoring obstacles entirely.
 
-## What we refuse, and why it keeps mattering
+The floor is that last line: the edge always draws. A diagram with a tight edge is worse than a pretty one, and a diagram missing an edge is a lie about the architecture.
 
-No DOT parser — Graphviz already is one. No CSS parser and no CSS algebra — CSSOM
-already is one, and a rule that stays data never needs to be re-read. No second
-layout engine, no config tab, no IDE. The tab window is a bare `<textarea>`: no
-highlighting, no completion, no library, and it is not allowed to grow into an
-editor.
+---
 
-And the one that governs every line: **no "what if".** Code written for a state
-nobody has observed is a debt someone else services. A what-if belongs in this
-document, then in the architecture, then in the types — not in `src/`. If it cannot
-happen, the types say so and the check is deleted. If it can happen and we choose
-not to serve it, the architecture says so and the code is deleted. `coding-rules.md`
-is the code of ethics; the codebase is a temple and we are its monks.
+## The rewrite
 
-Every one of those refusals has been tried in some form and written down in
-`docs/archive.md` with the reason it lost. Read that before reopening one.
+Continuing after your DOT-naming list.
 
-## What we know is unfinished
+Now the pipeline, and the thing to hold onto is that each stage has exactly one owner and nobody reaches past their own stage.
 
-Beyond the export size (V6) and delete-is-not-revert (S10), the two that shape
-the future most:
+```
+DOT → Vizer.render → VizJson → Diagram.bag → DiagramModel
+        ├─ frame   → html ranks
+        ├─ derived → styleRules @ source 1
+        └─ after the browser paints: measure → clusters / shells / connectors → svg
+```
 
-- **`viz.js` will be replaced** by a real DOT AST plus our own layout maths
-  (debt M4). Graphviz resolves `node [...]` defaults onto members at parse time,
-  so no JSON it offers can tell us *where* an attribute was written. We measured
-  every format; none carries provenance. Until then the model says what Graphviz
-  computed, not what you wrote.
-- **A saved style document has no way back in** (S11). `Save Styles` writes the
-  file and the reader exists and is tested, but no verb loads it.
+`Vizer` is the only thing in the codebase that calls vizjs, and `bag` is the only thing that reads its JSON. Graphviz's output is genuinely strange — stringly-typed positions, `_draw_` arrays, subgraphs as index lists — and the point of `bag` is that the strangeness stops there. Everything downstream sees `DiagramModel`: nodes, edges, clusters, rankdir, numbers already numbers. `diagram/*` is pure, data in and data out, no DOM, which is why it tests as plain functions.
 
-And the picture exports are verified by eye (V10) — a test harness for them cost
-more than it guarded, so it was deleted rather than kept.
+The app has exactly one `try/catch` and it wraps `renderJSON`, because DOT is syntactically broken on most keystrokes. It shows the message and leaves the last good picture standing. Everywhere else we fail loud.
+
+The canvas is a skeleton of named sinks, one per worker, and the order of the children is load-bearing:
+
+```html
+<article id="diagram-canvas">
+  <div id="diagram-html">   <!-- ranks + node html, zero inline styles -->
+  <svg id="diagram-svg">    <!-- #cluster-shells, #node-shells, #connector-paths -->
+  <div id="annotation-html">
+  <style id="style-css">    <!-- the stylist's sheet. never textContent -->
+  <script id="action-js">   <!-- yours, runs last -->
+```
+
+Every id we own is two hyphenated words. That is not tidiness — a DOT name is a bare word, so the diagram's ids and the page's ids share one namespace, and a node called `app` once inherited `height: 100vh` from a chrome rule and stretched its rank to the viewport.
+
+A node is two layers, and the html layer owns the visible node: background, border and label are real CSS on a real div, in flow, measurable. The svg layer only draws chrome *around* the measured rectangle — a stroke-only shell, an icon badge, a caption strip. The skeleton order forces this: svg paints after html, so a filled shell would cover the very label it is decorating, and two text layers would print every node twice.
+
+From Graphviz's layout we take two facts and nothing else: which rank a node is in, and its order inside that rank. There is no rank field in the JSON — I looked — so we recover it from `pos`: sort on one axis and open a new rank whenever a node sits more than 2 points from the one it would otherwise join. Exact equality would scatter one visual column across three divs, and 2 is safe because Graphviz never puts real ranks closer than about 36. The four `rankdir` values disagree about which coordinate is the key, which way ranks run, and which way nodes order inside one (Graphviz's `y` grows upward, the DOM's grows down), so that is a four-entry `Map` of data rather than four branches of code.
+
+Everything else about the picture is CSS, and we once broke that rule on purpose to see what happened: we derived per-node spacing from the coordinates, and deleted it again, because it was the only number in the pipeline that was computed instead of passed through.
+
+Which brings the important half. Graphviz's pixel sizes are thrown away entirely. The html goes out with no inline styles, the browser lays it out under whatever CSS is live at that moment, and only then does `measure` read the real boxes back with `getBoundingClientRect`. Every number the svg layer uses is that measurement. Put `font-size: 24px` on `.node` and the div grows; shells and edge endpoints computed from Graphviz's old numbers would detach, and every style change would need a Redraw to look right. Measured after paint, they simply stay glued.
+
+Connectors are an ortho snake, and it works because we never search for free space — the layout already is a grid. The vertical corridors are the gutters between ranks, the horizontal ones are the gaps between rows, and a route alternates: out of a side, along a gutter, across a row gap, along the next gutter, into the destination side. A real diagram gives about eight vertical lines and twenty horizontal ones, so the walk is a few hundred steps; a visibility graph over obstacle edges would be an order of magnitude bigger to answer the same question. A bend costs about 240 pixels of straightness, deliberately a lot, because you read a connector by its corners and two turns saved is worth a long way round. And clearance is a preference with a floor: try the walk at the clearance CSS asks for, then try it grazing the boxes, then fall back to a dog-leg that ignores obstacles. Your CSS can close every corridor in the diagram by tightening a gap, and a tight edge beats a missing one.
+
+On the style side, the one thing to add to the three representations above is where the rows come from before you touch them. A theme JSON is absorbed at source 0. Then `derived` recovers what the DOT implied — and note *recovers*, because Graphviz has already resolved `node [...]` defaults onto every member, so we take the most common value with ties broken lexicographically, which makes identical DOT produce an identical map in an identical order. A bare DOT derives only the `:root` token block and leaves presentation to the theme. Selectors are composed flat, `.cluster_x.node, .cluster_x.record`, because CSSOM has no nesting and there is one rule per selector.
+
+`@apply` is ours, not CSS: a property whose value lists other selectors in the same map. It is expanded only at the moment of feeding CSSOM, at the position it appears, so the selector's own later properties win. Expansion is a read, never a write — an expanded declaration reaches the sheet and never becomes a row you did not type. Undefined name throws, cycle throws. And there is exactly one place a rule becomes text again, `serialize()`, called only by the exports, because an SVG file has to carry its own stylesheet.
+
+Export is a wrapper, not a translation, and it is the decision I would most want understood. Save SVG clones the canvas into a `<foreignObject>` — SVG's own way of saying *this region is another language, go ask that engine* — so the file contains no shapes at all, and Chromium lays it out with the same engine that painted the screen. Shadows, gradients, `color-mix()`, text: correct by construction, including features nobody has invented yet. We built the alternative first, a real translator, boxes to `<rect>` and text to `<text>`, and deleted it. A translator is a dictionary with one entry per CSS feature, and this app ships a CSS editor, so users can always reach a property the dictionary lacks — and then the export quietly disagrees with the screen. Ours had already dropped shadows and per-side borders. The library everyone recommends, `dom-to-svg`, dropped every label in a record diagram when we measured it. The price we accept knowingly: the SVG opens in a browser and nowhere else, which is the use case.
+
+Chromium only, and that is not a support matrix — it is a ban on compatibility code in `src/`. No fallbacks, no polyfills, no feature detection, no declining a platform feature because another engine is slow to it.
+
+Five components, and one of them is the app. `Workbench` renders `main` beside `aside` straight into `body`, no root wrapper, and it is the only DOM owner — inject, wait for the paint, measure, place. `Tabs` is a radio strip that knows nothing about contents. The coding window is a bare `<textarea>` shared by the three text tabs: no highlighting, no completion, and it is not allowed to grow into an editor — CodeJar was on the stack and was removed, since it cost a library, a highlighter file, nine classes and a contenteditable div, and bought the diagram nothing. `Rows` is the style tab. `ExportDialog` is the one modal, asking SVG or PNG, and it exists because a file format stopped being a verb. State is signals and one store held by the workbench: no global store, no context, no router, no event bus. Every action is a button in the one toolbar, each with a chord in a `Map` from chord to verb, so adding a shortcut is adding a line.
+
+`types.ts` is five interfaces — `Vizer`, `Diagram`, `Stylist`, `Workbench`, `Files` — where `interface` means methods and `type` means data. Two runtime dependencies, vizjs and solid. No CSS framework, no state library, no icon package, no test framework beyond `bun test` plus a headless-Chrome `--dump-dom` harness for anything CSSOM. The ban that matters is not the dependency count; it is a library that changes the design, meaning a second DOT reader, a second layout engine, or a second UI framework.
+
+What we refuse: no DOT parser, because Graphviz is one. No CSS parser and no CSS algebra, because CSSOM is one and a rule that stays data never needs re-reading. No second layout engine, no config tab, no IDE. And the rule that governs every line, no "what if" — code written for a state nobody has observed is a debt someone else services. If it cannot happen, the types say so and the check is deleted; if it can and we choose not to serve it, the architecture says so and the code is deleted.
+
+What we delayed, briefly, because each one is a real position and not an oversight. vizjs will be replaced by a real DOT AST plus our own layout maths, since Graphviz resolves defaults at parse time and no output format it offers says *where* an attribute was written — we measured all of them (M4). Deleting a row is not an undo: one entry per selector and property, so typing over the theme replaces it, and Load DOT is the reset (S10). A saved style document has a writer and a tested reader but no verb loads it (S11). Export HTML is about 3.4 MB because it carries vizjs, which is the price of depending on nothing (V6). The picture exports are verified by eye, because a harness for them cost more than it caught (V10). And annotations, labels, icons and edges carry classes and nothing else until a real request says what the values should be — so an `.icon` fills its node and a cluster label is invisible, and both stay that way on purpose.
+
+
+
+
+
+

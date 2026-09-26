@@ -4,7 +4,7 @@
    Tokens, then the skeleton. Everything is reached by element and position, so
    the markup carries almost no hooks: the ids below are the sinks the engine
    writes and the coordinate contract, and the only classes are `.rows`/`.row`
-   and the three box names from `research-lab/stylist/index.html`, plus one state
+   and the three box names from the styles-tab prototype, plus one state
    flag. `@apply` is a Stylist feature, not real CSS, so a rule that wants a core
    class copies its properties.
 

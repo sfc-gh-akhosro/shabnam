@@ -102,6 +102,8 @@ stops being painted. (What *does* come back is anything `@apply` still supplies;
 below.) This is the reason the design is this small, and the reason there is no
 merge buffer, no `plus` / `minus`, and no second map.
 
+The trap worth stating, because it catches people who wrote the rule: a row you type on a key the theme already owns — `:root, svg` → `--primary-color`, say — does not sit *on top of* the theme's entry, it **becomes** it, at source `2`. Delete that row and the theme's value goes with it. Load DOT is the way back. Softening this would mean a second entry per key, which is the three layers returning, so it is a conversation about this section rather than a patch.
+
 Because Redraw does not flush, a rule derived from a DOT you have since edited stays
 in the book at source `1`. **Load DOT is the reset path**; meanwhile the stale rule is
 a visible row with a delete button. There is no purge-by-source machinery.
@@ -117,7 +119,9 @@ write** — an expanded declaration reaches the sheet and never becomes a book e
 so there is no question of what source it would carry and the tab keeps showing
 exactly what was actually said. An undefined name throws. A cycle throws.
 
-Nodes have **two layers**: an HTML layer (`shape →` markup, in flow, measurable) and an SVG layer that draws a **shell** around the measured box, with icon and caption inside the shell.
+Nodes have **two layers**, and **the HTML layer owns the visible node**: background, border and label are real CSS on a real div (`shape →` markup, in flow, measurable). The SVG layer draws a **shell** around the measured box — chrome *around* that rectangle, stroke-only, never filled — plus the icon and caption badges. The order in the skeleton makes this non-negotiable: `#diagram-svg` comes after `#diagram-html`, so a filled shell would hide the label it is decorating, and two text layers would print every node twice.
+
+The same order has a consequence we accept: `#connector-paths` is the **last** child of `#diagram-svg`, so an edge can cross a caption. `paint-order: stroke` with a halo only masks siblings drawn earlier, which is why `NodeSheller` emits all shell groups and *then* all captions — that fixes shell-over-caption, and edge-over-caption is not fixable inside a two-group skeleton. Closing it would mean a third `<g>` here, i.e. changing this section. Living with it is the current position.
 
 The product is a **dotFiddler**: one page, one canvas, four tabs, export that runs without us. There is never a second grammar.
 
@@ -136,6 +140,8 @@ If a proposed change requires reading DOT as a string — tokenize, recursive de
 | Custom keys | `icon`, `shell`, `caption` when present on the object | Read the field. Do not re-parse the source. |
 
 There is no third job called "parse DOT ourselves." Defaults are already resolved onto objects. Subgraph names are already on subgraph objects. Cluster membership is the subgraph object's `nodes` index list.
+
+**A node object carries no rank.** Probed, so nobody looks for it again: the only `rank` keys in the JSON sit on *subgraph* objects, where the author's `rank=same` / `min` / `max` survives verbatim, alongside `nodes` and — for nesting — a `subgraphs` index list; anonymous subgraphs are named `%1`, `%2`. A node has `pos` and nothing else, which is why §3.3 recovers ranks by bucketing coordinates rather than reading a field. The *effect* of a local rank constraint is already baked into `pos`, so `rank=same` lands its members in one rank for free. The *declaration* surviving on the subgraph object is one of the few provenance islands in this output, and the one a future subgraph feature would build on (M4 in `current-task.md`).
 
 Graphviz is **not** our renderer, our HTML, our CSS, or our geometry. We use its `pos` to decide *which column* a node is in, and nothing else — never its `_draw_` paths, never its pixel sizes.
 
@@ -278,6 +284,10 @@ element nobody draws is inert, and inert output is worse than absent output.
 
 Classes first. `#id` last, and rare. The valuable output is that **every node already carries the right classes**, so the handful of rows a user adds on top is trivial.
 
+**Annotations, labels, icons and edges carry their classes and nothing else — on purpose.** The theme styles the node and the layer scaffolding, and says deliberately nothing about `.icon`, `.cluster_ .label`, or edge decoration. Two consequences are visible today: a markdown `.icon` has no size rule, so an image with a `viewBox` and no intrinsic width resolves against its container and fills the node; and a cluster label inherits the cluster group's `fill`, so it is legible only against white. Both are real, both are left alone, because a default chosen without a use case is a default someone has to fight later. **Do not "fix" these in passing.** They wait for a request that says what the right value is.
+
+The class is the extension point, which is what makes waiting cheap: when the request arrives it is one theme entry, not a code change.
+
 **No derived margins**: nothing about spacing is computed from `pos`. A node takes what the theme gives it, plus whatever the author wrote in the DOT and whatever a Stylist row says. From a node's position we take exactly two things — **which rank it is in, and its order within that rank** (§3.3) — and everything else about the picture is decoration: node, cluster and edge attributes bagged into CSS, and the theme's own layout.
 
 Earlier iterations derived a per-node "weight" margin from the within-rank coordinate. It is gone: every formula tried read as a plausible proxy for isolation and none of them survived contact with real diagrams, and it was the only value in the pipeline that was computed rather than passed through. The pass-through law (§ attr values are passed through, never corrected) now holds with **no exception**.
@@ -304,6 +314,10 @@ SHAPE_HTML.get(node.shape) ?? SHAPE_HTML.get("box")
 ```
 
 First implementation: `box` only. Unknown shape falls back to `box`. Adding a shape is adding one map entry.
+
+**Every `shape=` is out of this pass, and `record` is the visible one.** A `record` node renders as a box whose label keeps its Graphviz source verbatim — `{Data \n Lake | {Batch | Columnar | Vectors}}` — because nothing splits on `|` and `{}` yet. That is why a record-heavy diagram looks busy, and it is a missing map entry rather than a bug. Note for whoever adds it: reading the already-resolved `label` field is not a DOT parser (§3.5); reading the DOT text would be.
+
+The shell registry makes the same promise one level down — a new shell is a file in `svg/`, one `SHELL_SVG` entry, and its import — and that promise is **untested**: `svg/box.svg` is still the only shell, so the token vocabulary (`{{x}} {{y}} {{width}} {{height}}`) has never had to serve a second shape. Worth writing a second one before trusting the claim.
 
 `LayoutFramer` frames those strings into `#diagram-html`:
 
@@ -352,7 +366,11 @@ Both numbers are **measured**, so they arrive as an argument the way the boxes d
 type ConnectorMetrics = { clearance: number; radius: number }
 ```
 
+A caption is drawn **only when the DOT asked for one.** `caption` falls back to `label` in the model (§3.1), and that is the right place for the fallback — but the HTML layer owns the text, so rendering the fallback here would print every node's label twice. The model-level promise and the on-screen result differ on purpose, and this is the one place that is true.
+
 Measured geometry is the single source of truth for size and position. The model deliberately does **not** carry Graphviz's `width` / `height`; two sources of size would guarantee that someone eventually uses the wrong one.
+
+**Measured means measured once, not live.** Anything that reflows `#diagram-html` without a redraw — browser zoom, a window resize, a pane that changes width — moves the boxes while `#cluster-shells`, `#node-shells` and `#connector-paths` keep the coordinates they were measured at, so shells and connectors visibly displace until the next Redraw. This follows from the two-pass design rather than contradicting it. A `ResizeObserver` on `#diagram-canvas` would close it and would be the first reactive machinery in the app; weigh that against §5's single conductor before adding one.
 
 Invisible clusters (`style=invis`) are not drawn. They still contribute a class to member nodes.
 
@@ -364,8 +382,11 @@ Invisible clusters (`style=invis`) are not drawn. They still contribute a class 
 - A config object or a config tab
 - A second geometry source alongside the measured boxes
 - **A CSS parser, a CSS serializer on the paint path, or CSS algebra.** A rule is a map entry; CSSOM is the only thing that turns it into paint.
+- **A CSS selector validator.** `Stylist.addRule` ends in `sheet.insertRule`, which throws on a selector CSSOM cannot parse. The rows tab keeps mid-typing state away from it — selector and property commit on `change`, not on keystroke — but a *finished* typo (`.`, `#`) reaches `insertRule` and takes the app down with a stack. That is the preferred failure (fail loud). If it ever becomes intolerable the honest fix is a browser-supplied probe, never a grammar of our own.
 
 Custom keys we care about (`icon`, `shell`, `caption`) are fields on the viz object. If Graphviz ever drops a key, we add **one** name→value map for that key — not a grammar.
+
+**Graphviz's node lists are declaration-scoped, and that is a boundary, not a gap.** A node belongs to whichever subgraph *declared* it, so a cluster written after the edges can come back with `nodes: []` — in `research-lab/example-1.dot`, `cluster_consumer` does, because its three members were already claimed by an earlier anonymous subgraph. That class then reaches no node and no rule is emitted for it. Fixing it would mean reading the DOT source to find out where the author wrote the cluster, which is the parser this section refuses. Author DOT accordingly: declare a node inside the cluster you want it classed by.
 
 ---
 
@@ -377,11 +398,13 @@ Four tabs, and one of them is not text. `SetTab` writes a **text tab** (load, se
 
 The coding window is **one `<textarea>`**, and it serves the three text tabs. `tabs.tsx` is a radio strip — four equal buttons, no editor, no store. Workbench owns `active`; when `active` is `styles` it paints the rows table instead of the textarea. No highlighting, no completion, no caret of ours, no component of ours: the textarea is written inline in `workbench.tsx`, because a component that wraps one element and forwards two props is a file for nothing.
 
-**The chrome's own CSS is `src/app.css`, and it is deliberately small.** Tokens on `body`, then a skeleton reached by *element and position* — `body > main`, `body > aside`, `nav`, `textarea`, `aside > section` — rather than by a hook per box. The four core classes (`.paper` · `.glass` · `.row` · `.col`) are not here: they belong to the theme and arrive through the sink. The markup therefore carries almost no `class` or `id`: a hook is allowed when the layout needs it, when it is a sink the engine writes, or when a test drives it. Nothing is named for decoration, and the semantic element is preferred to a class — `main`, `aside`, `article`, `section`, `nav`, and `hidden` rather than a `.hidden`. The styles tab is `research-lab/stylist/index.html` less its toolbar (`.rows`, `.row`, `.sel`, `.prop`, `.val`, `#selector-list`, `#property-list`) because that prototype is ten lines of CSS, and being restylable in ten lines is the point. The diagram's styling never appears here — it lives in the sinks (§3).
+**The chrome's own CSS is `src/app.css`, and it is deliberately small.** Tokens on `body`, then a skeleton reached by *element and position* — `body > main`, `body > aside`, `nav`, `textarea`, `aside > section` — rather than by a hook per box. The four core classes (`.paper` · `.glass` · `.row` · `.col`) are not here: they belong to the theme and arrive through the sink. The markup therefore carries almost no `class` or `id`: a hook is allowed when the layout needs it, when it is a sink the engine writes, or when a test drives it. Nothing is named for decoration, and the semantic element is preferred to a class — `main`, `aside`, `article`, `section`, `nav`, and `hidden` rather than a `.hidden`. The styles tab came from a ten-line prototype, less its toolbar (`.rows`, `.row`, `.sel`, `.prop`, `.val`, `#selector-list`, `#property-list`) because that prototype is ten lines of CSS, and being restylable in ten lines is the point. The diagram's styling never appears here — it lives in the sinks (§3).
 
 **One toolbar, and it is `main`'s `nav`.** Every action the app has lives there — Redraw, Load / Save DOT, Save SVG, Save PNG, Export HTML, Save Styles. No panel carries buttons of its own, and there is no status line: a redraw that cannot parse its DOT throws rather than writing a message into a corner of the page.
 
 `redraw` is sync with the DOT tab — the full draw. The styles tab does not need Graphviz: a row edit is a `setProperty` on a live sheet, so the picture repaints with no redraw and no reflow of anything else. The UI may still use one Redraw button that always runs the DOT path.
+
+**A styles row is three columns in a narrow pane, and it clips.** The long property names (`--horizontal-gap`, `--raised-shadow`) run past the pane's width mid-word. Every box carries a `title`, so a clipped row is readable on hover; a wrapping grid or a resizable pane both cost more than the annoyance today.
 
 | Tab | Sink | Who writes it |
 |---|---|---|
@@ -405,7 +428,7 @@ until you delete the row or Load DOT (§1).
 the tab. It stays visible as a property wherever the user or the theme wrote it, and
 an expanded declaration never becomes a book entry.
 
-There is exactly one shipped theme, `theme/basic-theme.json`, decomposed once from `basic.css` by a script in `build/`. The CSS it was decomposed from lives in `research-lab/stylist/`, because the runtime has no CSS file in it. There is no locked base, no overlay, no dropdown, and no theme file verbs.
+There is exactly one shipped theme, `theme/basic-theme.json`, decomposed once from a `basic.css` that no longer ships — the JSON is the artefact, and the runtime has no CSS file in it. There is no locked base, no overlay, no dropdown, and no theme file verbs.
 
 Autocomplete is not part of the fiddle. Do not put `suggestions` on `Workbench`.
 
@@ -495,7 +518,7 @@ There is no config model. Behavior that wants to be configuration goes to `:root
 
 ## 5. Runtime lifecycle
 
-Everything runs in the browser. `index.ts` mounts the SolidJS workbench into `#root`; the canvas skeleton of §1 is part of the component tree, not a generated string. Offline exploration, batch evaluation, and prototype scripts live in `research-lab/`, never in `src/`.
+Everything runs in the browser. `index.ts` mounts the SolidJS workbench into `body` (§1 — there is no `#root`); the canvas skeleton of §1 is part of the component tree, not a generated string. Offline exploration and prototype scripts are not kept: `research-lab/` holds the DOT fixtures the tests load, nothing else.
 
 `Workbench.redraw` is the conductor:
 
@@ -516,6 +539,8 @@ dot text
 
 `Files.loadDot` calls `Stylist.reset()` first: a new diagram starts on a blank book
 holding only the theme. Redraw does not.
+
+**One conductor means one trigger.** Redraw is a button and a keyboard shortcut, never a keystroke handler, so two overlapping calls cannot happen — which matters because `redraw` awaits a paint in the middle and interleaved calls would inject the SVG layer in either order. Nothing in the UI can cause that today. Anything that could — hot reload, a watcher, the `ResizeObserver` of §3.4 — has to bring a guard flag with it.
 
 A row edit is the short path: `Stylist.addRule` / `removeRule` → one `setProperty` or
 `removeProperty` → the browser repaints. No viz, no bag, no frame, no measure. The SVG
@@ -630,10 +655,10 @@ shabnam/
   src/            all TS, TSX, CSS, HTML
   svg/            shells. first file: box.svg
   icon/           borrowed logos
-  theme/          the shipped theme: basic-theme.json (basic.css lives in research-lab/)
+  theme/          the shipped theme: basic-theme.json
   test/           if needed. `test/browser/` is the CSSOM half, run in real Chrome
   docs/           documentation, project management, reports
-  research-lab/   discovery, experiments, prototypes
+  research-lab/   DOT fixtures the tests load
   build/          build scripts / generated inputs to the bundler
   dist/           build output. never a source of truth
 ```

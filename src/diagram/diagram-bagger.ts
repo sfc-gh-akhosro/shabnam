@@ -181,7 +181,7 @@ function nodeEntries(raw: RawGraph): [number, RawObject][] {
 }
 
 // The subgraphs, which are the first `_subgraph_cnt` objects. The root graph is
-// not among them — verified in `research-lab/probe-subgraphs.ts`, because the
+// not among them — verified against Graphviz output directly, because the
 // opposite belief costs you the anonymous block at index 0.
 //
 // An anonymous subgraph usually exists only to carry `rank=same`, but it can

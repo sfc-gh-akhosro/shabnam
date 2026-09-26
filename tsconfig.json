@@ -15,5 +15,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["bun-types"]
   },
-  "include": ["src/**/*", "build/**/*", "test/**/*", "research-lab/**/*"]
+  "include": ["src/**/*", "build/**/*", "test/**/*"]
 }
