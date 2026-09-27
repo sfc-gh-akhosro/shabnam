@@ -14,6 +14,9 @@
 //
 // Every action lives in that one toolbar, including Save Styles — the styles tab
 // is a list of rows and carries no toolbar of its own.
+//
+// The aside gives way to the diagram: clicking the canvas takes it out of the
+// DOM and a strip at main's right edge brings it back, unless Freeze is checked.
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
@@ -76,6 +79,8 @@ export function Workbench() {
   const [text, setText] = createStore<TabText>(seed.text);
   const [active, setActive] = createSignal<TabId>("dot");
   const [stamp, setStamp] = createSignal(0);
+  const [frozen, setFrozen] = createSignal(true);
+  const [isAsideHidden, setAsideHidden] = createSignal(false);
   const stylist = new Stylist();
   const engine = new Engine(text, stylist);
   const files = new Files(text, (tab, value) => setText(tab, value), stylist);
@@ -92,6 +97,11 @@ export function Workbench() {
     input.value = "";
     redraw();
   };
+
+  // The Freeze checkbox pins the aside: while it is checked, neither the click
+  // on the canvas nor the hover on the strip may change it.
+  const hideAside = () => frozen() || setAsideHidden(true);
+  const showAside = () => frozen() || setAsideHidden(false);
 
   const commands: Record<Command, () => void> = {
     redraw,
@@ -143,7 +153,7 @@ export function Workbench() {
           <input ref={dotPicker} hidden type="file" accept=".dot,.gv" onChange={(e) => loadDot(e.currentTarget)} />
         </nav>
 
-        <article id="diagram-canvas">
+        <article id="diagram-canvas" tabindex="0" onClick={hideAside}>
           <div id="diagram-html" />
           <svg id="diagram-svg">
             <g id="cluster-shells" />
@@ -154,24 +164,38 @@ export function Workbench() {
           <style id="style-css" />
           <script id="action-js" />
         </article>
+
+        <input
+          id="freeze"
+          type="checkbox"
+          title="Freeze the aside"
+          checked={frozen()}
+          onChange={(event) => setFrozen(event.currentTarget.checked)}
+        />
+
+        {/* The strip that brings the aside back. It and the aside are the two
+            arms of one boolean, so exactly one of them is ever in the DOM. */}
+        <Show when={isAsideHidden()}>
+          <div id="hover-zone" onMouseEnter={showAside}></div>
+        </Show>
       </main>
 
-      <aside>
-        <Tabs active={active()} setActive={setActive} />
-        <Show when={active() === "styles"}>
-          <Rows stylist={stylist} stamp={stamp()} />
-        </Show>
-        <Show when={textTab(active())} keyed>
-          {(tab) => (
-            <textarea
-              value={text[tab]}
-              onInput={(event) => setText(tab, event.currentTarget.value)}
-            />
-          )}
-        </Show>
-              <button id="close-aside">➡️</button>
-
-      </aside>
+      <Show when={!isAsideHidden()}>
+        <aside>
+          <Tabs active={active()} setActive={setActive} />
+          <Show when={active() === "styles"}>
+            <Rows stylist={stylist} stamp={stamp()} />
+          </Show>
+          <Show when={textTab(active())} keyed>
+            {(tab) => (
+              <textarea
+                value={text[tab]}
+                onInput={(event) => setText(tab, event.currentTarget.value)}
+              />
+            )}
+          </Show>
+        </aside>
+      </Show>
     </>
   );
 }

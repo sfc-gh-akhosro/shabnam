@@ -84,6 +84,10 @@
 
 **/node_modules/
 **/.git/
+**/temp/
+**/local/
+**/input/
+**/output/
 **/.DS_Store
 **/.turbo/
 **/.cache/

@@ -4,14 +4,14 @@
    Tokens, then the skeleton. Everything is reached by element and position, so
    the markup carries almost no hooks: the ids below are the sinks the engine
    writes and the coordinate contract, and the only classes are `.rows`/`.row`
-   and the three box names from the styles-tab prototype, plus one state
-   flag. `@apply` is a Stylist feature, not real CSS, so a rule that wants a core
+   and the three box names from the styles-tab prototype. `@apply` is a Stylist feature, not real CSS, so a rule that wants a core
    class copies its properties.
 
    Every id here is two hyphenated words, and that is not a style preference: a
    DOT node keeps its own name as its id (§3.1), so a bare `#app` or `#canvas`
-   is a live collision waiting for a node called `app`. The chrome's own boxes
-   carry no id at all — `body > main` and `body > aside` reach them. */
+   is a live collision waiting for a node called `app`. The two structural boxes
+   carry no id at all — `body > main` and `body > aside` reach them; the small
+   chrome that CSS has to position by name (`#freeze`, `#hover-zone`) does. */
 
 body {
   --theme-color: white;
@@ -56,7 +56,8 @@ body {
 
 
 button,
-input, .checkbox label {
+input,
+.checkbox label {
   font: inherit;
   border: 0;
   border-radius: 3px;
@@ -70,22 +71,55 @@ body>aside {
 }
 
 main {
+  position: relative;
+
   display: flex;
   flex-direction: column;
+
   flex: 1;
   min-width: 0;
+
   gap: var(--vertical-gap) var(--horizontal-gap);
 }
 
+#hover-zone {
+  position: absolute;
+  right: 0;
+  top: 5em;
+  height: 100%;
+  width: 3em;
+}
 
+#freeze {
+  position: absolute;
+  top: 0em;
+  right: 0em;
 
-nav, .checkbox {
+  width: 2em;
+  height: 2em;
+
+  background: url(/icon/unpin.svg);
+  background-size: cover;
+  background-color: var(--paper-background);
+
+  appearance: none;
+
+}
+
+#freeze:checked {
+  background: url(/icon/pin.svg);
+  background-size: cover;
+
+  box-shadow: inset var(--raised-shadow);
+}
+
+nav,
+.checkbox {
   display: flex;
   gap: var(--horizontal-pad);
   align-items: center;
   height: 2.5em;
   line-height: 2em;
-  padding: var(--vertical-pad);
 }
 
 nav>img {
@@ -267,18 +301,3 @@ aside>section {
   padding: var(--vertical-gap) var(--horizontal-gap);
   flex: 1;
 }
-
-#close-aside {
-  top: 0.25em;
-  width: 3em;
-  height: 2em;
-  left: -3em;
-  position: absolute;
-}
-
-.closed {
-  width: 0.5em;
-}
-
-
-
