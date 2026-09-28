@@ -8,7 +8,7 @@ This file is the blueprint. It describes the app we are building from scratch. W
 
 ## 0. Stack
 
-Bun (ESM packaging only) + viz.js + TypeScript + SolidJS + HTML + CSS.
+Bun (ESM packaging only) + viz.js + markdown-it + TypeScript + SolidJS + HTML + CSS.
 
 **Target: Chromium.** Users are corporate and technical, and Chromium is what they
 run. The rule this buys us is not "other engines are unsupported" — it is that
@@ -284,7 +284,7 @@ element nobody draws is inert, and inert output is worse than absent output.
 
 Classes first. `#id` last, and rare. The valuable output is that **every node already carries the right classes**, so the handful of rows a user adds on top is trivial.
 
-**Annotations, labels, icons and edges carry their classes and nothing else — on purpose.** The theme styles the node and the layer scaffolding, and says deliberately nothing about `.icon`, `.cluster_ .label`, or edge decoration. Two consequences are visible today: a markdown `.icon` has no size rule, so an image with a `viewBox` and no intrinsic width resolves against its container and fills the node; and a cluster label inherits the cluster group's `fill`, so it is legible only against white. Both are real, both are left alone, because a default chosen without a use case is a default someone has to fight later. **Do not "fix" these in passing.** They wait for a request that says what the right value is.
+**Annotations, labels, icons and edges carry their classes and nothing else — on purpose.** The theme styles the node and the layer scaffolding, and says deliberately nothing about `.icon`, `.cluster_ .label`, or edge decoration. Two consequences are visible today: an `.icon` from markdown has no size rule, so an image with a `viewBox` and no intrinsic width resolves against its container and fills the node; and a cluster label inherits the cluster group's `fill`, so it is legible only against white. Both are real, both are left alone, because a default chosen without a use case is a default someone has to fight later. **Do not "fix" these in passing.** They wait for a request that says what the right value is.
 
 The class is the extension point, which is what makes waiting cheap: when the request arrives it is one theme entry, not a code change.
 
@@ -640,6 +640,10 @@ Closed. Do not reopen in code without updating this file.
 | Attr → CSS property | `ATTR_CSS` registry |
 | Attr values | **Passed through, never corrected.** Graphviz's number plus the unit it measured in, and nothing else. It clamps `height=0` to `0.02in` and `width=0` to `0.01in`; we emit `0.02in`, because laying out DOT is its job and a correction here would be a rule the author cannot see. If a value looks wrong, that is a thing to style in the styles tab, not to fix in the bagger. |
 | Label escapes | `\N` becomes the node's own name and `\G` a cluster's, because `renderJSON` hands Graphviz's default label over unexpanded. Substitution on one parsed field, not a pass over DOT. |
+| Markdown | `markdown-it`, configured once in `diagram/markdown.ts`. `renderInline()` for a label — a label is a name, not a document, so no `<p>` wrapper. `render()` for an annotation, where lists and paragraphs are wanted. `html` · `breaks` · `linkify` on. We hand-rolled this once: an `MD` map of six regexes whose own comment called it "the second grammar we own", against §1. Nobody writes a markdown parser; they call one. |
+| Line break | **`\n`** — a literal backslash and the letter `n` — for labels **and** annotations, one contract. A pre-pass turns `\n` / `\l` / `\r` into a real newline and `breaks: true` turns that into a `<br>`. It has to be typeable as visible characters, because both CommonMark mechanisms are unreachable from a single-line `<input>`: Enter inserts nothing and a two-space hard break cannot be seen. `\n` is already what a DOT author writes. Consequences accepted: `\n\n` is a paragraph break in block mode, and a literal backslash-n is `\\n`. |
+| HTML in a label | **Passes through**, because `html: true`. A deliberate widening, not an oversight: the app already injects trusted HTML into its sinks and runs arbitrary `action.js`, so `<br>` in a label is no new capability. `\n` is still the documented way to break a line. |
+| Markdown images | markdown-it's own `image` renderer rule is overridden to emit `<img class="icon" src="…">` against the `ICONS` map, so `![star](star.svg)` resolves to an inlined data URI. That is the library's documented hook — the parser's output is never post-processed. A remote image would make Redraw fetch, taint the PNG canvas and cost Export HTML its standalone-ness (§4.1). |
 | Shape | `record` is the one shape with a renderer and a class of its own (`.record`); every other shape is a `.node` that names itself in `data-shape`, verbatim, `box` included. `none`, `box3d` and the rest carry no meaning for us. A class per shape would put a bare DOT word in the class space, where a subgraph of the same name already lives (§3.1). |
 | `style` | Each comma-separated word becomes a class — `style="invis,filled"` → `class="node invis filled"`, on nodes and on edges. What a word *means* is the theme's to say: `.invis { display: none }` lives in `basic-theme.json`, not in any bagger. |
 | Waiting for layout | `painted()` races `requestAnimationFrame` against `setTimeout(0)`. The frame is what the Measurer wants, but `rAF` does not fire in a background tab or under a virtual clock, and waiting on it alone leaves a redraw unfinished. See `docs/archive.md`, iteration 13. |
@@ -704,6 +708,7 @@ src/
     node-sheller.ts   boxes + nodes → shell SVG
     edge-router.ts    boxes + edges → the ortho snake's waypoints
     edge-drawer.ts    waypoints → connector SVG, with curvable bends
+    markdown.ts       the configured markdown-it instance, and label rendering
 
   stylist/          the book and the one live sheet. CSSOM only (§3).
     stylist.ts        Stylist        — addRule / removeRule / reset / cleanup / rows / save / feed
@@ -738,7 +743,7 @@ An organization idea. Can be broken if needed — occasionally, not routinely.
 | Lines in a block | `{}` or `()` or `<>` — about 7 inside |
 | Blocks in a function / method | about 7 |
 | Methods on an `interface` | 7. A class implements an interface. |
-| Code files per package | 7. Does **not** count `types.ts` or build / config (`.json`, lockfiles). `diagram/` deliberately runs over: routing a connector and drawing one are separate jobs, and merging them to hit the number would be the bigger file this table exists to prevent. |
+| Code files per package | 7. Does **not** count `types.ts` or build / config (`.json`, lockfiles). `diagram/` deliberately runs over: routing a connector and drawing one are separate jobs, and `markdown.ts` is a pure string-to-string worker that belongs beside them — merging any of them to hit the number would be the bigger file this table exists to prevent. |
 | Major class per file | preferably **one**, plus a few helpers |
 | Enums / `Map` entries | **no limit** |
 | Folders / packages per app | **no limit** |

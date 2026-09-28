@@ -1025,3 +1025,80 @@ instruction not to touch root files — so the contract is knowingly ahead of th
 code for the duration of the overhaul. Next session in: **session 2**, which
 deletes the hand-rolled markdown `MD` map in `node-shaper.ts` and adopts
 `markdown-it`, amending §0 and §7 *before* the library lands in the tree.
+
+---
+
+## Session 2 — the markdown parser is a library now
+
+`markdown-it` replaces the hand-rolled `MD` map. The law was amended first, as §0
+requires: §0's stack gained the dependency, §7 gained four rows (Markdown, Line
+break, HTML in a label, Markdown images), §8's tree gained `diagram/markdown.ts`,
+and §9's note on `diagram/` running over seven names the third reason.
+
+**Where the map came from.** The `MD` map — six regexes, plus image surgery and
+manual HTML escaping — rode into the tree inside commit `6393453` ("Visual cluster
+SVG boxes, smart connectors, 1:1 workbench parity, and CodeJar editors"),
+undiscussed. Its own comment called it *"the second grammar we own"*, which §1
+forbids in the same breath it forbids a DOT parser. §0 already had the answer:
+hand-rolling what a mature library does properly, to avoid a conversation, is the
+worse outcome. Nobody writes a markdown parser; they call one.
+
+**What the new worker is.** `src/diagram/markdown.ts` holds the configured
+instance, the `ICONS` map moved over from `node-shaper.ts`, and one entry point,
+`renderLabel()`. `node-shaper.ts` lost 68 lines and now imports it twice — once
+for `box`, once per record cell.
+
+Three things are the library's own extension points rather than post-processing,
+which is the whole reason to adopt it:
+
+- the `image` renderer rule emits `<img class="icon" src="…">` against `ICONS`, so
+  `\![star](star.svg)` still inlines a data URI and Redraw never fetches (§4.1);
+- `softbreak` emits `<br />` with **no trailing newline**. markdown-it
+  pretty-prints one, and in an inline label that newline is rendered whitespace,
+  so every line after a break started with a stray space;
+- `xhtmlOut: true`, because a picture export is parsed as XML (§4.1), so a void
+  element closes itself everywhere we send markup.
+
+**The pre-pass survives, promoted.** `\n` / `\l` / `\r` → a real newline, `\|` /
+`\{` / `\}` → the literal character. It is now the line-break contract for labels
+*and* annotations rather than a Graphviz implementation detail, because a
+single-line `<input>` can produce neither a real newline nor a two-space hard
+break. It is a left-to-right walk rather than a chain of `replace`, so `\\n` stays
+markdown's own escape: a chained `/\\[nlr]/` matches the *second* backslash of
+`\\n` and would have eaten the escape it documents.
+
+**Two behaviours changed, both on purpose.**
+
+- **HTML in a label passes through**, because `html: true`. The test that asserted
+  `<b>` arrives as `&lt;b&gt;` now asserts the opposite and says why: the app
+  already injects trusted HTML into its sinks and runs arbitrary `action.js`, so a
+  tag in a label is no new capability.
+- **`~~x~~` is `<s>`, not `<del>`.** The old regex said `<del>`; markdown-it says
+  `<s>`. The library's word wins — fighting it would be the dictionary problem
+  again, one entry at a time.
+
+**The regression check the plan asked for.** A throwaway script rendered every
+label piece in the starter and both `research-lab/` fixtures through the old chain
+and the new one and diffed: **111 pieces, 14 differ, and all 14 are one case.**
+Where an author wrote `"GCP \n Services"` with spaces around the escape, the old
+blind replace kept them (`GCP <br /> Services`) and CommonMark trims them
+(`GCP<br />Services`). The old output put a leading space on every continuation
+line, so this is the library correcting us. No markdown construct in either
+fixture changed meaning. The script was deleted; nothing is parked (`coding-rules.md`).
+
+**Deliberately not shipped: the block entry point.** The plan asked for "the two
+entry points", `renderInline()` for labels and `render()` for annotations. Only
+the first exists, because Session 1 purged annotations and nothing calls the
+second — an unused export is dead code, which `coding-rules.md` forbids outright,
+and the plan does not outrank the law. **Session 3 adds `renderAnnotation()`** to
+this file when the rows table gives it a caller; §7's Markdown row already
+describes both halves, so the contract is in place and waiting.
+
+**Green.** `bunx tsc --noEmit` clean, `bun test` 85 pass / 0 fail (84 before — one
+new check covers strikethrough, linkify and the `\\n` escape, which nothing
+tested), `bun run test:browser` 63 pass / 0 fail, stage `done`.
+
+**Still knowingly ahead of the code.** §4 continues to describe four tabs and an
+`annotation.html` textarea that do not exist. Those edits belong to Session 3,
+which restores `place()` and the theme's `#annotation-html > [data-selector]`
+block verbatim from `git show`, per the reminder Session 1 left.

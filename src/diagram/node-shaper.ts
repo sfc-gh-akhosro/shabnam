@@ -3,33 +3,7 @@
 // identity: DOT id + one type class (`node` / `record`) + one subgraph class (§3.1).
 
 import type * as T from "../types.ts";
-
-import bucket from "../../icon/bucket.svg";
-import burst from "../../icon/burst.svg";
-import chart from "../../icon/chart.svg";
-import cloud from "../../icon/cloud.svg";
-import database from "../../icon/database.svg";
-import python from "../../icon/python.svg";
-import star from "../../icon/star.svg";
-
-const ICONS = new Map<string, string>([
-  ["bucket.svg", bucket],
-  ["burst.svg", burst],
-  ["chart.svg", chart],
-  ["cloud.svg", cloud],
-  ["database.svg", database],
-  ["python.svg", python],
-  ["star.svg", star],
-]);
-
-function iconSrc(src: string): string {
-  const filename = src.replace(/^icon\//, "").replace(/^\.\/icon\//, "");
-  const svg = ICONS.get(filename);
-  if (svg !== undefined) {
-    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
-  }
-  return src;
-}
+import { renderLabel } from "./markdown.ts";
 
 export const SHAPE_HTML: T.ShapeHtml = new Map([
   ["box", box],
@@ -52,12 +26,12 @@ export function shapeHtml(node: T.Node): string {
 const SHAPE_CLASS: T.ShapeClass = new Map([["record", "record"]]);
 
 function box(node: T.Node): string {
-  return `<div ${identity(node)}><span class="label">${text(node.label)}</span></div>`;
+  return `<div ${identity(node)}><span class="label">${renderLabel(node.label)}</span></div>`;
 }
 
 // ------------------------------------------------------------------ shape=record
 //
-// The record label is one of the two grammars we own. `renderJSON` hands it over
+// The record label is the one grammar we own. `renderJSON` hands it over
 // unexpanded — the JSON describes the same nesting in `rects` and `_draw_`, but
 // as geometry, and geometry is the Measurer's (§3.4) — so the tree exists only in
 // the string. A split, not a parser: `|` separates cells, `{}` flips the flex
@@ -178,7 +152,7 @@ function flush(cursor: Cursor): string {
   const span = cell.span > 1 ? ` style="--span:${cell.span}"` : "";
   const extra = cell.classes.join(" ");
   const classes = extra === "" ? "cell" : `cell ${extra}`;
-  return `<span class="${classes}"${span}>${text(cell.text)}</span>`;
+  return `<span class="${classes}"${span}>${renderLabel(cell.text)}</span>`;
 }
 
 function path(cursor: Cursor): string {
@@ -205,24 +179,6 @@ function splitPort(text: string): [string, string] {
   return [text.slice(1, end).trim(), text.slice(end + 1).trim()];
 }
 
-// --------------------------------------------------------------------- markdown
-//
-// The second grammar we own, and the smaller one: inline markdown inside a label.
-// Inline only — a label is a name, not a document — and deliberately no image
-// syntax, because a remote image would make Redraw fetch, taint the PNG canvas,
-// and leave Export HTML no longer standalone (§4). Icons already arrive through
-// `icon=`, resolved by Graphviz and inlined.
-//
-// `_emphasis_` is not supported: underscores are common in DOT names and are our
-// own path notation. Applied in insertion order, so `**` is claimed before `*`.
-const MD = new Map<RegExp, string>([
-  [/`([^`]+)`/g, "<code>$1</code>"],
-  [/\*\*([^*]+)\*\*/g, "<strong>$1</strong>"],
-  [/\*([^*]+)\*/g, "<em>$1</em>"],
-  [/~~([^~]+)~~/g, "<del>$1</del>"],
-  [/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>'],
-]);
-
 // --------------------------------------------------------------------- shared
 
 function identity(node: T.Node): string {
@@ -242,24 +198,4 @@ export function styleWords(attrs: Map<string, string>): string[] {
     .split(",")
     .map((word) => word.trim())
     .filter((word) => word !== "");
-}
-
-// Escape first, so the author's `<` is text and only our own tags are markup.
-// Graphviz escapes (`\n`, `\l`, `\r`) and literal newlines become `<br />`.
-function text(label: string): string {
-  const escaped = label
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\\([|{}])/g, "$1")
-    .replace(/\\[nlr]/g, "<br />")
-    .replace(/\n/g, "<br />");
-
-  const withImages = escaped.replace(
-    /!\[([^\]]*)\]\(([^)]+)\)/g,
-    (_, alt: string, src: string) =>
-      `<img class="icon" src="${iconSrc(src)}" alt="${alt}" />`,
-  );
-
-  return [...MD].reduce((out, [pattern, tag]) => out.replace(pattern, tag), withImages);
 }

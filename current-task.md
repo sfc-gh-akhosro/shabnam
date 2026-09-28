@@ -1,8 +1,8 @@
 
 Always read these files in each session:
-- ./user-story.md
-- ./coding-rules.md
-- ./app-architecture.md
+- [describe the app](./user-story.md)
+- [how to design and develop](./coding-rules.md)
+- [what have been decided](./app-architecture.md)
 
 
 # Current task
@@ -14,9 +14,9 @@ Sessions 1 and 2 are independent and may swap order. 3 depends on both. 4 depend
 on 3. Every session below is written to be read cold — take one, read the law
 (`AGENTS.md` → `app-architecture.md` → `coding-rules.md`), and go.
 
-**Session 1 is done.** Next up: **Session 2** — its section is unchanged and still
-reads cold. Session 1's section below is now a record of what was removed, and
-carries two no-op findings plus a note for Session 3.
+**Sessions 1 and 2 are done.** Next up: **Session 3** — its section is unchanged
+and still reads cold. The two finished sections below are now records of what was
+removed, and carry the findings Session 3 needs.
 
 ---
 
@@ -144,46 +144,52 @@ and bring the long `place()` comment with it.
 
 ---
 
-## Session 2 — kill the hand-rolled markdown, adopt markdown-it
+## Session 2 — kill the hand-rolled markdown, adopt markdown-it ✅ DONE
 
-**Goal.** No regex-based markup translation anywhere in `src/`. One library call.
+**Goal (met).** No regex-based markup translation anywhere in `src/`. One library
+call. `bun test` 85 pass / 0 fail, `bun run test:browser` 63 pass / 0 fail,
+`bunx tsc --noEmit` clean. Full record in `docs/archive.md`.
 
-1. **Add the dependency.** `markdown-it` + `@types/markdown-it`.
-2. **Amend the law first** — §0 requires the conversation to land in the document
-   before the library lands in the tree.
-   - §0's stack list gains `markdown-it`.
-   - §7 gains two rows: **Markdown** (`markdown-it`; `renderInline()` for labels,
-     `render()` for annotations; `html` / `breaks` / `linkify` on) and **Line
-     break** (`\n`, one contract for labels and annotations).
-   - `docs/archive.md` records that the `MD` map rode in inside `6393453`
-     undiscussed, that its own comment called it "the second grammar we own"
-     against §1, and that the fix is a library. Update §3.2's markdown wart
-     reference.
-3. **Delete** the `MD` map and the regex chain in `text()` in
-   `src/diagram/node-shaper.ts`.
-4. **Keep the pre-pass**, now as the line-break contract: `\n` / `\l` / `\r` to real
-   newlines, and `\|` / `\{` / `\}` to the literal character. Substitution on one
-   already-parsed field is not a grammar (§3.5, §7 "Label escapes").
-5. **Drop the manual HTML escaping.** With `html: true` an author's `<` passes
-   through. This is a deliberate widening, not an oversight: the app already injects
-   trusted HTML into a sink and runs arbitrary `action.js`, so HTML in a label is no
-   new capability. Say so in §7 rather than leaving it implicit.
-6. **Icons keep working through the library's own extension point.**
-   `![alt](bucket.svg)` must resolve to an inlined data URI from `icon/` — §4.1, a
-   remote image would make Redraw fetch, taint the PNG canvas and break standalone
-   export. Override markdown-it's `image` renderer rule to emit
-   `<img class="icon" src="${iconSrc(src)}" alt="…">`. That is the documented hook;
-   do not post-process the parser's output.
-7. **Where it lives.** A `markdown.ts` in `diagram/`, holding the configured
-   instance and the two entry points. It is a pure string-to-string worker, so
-   `diagram/` is right (§3). It puts `diagram/` one file further over its soft 7,
-   which §9 already tolerates for this package — note it, do not merge files to
-   dodge the number.
+Against the seven items as written:
 
-**Verify.** The starter's `![star](star.svg) Platform Core` still renders an inlined
-icon plus text. `**bold**`, backtick code, `~~del~~` and links still render. `A\nB`
-breaks. A literal `<br>` breaks. Then **eyeball both `research-lab/` fixtures** —
-see Risks.
+1. `markdown-it` + `@types/markdown-it` installed.
+2. Law amended first — §0's stack, four new §7 rows (Markdown, Line break, HTML in
+   a label, Markdown images), §8's tree, §9's note on `diagram/`, and §3.2's
+   markdown wart reference. `docs/archive.md` records the `6393453` provenance.
+3. The `MD` map and the regex chain in `text()` are gone — `node-shaper.ts` is 68
+   lines lighter.
+4. Pre-pass kept and promoted to the line-break contract, rewritten as a
+   left-to-right walk. A chained `/\\[nlr]/` matches the **second** backslash of
+   `\\n` and would eat the escape we document; the walk does not.
+5. Manual HTML escaping dropped. The test that asserted `<b>` arrives escaped now
+   asserts the opposite and says why.
+6. Icons go through markdown-it's `image` renderer rule. `ICONS` and `iconSrc`
+   moved out of `node-shaper.ts` into `markdown.ts`, since the rule is what owns
+   them now.
+7. `src/diagram/markdown.ts`. `diagram/` is one file further over its soft 7, and
+   §9 now names the reason.
+
+**Two extra renderer overrides, both earning their line.** `softbreak` emits
+`<br />` with no trailing newline — markdown-it pretty-prints one, and in an inline
+label that newline is rendered whitespace, so every continuation line started with
+a stray space. `xhtmlOut: true` because a picture export is parsed as XML (§4.1).
+
+**Two behaviour changes, on purpose.** HTML in a label passes through (`html: true`).
+`~~x~~` is `<s>`, not the old `<del>` — the library's word wins.
+
+**The regression check.** Every label piece in the starter and both fixtures,
+rendered through the old chain and the new one and diffed: **111 pieces, 14 differ,
+all one case.** `"GCP \n Services"` was `GCP <br /> Services` and is now
+`GCP<br />Services` — CommonMark trims the spaces the blind replace kept, which
+removes a leading space from every continuation line. The library is correcting us.
+No markdown construct in either fixture changed meaning.
+
+**Reminder for Session 3, and it is a real gap.** Only `renderLabel()` exists.
+The plan asked for two entry points, but `render()` had no caller once Session 1
+purged annotations, and an unused export is dead code. **Add `renderAnnotation()`
+to `src/diagram/markdown.ts`** — block mode, `md.render()`, same `unescape()`
+pre-pass — when the rows table gives it a caller. §7's Markdown row already
+describes both halves.
 
 ---
 
@@ -290,12 +296,10 @@ console error, so the invalid-value check must assert its own error line and the
 
 ## Risks
 
-- **Session 2 can visibly change existing diagrams.** The old map applied `**`
-  before `*` by insertion order and understood nothing about nesting or escapes.
-  Real CommonMark will disagree with it somewhere. Eyeball the starter and both
-  `research-lab/` fixtures, not just the assertions.
-- **`html: true` widens what a label can do.** Argued and accepted, but it is a
-  change in kind and belongs in §7 explicitly.
+- **~~Session 2 can visibly change existing diagrams.~~** Checked and closed: 111
+  label pieces across the starter and both fixtures, 14 differ, all the same
+  whitespace-around-`\n` case, all improvements. See the Session 2 record above.
+- **~~`html: true` widens what a label can do.~~** In §7 explicitly now.
 - **`bun run test:browser` needs `dangerously_disable_sandbox: true`.** The sandbox
   refuses the port 3101 bind and surfaces it as `EADDRINUSE`, which reads exactly
   like a stale run but is not — `lsof -nP -iTCP:3101 -sTCP:LISTEN` shows nothing.

@@ -4,14 +4,14 @@
    Tokens, then the skeleton. Everything is reached by element and position, so
    the markup carries almost no hooks: the ids below are the sinks the engine
    writes and the coordinate contract, and the only classes are `.rows`/`.row`
-   and the three box names from `research-lab/stylist/index.html`, plus one state
-   flag. `@apply` is a Stylist feature, not real CSS, so a rule that wants a core
+   and the three box names from the styles-tab prototype. `@apply` is a Stylist feature, not real CSS, so a rule that wants a core
    class copies its properties.
 
    Every id here is two hyphenated words, and that is not a style preference: a
    DOT node keeps its own name as its id (§3.1), so a bare `#app` or `#canvas`
-   is a live collision waiting for a node called `app`. The chrome's own boxes
-   carry no id at all — `body > main` and `body > aside` reach them. */
+   is a live collision waiting for a node called `app`. The two structural boxes
+   carry no id at all — `body > main` and `body > aside` reach them; the small
+   chrome that CSS has to position by name (`#freeze`, `#hover-zone`) does. */
 
 body {
   --theme-color: white;
@@ -56,7 +56,8 @@ body {
 
 
 button,
-input, .checkbox label {
+input,
+.checkbox label {
   font: inherit;
   border: 0;
   border-radius: 3px;
@@ -70,22 +71,56 @@ body>aside {
 }
 
 main {
+  position: relative;
+
   display: flex;
   flex-direction: column;
+  align-items: start;
+
   flex: 1;
   min-width: 0;
+
   gap: var(--vertical-gap) var(--horizontal-gap);
 }
 
+#hover-zone {
+  position: absolute;
+  right: 0;
+  top: 5em;
+  height: 100%;
+  width: 3em;
+}
 
+#freeze {
+  position: absolute;
+  top: 0em;
+  right: 0em;
 
-nav, .checkbox {
+  width: 2em;
+  height: 2em;
+
+  background: url(/icon/unpin.svg);
+  background-size: cover;
+  background-color: var(--paper-background);
+
+  appearance: none;
+
+}
+
+#freeze:checked {
+  background: url(/icon/pin.svg);
+  background-size: cover;
+
+  box-shadow: inset var(--raised-shadow);
+}
+
+nav,
+.checkbox {
   display: flex;
   gap: var(--horizontal-pad);
   align-items: center;
   height: 2.5em;
   line-height: 2em;
-  padding: var(--vertical-pad);
 }
 
 nav>img {
@@ -137,11 +172,20 @@ aside .checkbox {
   box-shadow: inset var(--flat-shadow);
 }
 
-
 article {
   display: flex;
-  flex: 1;
   overflow: auto;
+  /* Hug the diagram on both axes, cap on both, scroll past the cap: never grow
+     (`flex: 0 1 auto`), but stay shrinkable (`min-height: 0` defeats the flex
+     default `min-height: auto`, which would push the scroll onto the document). */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+#diagram-html {
+  flex: none;
 }
 
 
@@ -237,16 +281,32 @@ aside>section {
   position: relative;
 }
 
-#diagram-html {
-  width: 100%;
-}
 
 #annotation-html,
 #diagram-svg {
-  flex: 1;
   position: absolute;
   inset: 0;
+}
 
+/* An `<svg>` is a **replaced** element, so `inset: 0` cannot size it: with
+   width/height still `auto` the over-constrained absolute-positioning equation
+   keeps the intrinsic 300x150 and throws `right`/`bottom` away. `#annotation-html`
+   is a div and stretches; this one has to be told. Say it, or the outermost svg's
+   UA `overflow: hidden` clips the whole connector layer to a 300x150 corner.
+
+   `overflow: visible` on top, because 100% is only the scroll *viewport* — the
+   canvas scrolls, so a diagram wider than the pane would be clipped again at the
+   edge. The coordinate contract is untouched either way: a node's offsetParent
+   and this layer's containing block are both #diagram-canvas, at one origin, with
+   no viewBox (node-sheller.ts).
+
+   `pointer-events: none` because this layer covers the HTML one. The nodes below
+   stay hoverable and selectable; a child that wants the mouse asks for it. */
+#diagram-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
 }
 
 .diagram {

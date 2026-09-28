@@ -95,15 +95,18 @@ test("a port is stripped from the label, not classed", async () => {
   expect(await html("<p6> 6th")).not.toContain("p6");
 });
 
-test("inline markdown reaches both shapes, and the author's angle brackets do not", async () => {
+test("inline markdown reaches both shapes, and so does the author's HTML", async () => {
   expect(await html("**bold** | *thin* | `mono`")).toContain("<strong>bold</strong>");
   expect(await html("**bold** | *thin* | `mono`")).toContain("<em>thin</em>");
   expect(await html("**bold** | *thin* | `mono`")).toContain("<code>mono</code>");
 
-  const plain = await new Vizer().render('digraph { n [label="**b** and <b>"] }');
+  // `html: true` (§7) is a deliberate widening: the app already injects trusted
+  // HTML into its sinks and runs arbitrary action.js, so a tag in a label is no
+  // new capability. `\n` stays the documented way to break a line.
+  const plain = await new Vizer().render('digraph { n [label="**b** and <b>bare</b>"] }');
   const box = shapeHtml(new DiagramBagger().bag(plain).nodes[0]!);
   expect(box).toContain("<strong>b</strong>");
-  expect(box).toContain("&lt;b&gt;");
+  expect(box).toContain("<b>bare</b>");
 });
 
 test("inline image markdown renders as an icon and newlines become break tags", async () => {
@@ -111,6 +114,16 @@ test("inline image markdown renders as an icon and newlines become break tags", 
   expect(markup).toContain('<img class="icon" src="data:image/svg+xml,');
   expect(markup).toContain('alt="cloud" />');
   expect(markup).toContain("Line 1<br />Line 2");
+});
+
+test("the library brings the rest of CommonMark, and the break stays escapable", async () => {
+  // markdown-it spells strikethrough `<s>`, where our old regex said `<del>`.
+  expect(await html("~~gone~~")).toContain("<s>gone</s>");
+  expect(await html("[docs](https://graphviz.org)")).toContain('href="https://graphviz.org"');
+  // linkify: true — a bare URL is a link without the brackets.
+  expect(await html("see https://graphviz.org")).toContain("<a href=");
+  // `\\n` is markdown's own escape, so a literal backslash-n costs us nothing.
+  expect(await html("A\\\\nB")).not.toContain("<br />");
 });
 
 test("an unbalanced label throws instead of emitting repairable markup", async () => {
