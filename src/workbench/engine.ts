@@ -55,7 +55,7 @@ export class Engine implements T.Workbench {
     this.inject("cluster-shells", this.diagram.clusters(boxes, model));
     this.inject("node-shells", this.diagram.shells(boxes, model));
     this.inject("connector-paths", this.diagram.connectors(boxes, model, this.metrics()));
-    this.place(boxes);
+    this.place();
     this.inject("action-js", this.text.action);
   }
 
@@ -85,16 +85,56 @@ export class Engine implements T.Workbench {
     return { clearance: em, radius: px(style.getPropertyValue("--connector-radius"), em) };
   }
 
-  place(boxes: T.Box[]): void {
-    const byId = new Map(boxes.map((box) => [box.id, box]));
-    for (const mark of document.querySelectorAll<HTMLElement>("#annotation-html [data-anchor]")) {
-      const spec = mark.dataset.anchor!;
-      const at = spec.includes(",") ? pair(spec) : center(byId.get(spec)!);
-      const offset = pair(mark.dataset.offset ?? "0,0");
-      mark.style.left = `${at.x + offset.x}px`;
-      mark.style.top = `${at.y + offset.y}px`;
+  // Annotations are positioned by CSS, not by us. An offset is whatever CSS
+  // accepts — `200px`, `3em`, `50%`, `min(10vw, 4em)` — so we must not add it:
+  // arithmetic on a length we did not parse is arithmetic we cannot do. What only
+  // the page knows is where a thing ended up, so that is all this publishes, as
+  // two custom properties. The theme spends them:
+  //
+  //   left: calc(var(--anchor-x) + var(--dx, 0px));
+  //   top:  calc(var(--anchor-y) + var(--dy, 0px));
+  //   transform: translate(-50%, -50%);
+  //
+  // A `%` in an offset therefore resolves against the annotation layer, and a
+  // malformed one makes the declaration invalid at computed-value time — CSS
+  // drops it and the mark sits at the layer's corner. That is CSS reporting a bad
+  // value, so there is nothing here to validate.
+  //
+  // `data-selector` is a CSS selector, run as one, against the whole document —
+  // not a node id. A node is `#core`, but so is a rank, a cluster, a class of
+  // nodes, or the canvas itself, and none of those needed a feature. Several
+  // matches anchor to the box that contains them all, so `.rank` is a row and
+  // `#annotation-html` is the drawing's own frame — which is how "from the
+  // origin" is said: its centre, less half of itself.
+  //
+  // Measured off the annotation layer rather than the canvas, because the layer
+  // is what `left`/`top` on a mark are relative to. It is absolutely positioned
+  // inside a scroller, so it travels with the content and its corner *is* the
+  // coordinate origin — no scroll term, and no separate case for the canvas.
+  place(): void {
+    const layer = document.getElementById("annotation-html")!;
+    const origin = layer.getBoundingClientRect();
+    for (const mark of layer.querySelectorAll<HTMLElement>("[data-selector]")) {
+      const selector = mark.dataset.selector!;
+      const found = document.querySelectorAll(selector);
+      // A selector that matches nothing is a typo, and the only useful thing to
+      // say about it is what it was. A selector that is not a selector throws
+      // from `querySelectorAll`, already naming itself.
+      if (found.length === 0) throw new Error(`annotation selector "${selector}" matches nothing`);
+      const at = middle([...found].map((element) => element.getBoundingClientRect()));
+      mark.style.setProperty("--anchor-x", `${at.x - origin.left}px`);
+      mark.style.setProperty("--anchor-y", `${at.y - origin.top}px`);
     }
   }
+}
+
+// The centre of the box that contains every match, in viewport coordinates. One
+// match is the ordinary case and falls out of the same arithmetic.
+function middle(rects: DOMRect[]): T.Point {
+  return {
+    x: (Math.min(...rects.map((rect) => rect.left)) + Math.max(...rects.map((rect) => rect.right))) / 2,
+    y: (Math.min(...rects.map((rect) => rect.top)) + Math.max(...rects.map((rect) => rect.bottom))) / 2,
+  };
 }
 
 // One frame, or a turn of the event loop — whichever comes first.
@@ -115,15 +155,6 @@ function painted(): Promise<void> {
     requestAnimationFrame(() => done());
     setTimeout(() => done(), 0);
   });
-}
-
-function pair(spec: string): T.Point {
-  const [x, y] = spec.split(",");
-  return { x: Number(x), y: Number(y) };
-}
-
-function center(box: T.Box): T.Point {
-  return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
 }
 
 // A CSS length in the two units a theme actually writes a radius in. Anything

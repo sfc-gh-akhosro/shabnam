@@ -410,7 +410,7 @@ The coding window is **one `<textarea>`**, and it serves the three text tabs. `t
 |---|---|---|
 | diagram.dot | source for `renderJSON` | User. Seeded with a starter diagram. |
 | styles | `#style-css` via CSSOM | The `Stylist`. One book, fed by the theme at source `0`, the redraw's derived bag at `1`, and the user's rows at `2`. The tab shows the book, one row per entry, tagged with its source. |
-| annotation.html | `#annotation-html` | User. Cartesian `data-anchor` / `data-offset`. |
+| annotation.html | `#annotation-html` | User. `data-selector` is a CSS selector; the offset is CSS. |
 | action.js | `#action-js` | User. Runs last. |
 
 **Editing any row writes at source `2`.** There is one book, so the row *is* the
@@ -431,6 +431,27 @@ an expanded declaration never becomes a book entry.
 There is exactly one shipped theme, `theme/basic-theme.json`, decomposed once from a `basic.css` that no longer ships — the JSON is the artefact, and the runtime has no CSS file in it. There is no locked base, no overlay, no dropdown, and no theme file verbs.
 
 Autocomplete is not part of the fiddle. Do not put `suggestions` on `Workbench`.
+
+**An annotation is anchored by us and positioned by CSS.** `data-selector` is a **CSS selector**, run as one — `place()` hands it to `querySelectorAll` against the whole document and publishes the centre of the box containing **every** match onto the mark as two custom properties, `--anchor-x` and `--anchor-y`. So a node is `#core`, and for no extra feature a rank is `.rank`, a cluster is `#cluster_source`, a class of nodes is `.node`, and the drawing's own frame is `#annotation-html`. A mark without the attribute is left in normal flow; a selector matching nothing throws, saying which; a selector that is not one throws from `querySelectorAll`, already naming itself.
+
+They are measured off the **annotation layer**, not the canvas, because the layer is what `left` / `top` on a mark are relative to: it is absolutely positioned inside a scroller, so it travels with the content and its corner *is* the coordinate origin. No scroll term, and no separate case for the canvas.
+
+That is the whole of the engine's part. The theme spends those two numbers:
+
+```css
+#annotation-html > [data-selector] {
+  position: absolute;
+  left: calc(var(--anchor-x) + var(--dx, 0px));
+  top:  calc(var(--anchor-y) + var(--dy, 0px));
+  transform: translate(-50%, -50%);
+}
+```
+
+So **the offset is `--dx` / `--dy`, and it is any length CSS accepts** — `200px`, `3em`, `50%`, `min(10vw, 4em)` — written wherever a CSS value can be written: inline on the mark, or as a styles row against a selector. It is never parsed, added, or validated here, because arithmetic on a length we did not parse is arithmetic we cannot do; `calc()` does it, and a malformed value is invalid at computed-value time, so CSS drops the declaration and the mark sits at the layer's corner. **Signs are CSS's, not ours: `--dy` grows downward**, and `%` resolves against the annotation layer. Two things follow for free — an offset restyles live with no redraw, like any other row, and the mark's own **centre** is what lands on the point, without anything measuring the annotation.
+
+**There is no origin form, because it needs none.** The layer is a thing a selector can match, so `data-selector="#annotation-html"` with `--dx: calc(-50% + 1em)` is one em in from the drawing's top-left corner — its centre, less half of itself, expressed in the offset that was already there. A branch in `place()` for "no anchor" would be a second way to say the same thing.
+
+This supersedes the pixel-pair contract in `docs/archive.md`, iteration 5: `data-anchor`, `data-offset` and the literal `data-anchor="120,40"` form are all gone.
 
 **File verbs and shortcuts.** `Cmd` on macOS, `Ctrl` elsewhere; the four the browser claims are `preventDefault`ed. The bindings are a `Map` registry (§0).
 

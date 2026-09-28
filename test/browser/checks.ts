@@ -85,6 +85,13 @@ const FIELD = new Map<Field, string>([
 ]);
 
 const rows = () => $$(".rows > .row");
+// The annotation layer's marks, in document order.
+const marks = () => $$("#annotation-html [data-selector]");
+/** A box's centre in viewport coordinates, rounded the way the DOM reports it. */
+const centre = (element: HTMLElement) => {
+  const at = element.getBoundingClientRect();
+  return { x: Math.round(at.left + at.width / 2), y: Math.round(at.top + at.height / 2) };
+};
 // A dropped row is hidden, not removed (§4), so "what the user can see" and "what
 // is in the list" are now two different questions.
 const live = () => rows().filter((row) => !row.hasAttribute("hidden"));
@@ -132,7 +139,72 @@ function smoke(): void {
   const connectors = $$("#connector-paths *").length;
   check("the starter diagram draws", nodes === 3 && connectors > 0, `${nodes} nodes, ${connectors} connector parts`);
   check("the SVG layer is measured, not empty", $$("#node-shells *").length > 0, $$("#node-shells *").length);
-  check("the annotation is placed", $("#annotation-html div") !== null, $("#annotation-html").innerHTML.length);
+  // Not "a div exists": that passed while the anchoring did nothing at all,
+  // because `place()` wrote coordinates onto a mark no sheet ever positioned.
+  //
+  // The contract is a division of labour, so both halves are asserted. Ours:
+  // `--anchor-x` / `--anchor-y` is the centre of what the selector matched. CSS's:
+  // the mark's own centre lands there, plus an offset in any length CSS accepts —
+  // so the expectation resolves `4em` off the mark's own computed font size rather
+  // than hard-coding a pixel count.
+  const mark = marks()[0]!;
+  const anchored = $(mark.dataset.selector!);
+  const em = parseFloat(getComputedStyle(mark).fontSize);
+  const node = centre(anchored);
+  const want = { x: node.x, y: Math.round(node.y + 4 * em) };
+  const got = centre(mark);
+  check(
+    "a mark's centre lands on its selector's centre, plus a length CSS resolved",
+    getComputedStyle(mark).position === "absolute" && got.x === want.x && got.y === want.y,
+    `${JSON.stringify(got)} vs ${JSON.stringify(want)} at ${em}px/em`,
+  );
+
+  // The origin, which is not a special case in the code: the layer is a thing a
+  // selector can match, so its centre less half of itself is its corner. This is
+  // the only check that would notice `place()` growing a branch for it.
+  const second = marks()[1]!;
+  const layer = $("#annotation-html").getBoundingClientRect();
+  const corner = centre(second);
+  check(
+    "a mark selecting the layer itself measures from the drawing's corner",
+    corner.x === Math.round(layer.left + em) && corner.y === Math.round(layer.top + em),
+    `${JSON.stringify(corner)} vs ${JSON.stringify({ x: Math.round(layer.left + em), y: Math.round(layer.top + em) })}`,
+  );
+
+  // Pass-through, proved in the one unit we could never have added ourselves: a
+  // percentage resolves against the containing block, which is the annotation
+  // layer. It also proves the offset is live CSS — no redraw, no `place()`.
+  mark.style.setProperty("--dx", "50%");
+  const shifted = centre(mark).x - got.x;
+  mark.style.removeProperty("--dx");
+  check(
+    "a percentage offset resolves against the layer, with no redraw",
+    shifted === Math.round(layer.width / 2),
+    `${shifted}px of ${layer.width}px`,
+  );
+}
+
+// `data-selector` is run as a selector, so it can match more than one thing, and
+// then the anchor is the box containing all of them. Driven the way a person would:
+// edit the annotation, press Redraw.
+async function manyMatches(): Promise<void> {
+  tabs()[2]!.click();
+  await tick();
+  await type($("aside textarea"), `<div data-selector=".node">every node</div>`, "input");
+  redrawButton().click();
+  await tick();
+
+  const rects = $$("#diagram-html .node").map((node) => node.getBoundingClientRect());
+  const want = {
+    x: Math.round((Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2),
+    y: Math.round((Math.min(...rects.map((r) => r.top)) + Math.max(...rects.map((r) => r.bottom))) / 2),
+  };
+  const got = centre(marks()[0]!);
+  check(
+    "a selector matching many anchors to the box that holds them all",
+    got.x === want.x && got.y === want.y,
+    `${JSON.stringify(got)} vs ${JSON.stringify(want)} over ${rects.length} nodes`,
+  );
 }
 
 function stylesheet(): void {
@@ -513,6 +585,8 @@ async function sourceFilter(): Promise<void> {
 await mounted();
 smoke();
 publish("smoke");
+await manyMatches();
+publish("anchors");
 stylesheet();
 publish("stylesheet");
 await rowsTab();

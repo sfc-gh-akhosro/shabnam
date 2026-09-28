@@ -169,7 +169,7 @@ export interface Workbench {
   redraw(): Promise<void>;
   inject(sink: string, text: string): void;
   measure(): Box[];
-  place(boxes: Box[]): void;
+  place(): void;
 }
 
 export type PictureFormat = "svg" | "png";

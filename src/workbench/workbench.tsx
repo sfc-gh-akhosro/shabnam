@@ -49,8 +49,15 @@ const STARTER_DOT = `digraph starter {
 }
 `;
 
-const STARTER_HTML = `<div data-anchor="core" data-offset="0,52">
+// An annotation names what it hangs off with a CSS selector, and says how far off
+// it in any CSS length: `--dx` right, `--dy` down. `#annotation-html` is the
+// drawing's own frame, so its centre less half of itself is the origin.
+const STARTER_HTML = `<div data-selector="#core" style="--dy: 4em">
   the one place DOT cannot reach
+</div>
+
+<div data-selector="#annotation-html" style="--dx: calc(-50% + 1em); --dy: calc(-50% + 1em)">
+  from the origin
 </div>
 `;
 
