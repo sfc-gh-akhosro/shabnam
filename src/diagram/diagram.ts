@@ -14,27 +14,27 @@ export class Diagram implements T.Diagram {
   private sheller = new NodeSheller();
   private edger = new EdgeDrawer();
 
-  bag(json: T.VizJson): T.DiagramModel {
+  bag(json: T.VizJson): T.VizModel {
     return this.bagger.bag(json);
   }
 
-  frame(model: T.DiagramModel): string {
+  frame(model: T.VizModel): string {
     return this.framer.frame(model);
   }
 
-  derived(model: T.DiagramModel): T.StyleBag {
+  derived(model: T.VizModel): T.StyleBag {
     return this.css.bag(model);
   }
 
-  clusters(boxes: T.Box[], model: T.DiagramModel): string {
+  clusters(boxes: T.Box[], model: T.VizModel): string {
     return this.sheller.clusters(boxes, model);
   }
 
-  shells(boxes: T.Box[], model: T.DiagramModel): string {
+  shells(boxes: T.Box[], model: T.VizModel): string {
     return this.sheller.shells(boxes, model);
   }
 
-  connectors(boxes: T.Box[], model: T.DiagramModel, metrics: T.ConnectorMetrics): string {
+  connectors(boxes: T.Box[], model: T.VizModel, metrics: T.ConnectorMetrics): string {
     return this.edger.draw(boxes, model, metrics);
   }
 }

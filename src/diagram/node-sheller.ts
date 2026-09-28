@@ -42,7 +42,7 @@ const ICON_SVG = new Map([
 ]);
 
 export class NodeSheller {
-  shells(boxes: T.Box[], model: T.DiagramModel): string {
+  shells(boxes: T.Box[], model: T.VizModel): string {
     const nodes = new Map(model.nodes.map((node) => [node.id, node]));
     const pairs = boxes.map((box) => [box, nodes.get(box.id)!] as const);
 
@@ -56,7 +56,7 @@ export class NodeSheller {
     ].join("");
   }
 
-  clusters(boxes: T.Box[], model: T.DiagramModel): string {
+  clusters(boxes: T.Box[], model: T.VizModel): string {
     const boxMap = new Map(boxes.map((b) => [b.id, b]));
     const visualClusters = model.clusters.filter(
       (cluster) => cluster.name.startsWith("cluster") && !cluster.isInvis,
@@ -75,7 +75,7 @@ const CLUSTER_PAD_TOP_NOLABEL = 16;
 
 function renderCluster(
   cluster: T.Cluster,
-  model: T.DiagramModel,
+  model: T.VizModel,
   boxMap: Map<string, T.Box>,
 ): string {
   const memberIds = clusterNodeIds(cluster, model);
@@ -110,7 +110,7 @@ function renderCluster(
   );
 }
 
-function clusterNodeIds(cluster: T.Cluster, model: T.DiagramModel): string[] {
+function clusterNodeIds(cluster: T.Cluster, model: T.VizModel): string[] {
   const ids = new Set<string>(cluster.nodes);
   for (const childName of cluster.clusters) {
     const child = model.clusters.find((c) => c.name === childName);

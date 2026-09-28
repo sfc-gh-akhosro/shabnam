@@ -9,11 +9,11 @@ import { expect, test } from "bun:test";
 import { DiagramBagger } from "../src/diagram/diagram-bagger.ts";
 import { EdgeDrawer } from "../src/diagram/edge-drawer.ts";
 import { Vizer } from "../src/diagram/vizer.ts";
-import type { Box, ConnectorMetrics, DiagramModel, Point } from "../src/types.ts";
+import type { Box, ConnectorMetrics, VizModel, Point } from "../src/types.ts";
 
 const SHARP: ConnectorMetrics = { clearance: 14, radius: 0 };
 
-async function makeModel(dot: string): Promise<DiagramModel> {
+async function makeModel(dot: string): Promise<VizModel> {
   return new DiagramBagger().bag(await new Vizer().render(dot));
 }
 

@@ -5,8 +5,156 @@
 // signature cannot say on its own.
 
 // ---------------------------------------------------------------------------
+// names — every atomic type gets one. `NodeId[][]` reads on its own.
+// ---------------------------------------------------------------------------
+
+/** A DOT node name, spaces turned to underscores. Also the HTML id. */
+export type NodeId = string;
+/** `tail_head`, then `_2`, `_3` … for parallel edges. */
+export type EdgeId = string;
+/** `cluster_a` — the name the DOT wrote, and the CSS class. Never stripped. */
+export type SubgraphName = string;
+
+/** `.cluster_a.node, .cluster_a.record` — composed flat, never nested. */
+export type Selector = string;
+export type Property = string;
+/** As the author typed it, but for a bare number, which gains `px` (§3.2). */
+export type CssValue = string;
+
+export type DotAttr = string;
+export type DotValue = string;
+
+/** Rough pixels from layout, not a measurement of anything painted. */
+export type Px = number;
+
+export type Rankdir = "TB" | "BT" | "LR" | "RL";
+
+// ---------------------------------------------------------------------------
+// the reader's answer 1 — the semantics. No coordinates (§3.1).
+// ---------------------------------------------------------------------------
+
+export type DiagramNode = {
+  id: NodeId;
+  /** Every subgraph it is named inside, outermost first. */
+  classes: SubgraphName[];
+  /** Markup, resolved down from the branches above it. Innermost wins. */
+  shape: string;
+  label: string;
+  icon: string;
+  caption: string;
+};
+
+export type DiagramEdge = {
+  id: EdgeId;
+  from: NodeId;
+  to: NodeId;
+  classes: SubgraphName[];
+};
+
+export type DiagramCluster = {
+  name: SubgraphName;
+  label: string;
+  isInvis: boolean;
+  nodes: NodeId[];
+  clusters: SubgraphName[];
+};
+
+/** `nodes` is keyed because every consumer asks for one by id; insertion order
+ *  is DOT order, so iterating `.values()` still reads the diagram as written. */
+export type DiagramModel = {
+  rankdir: Rankdir;
+  nodes: Map<NodeId, DiagramNode>;
+  edges: DiagramEdge[];
+  clusters: DiagramCluster[];
+};
+
+// ---------------------------------------------------------------------------
+// answer 2 — appearance, at the branch it was written on (§3.2)
+// ---------------------------------------------------------------------------
+
+/** selector → property → value. The selector *is* the branch. */
+export type DotStyles = Map<Selector, Map<Property, CssValue>>;
+
+// ---------------------------------------------------------------------------
+// answer 3 — what layout is given, and what it answers
+// ---------------------------------------------------------------------------
+
+/** No styles, no sizes, no weights — plus the two facts that are layout's. */
+export type PointGraph = {
+  rankdir: Rankdir;
+  nodes: NodeId[];
+  arrows: Arrow[];
+  /** Each group must land on one rank. */
+  sameRank: NodeId[][];
+  boxes: Map<SubgraphName, NodeId[]>;
+};
+
+export type Arrow = { from: NodeId; to: NodeId };
+
+export type Placement = {
+  /** Integer, straight from layout — not bucketed from a coordinate. */
+  rank: number;
+  /** Integer, within the rank. */
+  order: number;
+  x: Px;
+  y: Px;
+};
+
+/** Keyed by id, because every caller asks "where is this one?" */
+export type Positions = Map<NodeId, Placement>;
+
+// ---------------------------------------------------------------------------
+// the walk's record — what was written, and where (§2)
+// ---------------------------------------------------------------------------
+
+/**
+ * A list of enclosing subgraph names, outermost first; `[]` is the root graph.
+ * This is the provenance the whole design rests on.
+ */
+export type Scope = SubgraphName[];
+
+/** `node [...]` / `edge [...]` / `graph [...]`, kept at its branch. */
+export type Declaration = {
+  scope: Scope;
+  about: "node" | "edge" | "graph";
+  attrs: Map<DotAttr, DotValue>;
+};
+
+/** A node or edge statement that carried attributes of its own. */
+export type Stated = {
+  id: string;
+  scope: Scope;
+  attrs: Map<DotAttr, DotValue>;
+};
+
+export type EdgeStated = Stated & { from: NodeId; to: NodeId };
+
+/**
+ * Everything one walk recorded. The three answers are each a pure reading of
+ * this, which is why they can disagree about resolution.
+ */
+export type Written = {
+  rankdir: Rankdir;
+  /** What each subgraph said about itself: `label`, `rank`, `style`. */
+  scopes: Map<SubgraphName, Map<DotAttr, DotValue>>;
+  /** Where each subgraph sits, so nesting can be recovered. */
+  nesting: Map<SubgraphName, Scope>;
+  /** Cumulative: a node named in two subgraphs belongs to both. */
+  members: Map<NodeId, Set<SubgraphName>>;
+  declarations: Declaration[];
+  nodes: Stated[];
+  edges: EdgeStated[];
+};
+
+// ---------------------------------------------------------------------------
 // types — data only
 // ---------------------------------------------------------------------------
+
+// --- the viz.js shapes, departing -----------------------------------------
+//
+// `Node` … `VizLayout` and the `Vizer` / `Diagram` verbs that carry them are
+// the old pipeline's, kept only so the app keeps drawing while `dot/` lands
+// unwired. They and their three workers go in Session 2; nothing new reads them.
 
 /** Graphviz `renderJSON` output. Opaque: `Diagram.bag` is the only reader. */
 export type VizJson = unknown;
@@ -42,7 +190,7 @@ export type Cluster = {
   attrs: Map<string, string>;
 };
 
-export type DiagramModel = {
+export type VizModel = {
   rankdir: string;
   nodes: Node[];
   edges: Edge[];
@@ -50,7 +198,9 @@ export type DiagramModel = {
   attrs: Map<string, string>;
 };
 
-export type Layout = Node[][];
+export type VizLayout = Node[][];
+
+// --- ours ------------------------------------------------------------------
 
 export type Point = { x: number; y: number };
 
@@ -142,17 +292,35 @@ export type StyleRow = {
 // interfaces — methods only. Packages implement these, not every file.
 // ---------------------------------------------------------------------------
 
+/**
+ * The DOT reader. One walk, three answers, and the parsed tree escapes nowhere.
+ * One implementation: `GraphvizAst`, which is the only thing that reads DOT.
+ */
+export interface Ast {
+  model(): DiagramModel;
+  styles(): DotStyles;
+  points(): PointGraph;
+}
+
+/**
+ * The only source of geometry. One implementation: `DagreLayout`. `rank=same`
+ * is served by contraction inside it, which no type above it knows about.
+ */
+export interface Layout {
+  place(graph: PointGraph): Positions;
+}
+
 export interface Vizer {
   render(dot: string): Promise<VizJson>;
 }
 
 export interface Diagram {
-  bag(json: VizJson): DiagramModel;
-  frame(model: DiagramModel): string;
-  derived(model: DiagramModel): StyleBag;
-  clusters(boxes: Box[], model: DiagramModel): string;
-  shells(boxes: Box[], model: DiagramModel): string;
-  connectors(boxes: Box[], model: DiagramModel, metrics: ConnectorMetrics): string;
+  bag(json: VizJson): VizModel;
+  frame(model: VizModel): string;
+  derived(model: VizModel): StyleBag;
+  clusters(boxes: Box[], model: VizModel): string;
+  shells(boxes: Box[], model: VizModel): string;
+  connectors(boxes: Box[], model: VizModel, metrics: ConnectorMetrics): string;
 }
 
 export interface Stylist {
@@ -207,4 +375,5 @@ export type ShapeHtml = Map<string, (node: Node) => string>;
 /** shape → the node's type class. Absent means `.node` plus `data-shape`. */
 export type ShapeClass = Map<string, string>;
 export type ShellSvg = Map<string, string>;
-export type AttrCss = Map<string, string>;
+/** DOT attribute → CSS property. Absent means it is not appearance. */
+export type AttrCss = Map<DotAttr, Property>;

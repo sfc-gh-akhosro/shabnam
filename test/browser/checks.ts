@@ -516,6 +516,20 @@ async function importantAndInvalid(): Promise<void> {
   await type(box(bad, "value"), "0px", "change");
   check("fixing the value clears the mark and adds the rule", !bad.classList.contains("invalid") && /^\d+$/.test(bad.id), `${bad.className} id=${bad.id || "(none)"}`);
 
+  // The premise the DOT reader's one correction rests on (§3.1): a Graphviz
+  // length is a bare number, and a bare non-zero number is not a CSS `<length>`.
+  // So `fontsize=12` was reaching CSSOM as `font-size: 12`, being refused here,
+  // and never painting — which is why `styles.ts` appends `px`. Probed rather
+  // than remembered, because the whole law is downstream of this one answer.
+  const unitless = blankRow();
+  await type(box(unitless, "selector"), ".scratch-unit", "change");
+  await type(box(unitless, "property"), "font-size", "change");
+  await type(box(unitless, "value"), "12", "change");
+  check("CSSOM refuses a unitless length, which is why the reader adds `px`", unitless.classList.contains("invalid") && !cssTexts().join("").includes("scratch-unit"), `invalid=${unitless.classList.contains("invalid")}`);
+
+  await type(box(unitless, "value"), "12px", "change");
+  check("and takes the same number with a unit", !unitless.classList.contains("invalid") && declaration(".scratch-unit", "font-size") === "12px", `font-size: "${declaration(".scratch-unit", "font-size")}"`);
+
   // Expected, and already asserted. Out of the list so the suite's last check
   // still means "nothing went wrong that we did not ask for".
   errors.splice(before, errors.length - before);

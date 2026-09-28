@@ -4,9 +4,9 @@ import { expect, test } from "bun:test";
 import { DiagramBagger } from "../src/diagram/diagram-bagger.ts";
 import { NodeSheller } from "../src/diagram/node-sheller.ts";
 import { Vizer } from "../src/diagram/vizer.ts";
-import type { Box, DiagramModel } from "../src/types.ts";
+import type { Box, VizModel } from "../src/types.ts";
 
-async function makeModel(dot: string): Promise<DiagramModel> {
+async function makeModel(dot: string): Promise<VizModel> {
   return new DiagramBagger().bag(await new Vizer().render(dot));
 }
 

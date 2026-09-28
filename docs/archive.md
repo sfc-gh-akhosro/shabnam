@@ -1321,7 +1321,11 @@ Found by probing rather than reading, which is the lesson worth keeping.
 
 ### Open, and needing a decision before Session 2
 
-**Unitless lengths reaching CSS — pre-existing, and probably never painted.**
+**~~Unitless lengths reaching CSS — pre-existing, and probably never painted.~~**
+— **closed in Session 6**, and the recommendation below was not what was taken:
+one numeric test appends `px` to any bare number, so `width` / `height` kept their
+mappings. The premise was then probed in Chrome rather than left as reasoning.
+The original note, as written:
 `ATTR_CSS` maps `fontsize → font-size` and `penwidth → border-width`, and DOT
 values are bare numbers. `font-size: 12` and `border-width: 3` are **invalid CSS**
 — a `<length>` needs a unit unless zero — so CSSOM has been refusing them, meaning
@@ -1356,3 +1360,77 @@ it replaces.
 
 **Verified.** `tsc --noEmit` clean, 93 pure tests green, `src/` untouched. Both
 new dependencies are dev-only until Session 2 promotes them.
+
+## Session 6 — the reader replaced in the code, half of it
+
+Session 5 rewrote `app-architecture.md` and `src/types.ts` to a reader that did
+not exist yet, deliberately letting the document lead. This session made the code
+catch up as far as the two walls: `src/dot/` now holds `GraphvizAst` and
+`DagreLayout` and their three pure readings, **unwired**. Nothing in `src/` calls
+them, `dist/index.js` is still 2.5 MB of viz.js, and the app draws exactly as it
+did. 127 pure tests green, 82 browser checks green, `tsc --noEmit` clean.
+
+### The two decisions the plan asked for
+
+**`DiagramModel.nodes` is a `Map<NodeId, DiagramNode>`.** Every consumer asks for
+one node by id; the array was a habit inherited from the viz shape. Insertion
+order is DOT order, so `.values()` still reads the diagram as written, and the
+model now matches `Positions` in being keyed by the thing callers hold.
+
+**A bare number gains `px`, and that is the one value we correct.** The plan
+recommended `pt` for `fontsize`, `px` for `penwidth`, and dropping `width` /
+`height`. The answer was better: make it one numeric test rather than a
+per-attribute table, because **no colour and no font-family value is ever a bare
+number**, so `/^\d*\.?\d+$/` → append `px` covers every length and the two size
+mappings can stay. Fewer moving parts, and nothing special-cases zero — `0px` and
+`0` paint identically, so a branch to preserve `"0"` would be pedantry.
+
+This collides with "an attr value is what the author typed, never corrected", so
+the law was rewritten rather than quietly bent: `app-architecture.md` §3.1 now
+says *with one correction*, and explains why a rule nobody can see is worse than
+a rule that was adjusted.
+
+**The premise was probed, not remembered.** The whole correction rests on
+`font-size: 12` being invalid CSS, which had never actually been observed in this
+repo — it was reasoning from the spec. The browser suite now drives a real row
+through the real Stylist: CSSOM refuses `12`, accepts `12px`. Confirmed in
+Chrome, and kept as a permanent check, because a law downstream of one library's
+answer should have that answer under test.
+
+### Three things the plan did not name
+
+**Coexistence needed a rename, not a parallel vocabulary.** The legacy
+`DiagramModel` and `Layout` (`= Node[][]`) collide with the target names. Renaming
+the *new* shapes would have meant renaming them back in Session 2, so the *old*
+ones became `VizModel` and `VizLayout`, marked in `types.ts` as departing —
+which also labels them for deletion rather than leaving two plausible models with
+nothing to tell them apart. `Node`, `Edge`, `Cluster` and `VizJson` do not
+collide and were left untouched. BSD `sed` does not honour `\b`, and silently
+no-opped the first two rename passes while reporting success; `tsc` caught it.
+
+**The lab was missing two behaviours `app-architecture.md` §3.1 promises**, and
+wiring it up in Session 2 would have regressed both in silence: parallel-edge id
+suffixes (`a_b`, `a_b_2`, `a_b_3`) and the `\N` / `\G` label escapes. Both are
+implemented and under test. Matching whole `\x` pairs is what keeps `\\N` out of
+it and leaves the `\n` line-break contract to `markdown.ts`. The lab's *other*
+divergence from the old pipeline — the id-collision throw — stays gone, because
+§3.1 dropped it on purpose.
+
+**A real bug, found by a test written for something else.** A root-level bare
+attribute (`bgcolor="white"`) produced no rule at all. The walk files the root
+graph under scope `""`, and `buildStyles` skipped that key — while a *subgraph's*
+own attributes did become a rule. The root had been special-cased out of its own
+symmetry, and the lab's CLI never showed it because neither example file styles
+the root. Both forms now yield `:root, svg`, and a `graph [bgcolor=…]` and a bare
+`bgcolor=…` agree. §3.2 carries the rule, including the decision that a scope's
+own attributes name that scope with the **bare** class rather than the composed
+nesting a `node [...]` gets — the attribute is about the subgraph, not its members.
+
+### Not invented, on purpose
+
+**Nothing emits the `:root` token block.** `example-1` is pure markup and derives
+*no* rules at all, yet §3.2 and the story both say a bare DOT derives the token
+block — the old `css-bagger` built it in a preamble. It is not the reader's to
+emit, because a reader may not invent a value, and inventing one to make a
+sentence true would have been the worst available outcome. Handed to Session 2 as
+a decision between the theme and the `Stylist`.

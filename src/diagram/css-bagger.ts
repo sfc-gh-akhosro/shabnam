@@ -59,7 +59,7 @@ const ATTR_INHERITS = new Set(["fontname", "fontsize"]);
 // source 1 and has to stay at least as near as the theme's source 0.
 const TOKENS = "#diagram-canvas, svg";
 
-function preamble(model: T.DiagramModel, nodeBag: Bag, edgeBag: Bag): Bag {
+function preamble(model: T.VizModel, nodeBag: Bag, edgeBag: Bag): Bag {
   const primaryColor =
     model.attrs.get("bgcolor") ??
     model.attrs.get("fillcolor") ??
@@ -105,7 +105,7 @@ function preamble(model: T.DiagramModel, nodeBag: Bag, edgeBag: Bag): Bag {
 type Bag = Map<string, string>;
 
 export class CssBagger {
-  bag(model: T.DiagramModel): T.StyleBag {
+  bag(model: T.VizModel): T.StyleBag {
     const out: T.StyleBag = new Map();
     const graphBag = pick(model.attrs);
     const nodeBag = mode(model.nodes.map((node) => node.attrs));
@@ -132,7 +132,7 @@ export class CssBagger {
   private cluster(
     out: T.StyleBag,
     cluster: T.Cluster,
-    model: T.DiagramModel,
+    model: T.VizModel,
     inherited: Bag,
     bags: Map<string, Bag>,
     granted: Map<string, Bag>,
@@ -153,7 +153,7 @@ export class CssBagger {
 
   private nodeOverrides(
     out: T.StyleBag,
-    model: T.DiagramModel,
+    model: T.VizModel,
     nodeBag: Bag,
     bags: Map<string, Bag>,
   ): void {
@@ -261,15 +261,15 @@ function own(out: T.StyleBag, selector: string, seed?: Bag): Bag {
   return properties;
 }
 
-function nodeOf(model: T.DiagramModel, id: string): T.Node {
+function nodeOf(model: T.VizModel, id: string): T.Node {
   return model.nodes.find((node) => node.id === id)!;
 }
 
-function clusterOf(model: T.DiagramModel, name: string): T.Cluster {
+function clusterOf(model: T.VizModel, name: string): T.Cluster {
   return model.clusters.find((cluster) => cluster.name === name)!;
 }
 
-function roots(model: T.DiagramModel): T.Cluster[] {
+function roots(model: T.VizModel): T.Cluster[] {
   const nested = new Set(model.clusters.flatMap((cluster) => cluster.clusters));
   return model.clusters.filter((cluster) => !nested.has(cluster.name));
 }

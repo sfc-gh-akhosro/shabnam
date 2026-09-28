@@ -16,7 +16,7 @@ const ARROW = `<defs><marker id="connector-arrow" class="arrow" viewBox="0 0 10 
 export class EdgeDrawer {
   private router = new EdgeRouter();
 
-  draw(boxes: T.Box[], model: T.DiagramModel, metrics: T.ConnectorMetrics): string {
+  draw(boxes: T.Box[], model: T.VizModel, metrics: T.ConnectorMetrics): string {
     const byId = new Map(boxes.map((box) => [box.id, box]));
 
     const paths = model.edges.map((edge) => {

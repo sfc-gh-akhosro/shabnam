@@ -14,17 +14,21 @@ The prize is not the swap, it is what the swap deletes: the statistical recovery
 of DOT defaults, the coordinate bucketing, and a 2.5 MB WASM payload.
 
 ```
-today                          after
+today                          after (Session 1 actuals, comments included)
   vizer.ts            16         (deleted)
-  diagram-bagger.ts  239         graphviz-ast.ts   ~95
-  css-bagger.ts      275         styles.ts         ~56  + model.ts ~66
+  diagram-bagger.ts  239         graphviz-ast.ts   130
+  css-bagger.ts      275         styles.ts          71  + model.ts 88
   layout-framer.ts    63         layout-framer.ts  ~35   (bucketing dies)
-                                 points.ts         ~28
-                                 dagre-layout.ts   ~67
+                                 points.ts          41
+                                 dagre-layout.ts    96
   ─────────────────────          ─────────────────────
-                     593                          ~347
+                     593                           426 + ~35
   dist/index.js     2.5 MB       expect < 300 KB
 ```
+
+The two walls came in slightly over the projection, all of it comment: §3.1's
+parallel-edge ids and label escapes were missing from the lab and had to be
+written (see the archive).
 
 **Architecture and types are already rewritten to the target**, so the document
 leads the code for the length of this task — which is the intended direction, not
@@ -32,33 +36,20 @@ drift. Session 4 closes the gap and re-checks every claim.
 
 ---
 
-## Session 1 — the two walls land, unwired
+**Session 1 is done** — `src/dot/` holds both walls and their three readings,
+unwired, and `src/types.ts` holds the new shapes. The record, the two decisions it
+settled and the bug it found are in [`docs/archive.md`](docs/archive.md).
 
-Move the lab into `src/dot/` and make it the app's own. Nothing calls it yet, so
-the app keeps working on viz.js throughout.
-
-- `src/types.ts` takes the new shapes: named atomic types, `DiagramModel` with no
-  coordinates, `DotStyles`, `PointGraph`, `Positions`, `Written`, and the `Ast` /
-  `Layout` interfaces. Keep `Box`, `ConnectorMetrics`, the style book and the tab
-  types exactly as they are — they are downstream of this story and untouched by it.
-- `src/dot/` gets `graphviz-ast.ts`, `model.ts`, `styles.ts`, `points.ts`,
-  `dagre-layout.ts`. Six files including nothing else; `diagram/` stays put.
-- Unit tests for each worker, from the two example files: selector composition,
-  markup resolution (innermost wins), cumulative membership, `rank=same` held,
-  ranks compacted to `0…n`.
-
-**Done when** `bun test` is green with the new tests, the app still runs on
-viz.js, and `Ast` / `Layout` each have exactly one implementation.
-
-**Decision to make here, not later:** whether `DiagramModel.nodes` keeps a
-`Map<NodeId, DiagramNode>` instead of an array. Every consumer looks a node up by
-id; the array is a habit from the viz shape.
+---
 
 ## Session 2 — redraw changes hands
 
 - `Workbench.redraw` builds a `GraphvizAst`, then asks it for the three answers
   and hands the `PointGraph` to `DagreLayout`.
-- Delete `vizer.ts`, `diagram-bagger.ts`, `css-bagger.ts`.
+- Delete `vizer.ts`, `diagram-bagger.ts`, `css-bagger.ts` — and with them
+  `VizJson`, `Node`, `Edge`, `Cluster`, `VizModel`, `VizLayout` and the `Vizer` /
+  `Diagram` verbs that carry them. Session 1 renamed the last two rather than
+  the new shapes, so nothing is renamed back; it is all deletion.
 - `layout-framer.ts` takes `Positions` instead of reading `pos`: the `AXES` map,
   the 2-point tolerance and `bucket()` all go. Ranks arrive as integers and
   `order` is already correct, so framing is a group-and-emit.
@@ -67,6 +58,15 @@ id; the array is a habit from the viz shape.
   `record-shape`, `smart-connectors`, `ui-integration`.
 - Drop `@viz-js/viz` from dependencies; promote `@ts-graphviz/ast` and
   `@dagrejs/dagre` from dev to runtime.
+
+**Decide here: who emits the `:root` token block.** Nothing does. `example-1` is
+pure markup and derives *no* rules at all, yet §3.2 and the story both say a bare
+DOT derives the token block, which the old `css-bagger` built in a preamble. It is
+**not** the reader's — a reader may not invent a value, and §3.2's "derived rules
+never invent a colour" is the same law from the other side. So either the theme
+already carries those tokens and the sentence is wrong, or the `Stylist` owns a
+preamble and §3.2 should say so. Check `theme/basic-theme.json` first: if the
+tokens are already there at source `0`, the honest fix is to delete the claim.
 
 **Done when** both suites are green, no file imports viz, and a redraw of both
 examples is inspected in the browser — this is the session where the picture
@@ -88,7 +88,11 @@ visibly moves, so look at it.
 
 - Re-read `app-architecture.md` against the code that now exists and fix every
   claim that drifted, including the stale ones this task already found (below).
-- `user-story.md` gets the brief version, no duplication of the readme.
+- **`user-story.md` has two known drifts**, both from the reader swap: it still
+  says a sanitized id colliding with another **throws**, which §3.1 deliberately
+  dropped in favour of the bare space→underscore, and one passage still describes
+  a rank as recovered by sorting on an axis and opening a bucket at a gap, which
+  `Positions` retired. It gets the brief version, no duplication of the readme.
 - `coding-rules.md` carries the story → types → architecture → code loop.
 - Closing ceremony: archive, clean desk, canary, commit.
 
@@ -96,23 +100,13 @@ visibly moves, so look at it.
 
 ## Problems found, which the plan does not silently absorb
 
-**1. Unitless lengths reaching CSS — and this one is pre-existing.** `ATTR_CSS`
-maps `fontsize → font-size` and `penwidth → border-width`, and Graphviz values are
-bare numbers. `font-size: 12` and `border-width: 3` are **invalid CSS** — a
-`<length>` needs a unit unless it is zero — so CSSOM must be refusing them today,
-which means `#horizon`'s `fontsize=12` in `example-2.dot` has never once been
-painted. The lab inherits the bug and I added two more mappings (`width`,
-`height`) with the same flaw.
-
-This is a genuine collision between two laws: values pass through uncorrected,
-and a rule must be valid CSS. Three ways out, and it is your call:
-appending a unit at translation time (a correction, so it needs saying out loud in
-the architecture), dropping those attributes from the registry (size and weight
-are CSS's job anyway, which the architecture already argues), or leaving them to
-be refused. **My recommendation: drop `width` and `height`, and give `fontsize`
-and `penwidth` units** — `pt` for the font, `px` for the border — because those
-two are the units Graphviz means, and a rule nobody can see is worse than a rule
-that was adjusted. Verify in the browser suite before believing me.
+**1. Unitless lengths reaching CSS — settled at Session 1.** A bare number gains
+`px` in `styles.ts`, and the premise was probed rather than remembered: the
+browser suite now drives a `font-size: 12` row and watches CSSOM refuse it, then
+the same number with a unit and watches it land. So `#horizon`'s `fontsize=12`
+paints for the first time. `width` and `height` kept their mappings, since one
+numeric test serves every length; §3.1 carries the correction and §3.2 the
+registry line.
 
 **2. `PointGraph` drops edge weights, and `example-2` tunes layout with them.**
 It uses `weight=0` twice, `weight=100`, `constraint=false` and a graph-level
@@ -123,9 +117,10 @@ within a rank that will move. If it looks wrong in Session 2, the fix is to let
 `Arrow` carry an optional `weight` and `minlen` — those are structure, not style,
 so they belong in the point graph and it stays honest.
 
-**3. Anonymous subgraph names change**, `%1` → `subgraph_1`. Any saved style
-naming `.subgraph_N` breaks. No verb loads a style document today (S11), so this
-costs nothing now and would cost something later.
+**3. Anonymous subgraph names change**, `%1` → `subgraph_1`, and it is now under
+test both ways round. Any saved style naming `.subgraph_N` in the old form
+breaks. No verb loads a style document today (S11), so this costs nothing now and
+would cost something later.
 
 **4. Ports are dropped.** `a:p1:n -> b` keeps the node and discards the port, as
 today. Noted, not fixed.

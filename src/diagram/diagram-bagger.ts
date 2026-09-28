@@ -62,7 +62,7 @@ export class DiagramBagger {
   // sanitized id → the DOT name that claimed it, so a collapse throws (§3.1)
   private ids = new Map<string, string>();
 
-  bag(json: T.VizJson): T.DiagramModel {
+  bag(json: T.VizJson): T.VizModel {
     const raw = json as RawGraph;
     this.ids = new Map();
 

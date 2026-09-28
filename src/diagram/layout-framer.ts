@@ -27,7 +27,7 @@ const AXES = new Map<string, Axes>([
 ]);
 
 export class LayoutFramer {
-  columns(model: T.DiagramModel): T.Layout {
+  columns(model: T.VizModel): T.VizLayout {
     const axes = AXES.get(model.rankdir) ?? AXES.get("TB")!;
     const buckets = bucket(model.nodes, axes);
 
@@ -37,7 +37,7 @@ export class LayoutFramer {
     return buckets;
   }
 
-  frame(model: T.DiagramModel): string {
+  frame(model: T.VizModel): string {
     const columns = this.columns(model).map(
       (column) => `<div class="rank">${column.map((node) => shapeHtml(node)).join("")}</div>`,
     );

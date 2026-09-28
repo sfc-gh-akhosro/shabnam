@@ -6,11 +6,11 @@
 import { expect, test } from "bun:test";
 import { DiagramBagger } from "../src/diagram/diagram-bagger.ts";
 import { Vizer } from "../src/diagram/vizer.ts";
-import type { DiagramModel } from "../src/types.ts";
+import type { VizModel } from "../src/types.ts";
 
 const FIXTURE = new URL("../research-lab/example-1.dot", import.meta.url).pathname;
 
-async function model(dot: string): Promise<DiagramModel> {
+async function model(dot: string): Promise<VizModel> {
   return new DiagramBagger().bag(await new Vizer().render(dot));
 }
 
