@@ -219,21 +219,17 @@ Same spirit as Soft 7: enough structure to stay coherent, not so much that it st
 
 ---
 
-## Closing ceremony
+## Opening Ceremony
+The developer might ask for the `opening ceremony` (often in the begining of a session) which basically means I want a fresh start and erase many of LLM memory and carried over knowledge from other sessions. 
 
-Before we close the workshop for a session. Not deep — a stop-and-check, so the next session opens on a clean desk.
+we already have everything we need.
 
-1. **Archive what is done.** Finished work moves out of `current-task.md` into `docs/archive.md` — what was built, what was decided, what turned out wrong. `current-task.md` ends the session empty or holding only what is genuinely next.
-2. **File what this session decided.** There is no debts ledger; it was retired once every entry in it had a proper home, and recreating one is how it grows back. A decision the code already implements goes into `app-architecture.md` — that is the contract, and a behaviour described nowhere gets "fixed" by the next session. Finished work, and anything that cannot be closed and never will be, goes into `docs/archive.md` with the reasoning that makes it worth re-reading. Wanted-but-unscheduled work goes into `current-task.md` under **For Later**. A ledger comes back only if we deliberately defer something real, and that is a conversation.
-3. **Clean the desk.** Delete dead code, unused exports, one-off scripts, and tests that no longer test anything. A test that has stopped earning its place is deleted, not kept out of politeness.
-4. **Check the canary.** `git status`. Anything unexpected means the ignore rules caught something — fix the cause, never the canary.
-5. **Commit and push,** with the identity the repo expects, then report: what shipped, what is open, what the next session should pick up.
-6. **Erase the carried knowledge.** Wipe every agent-side store that would let the next session inherit something the repo does not say. The list is exact, in both directions.
 
-**Why step 7 exists, and why it is last.** This repo *is* the memory: `AGENTS.md` routes to `app-architecture.md`, `coding-rules.md` and `user-story.md`; `current-task.md` holds what is next; `docs/archive.md` holds what was decided and why; `git` holds the rest. 
+**Erase the carried knowledge.** Wipe every agent-side store that would let the next session inherit something the repo does not say. The list is exact, in both directions.
+
+**Why to erase.** This repo *is* the memory: `AGENTS.md` routes to `app-architecture.md`, `coding-rules.md` and `user-story.md`; `current-task.md` holds what is next; `docs/archive.md` holds what was decided and why; `git` holds the rest. 
 LLM's have tendency to over "attend" to the short-term memory (that lives in automated files) than the longer vision that lives in our repo.
 
-It is last because erasing is only safe once the knowledge is both **written down and committed**. Steps 1-3 put it in the repo, step 6 puts it in git, and step 7 clears the scratchpad. Never run this earlier in the ceremony.
 
 | Erase | What it carries |
 |---|---|
@@ -274,6 +270,19 @@ Two rules for doing it:
 
 - **Anything worth keeping was already filed by steps 1-3.** If you are tempted to preserve an entry, that is step 1 or 3 telling you it was never filed. Put it in the repo, then erase.
 - **A cross-project preference is not this repo's to file, and not memory's to hold either.** It belongs in the `user-preferences` skill (`~/.snowflake/cortex/skills/user-preferences/reference/`), which is hand-authored, reviewable, and survives this step; there is a copy at `~/Repos/etc/coco-preferences/`. Before deleting anything that looks like a duplicate, **confirm the live copy exists** — do not infer it. A memory file deleted on the assumption that a skill already covered it is gone for good: `rm` does not use the trash, and there was no backup. That has happened once, to a file whose contents are now unrecoverable.
+
+---
+
+## Closing Ceremony
+The developer might ask for `closing ceremony` which is a trigger for these "house cleaning" procedure and making our repo ready for the next session.
+
+Before we close the workshop for a session. Not deep — a stop-and-check, so the next session opens on a clean desk.
+
+1. **Archive what is done.** Finished work moves out of `current-task.md` into `docs/archive.md` — what was built, what was decided, what turned out wrong. `current-task.md` ends the session empty or holding only what is genuinely next.
+2. **File what this session decided.** There is no debts ledger; it was retired once every entry in it had a proper home, and recreating one is how it grows back. A decision the code already implements goes into `app-architecture.md` — that is the contract, and a behaviour described nowhere gets "fixed" by the next session. Finished work, and anything that cannot be closed and never will be, goes into `docs/archive.md` with the reasoning that makes it worth re-reading. Wanted-but-unscheduled work goes into `current-task.md` under **For Later**. A ledger comes back only if we deliberately defer something real, and that is a conversation.
+3. **Clean the desk.** Delete dead code, unused exports, one-off scripts, and tests that no longer test anything. A test that has stopped earning its place is deleted, not kept out of politeness.
+4. **Check the canary.** `git status`. Anything unexpected means the ignore rules caught something — fix the cause, never the canary.
+5. **Commit and push,** with the identity the repo expects, then report: what shipped, what is open, what the next session should pick up.
 
 ---
 
