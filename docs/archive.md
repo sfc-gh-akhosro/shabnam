@@ -1426,11 +1426,47 @@ the root. Both forms now yield `:root, svg`, and a `graph [bgcolor=…]` and a b
 own attributes name that scope with the **bare** class rather than the composed
 nesting a `node [...]` gets — the attribute is about the subgraph, not its members.
 
-### Not invented, on purpose
+### Not invented — and then the claim was deleted instead
 
 **Nothing emits the `:root` token block.** `example-1` is pure markup and derives
-*no* rules at all, yet §3.2 and the story both say a bare DOT derives the token
-block — the old `css-bagger` built it in a preamble. It is not the reader's to
+*no* rules at all, yet §3.2 and the story both said a bare DOT derives the token
+block — the old `css-bagger` built it in a preamble. It was not the reader's to
 emit, because a reader may not invent a value, and inventing one to make a
-sentence true would have been the worst available outcome. Handed to Session 2 as
-a decision between the theme and the `Stylist`.
+sentence true would have been the worst available outcome. Handed on as a decision
+between the theme and the `Stylist` — and reading the old preamble settled it as
+**neither**:
+
+```ts
+const primaryColor = model.attrs.get("bgcolor") ?? … ?? "blue";
+const secondaryColor = nodeBag.get("color")
+  ?? model.nodes.find((n) => n.attrs.has("color"))?.attrs.get("color") ?? "green";
+```
+
+Three laws at once. It **invented values** — `blue`, `green`, `orange`, `14px`,
+`2em`, `0 6px 12px lightgrey` — against §3.2's "derived rules never invent a
+colour". It **recovered a default by position**, promoting the first node that
+happened to carry a `color` to a diagram-wide token, which is a cousin of the
+tally §7 refuses. And it wrote at source `1` onto the same canvas selector the
+theme owns at source `0`, so by §1.2's equal-or-higher guard **every redraw
+replaced the theme's real palette with the invented one** — `--primary-color`
+went from `#0b3d91` to `blue`. All seventeen tokens are already in
+`basic-theme.json`. So the claim was struck from §3.2 and the story rather than
+served, and "a bare DOT derives nothing" became the law, with `example-1` as its
+demonstration. It also derived `--connector-style` from `splines`, which §3.4 had
+already retired.
+
+**And that investigation found a bug in the same session's code.** `styles.ts` was
+sending a root graph attribute to `:root, svg`, because §3.2's sentence about
+`:root` was read as general when it is specifically about custom properties. For
+an ordinary property it is wrong twice over: `:root` is `<html>` on screen, so a
+DOT `bgcolor` would tint the app's chrome instead of the diagram, and it is the
+`<svg>` element inside an exported file, so screen and export would disagree —
+exactly the failure V11 closed, and the reason `css-bagger`'s own comment insisted
+the theme and the derived block name the same near ancestor. A root graph
+attribute is now `#diagram-canvas`, matching the theme, and a bare `bgcolor=…` and
+a `graph [bgcolor=…]` are asserted to produce the same rule.
+
+§1.1 was corrected in passing: it claimed "derived rules never reference a sink id,
+and neither should a theme", while the shipped theme references five such
+selectors and has to. What it means is that a rule about diagram *content* never
+reaches through a sink id; the sinks themselves are styled directly, on purpose.

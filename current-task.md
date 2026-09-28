@@ -59,14 +59,17 @@ settled and the bug it found are in [`docs/archive.md`](docs/archive.md).
 - Drop `@viz-js/viz` from dependencies; promote `@ts-graphviz/ast` and
   `@dagrejs/dagre` from dev to runtime.
 
-**Decide here: who emits the `:root` token block.** Nothing does. `example-1` is
-pure markup and derives *no* rules at all, yet §3.2 and the story both say a bare
-DOT derives the token block, which the old `css-bagger` built in a preamble. It is
-**not** the reader's — a reader may not invent a value, and §3.2's "derived rules
-never invent a colour" is the same law from the other side. So either the theme
-already carries those tokens and the sentence is wrong, or the `Stylist` owns a
-preamble and §3.2 should say so. Check `theme/basic-theme.json` first: if the
-tokens are already there at source `0`, the honest fix is to delete the claim.
+**Settled before Session 2 opened: nobody emits a token block, because nobody
+may.** The question was "theme or `Stylist`?" and the answer was "neither, and the
+claim was wrong". The old `css-bagger` preamble invented `"blue"`, `"green"`,
+`"orange"` and `"14px"` when the DOT was silent, took a secondary colour from the
+first node that happened to carry one, and wrote at source `1` onto the canvas
+selector the theme owns at `0` — so it replaced the theme's real palette on every
+redraw. All seventeen tokens are already in `basic-theme.json`. §3.2 now says a
+derived rule never invents *anything*, and `example-1` deriving nothing is the
+demonstration rather than a gap. A root graph attribute lands on
+`#diagram-canvas`, not `:root`, because `:root` is `<html>` on screen and the
+`<svg>` after export.
 
 **Done when** both suites are green, no file imports viz, and a redraw of both
 examples is inspected in the browser — this is the session where the picture
@@ -88,11 +91,11 @@ visibly moves, so look at it.
 
 - Re-read `app-architecture.md` against the code that now exists and fix every
   claim that drifted, including the stale ones this task already found (below).
-- **`user-story.md` has two known drifts**, both from the reader swap: it still
-  says a sanitized id colliding with another **throws**, which §3.1 deliberately
-  dropped in favour of the bare space→underscore, and one passage still describes
-  a rank as recovered by sorting on an axis and opening a bucket at a gap, which
-  `Positions` retired. It gets the brief version, no duplication of the readme.
+- **`user-story.md` has one known drift**: it still says a sanitized id colliding
+  with another **throws**, which §3.1 deliberately dropped in favour of the bare
+  space→underscore. A second was suspected and checked: the rank passage is
+  already correctly in the past tense, so there is nothing to fix there. It gets
+  the brief version, no duplication of the readme.
 - `coding-rules.md` carries the story → types → architecture → code loop.
 - Closing ceremony: archive, clean desk, canary, commit.
 

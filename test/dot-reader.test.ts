@@ -113,19 +113,27 @@ test("a `node [...]` composes a flat selector from the branch it was written on"
   );
 });
 
-test("the root is `:root, svg`, an edge declaration is `.edge`, a subgraph is its class", () => {
+test("the root names the canvas, an edge declaration is `.edge`, a subgraph is its class", () => {
   const ast = new GraphvizAst(`digraph {
     bgcolor="white"
     edge [color="grey"]
     subgraph cluster_a { bgcolor="azure" ; node [fillcolor="coral"] ; a }
   }`);
   const styles = ast.styles();
-  expect(styles.get(":root, svg")).toEqual(new Map([["background-color", "white"]]));
+  // `#diagram-canvas`, not `:root`: `:root` is `<html>` on screen and the `<svg>`
+  // after export, so one rule would paint two different things.
+  expect(styles.get("#diagram-canvas")).toEqual(new Map([["background-color", "white"]]));
   expect(styles.get(".edge")).toEqual(new Map([["border-color", "grey"]]));
   expect(styles.get(".cluster_a")).toEqual(new Map([["background-color", "azure"]]));
   expect(styles.get(".cluster_a.node, .cluster_a.record")).toEqual(
     new Map([["background-color", "coral"]]),
   );
+});
+
+test("a bare graph attribute and a `graph [...]` produce the same rule", () => {
+  const bare = new GraphvizAst(`digraph { bgcolor="white" }`).styles();
+  const listed = new GraphvizAst(`digraph { graph [bgcolor="white"] }`).styles();
+  expect([...listed]).toEqual([...bare]);
 });
 
 test("a nested declaration composes both names, because there is no wrapper element", () => {

@@ -37,12 +37,13 @@ export function buildStyles(written: T.Written): T.DotStyles {
 }
 
 /**
- * A scope's own attributes. The root graph is `:root, svg` — both, because a
- * sheet attached to the page is not guaranteed to resolve custom properties
- * inside an SVG subtree from `:root` alone (§3.2). A subgraph is its class.
+ * A scope's own attributes. A subgraph is its class. The root graph is
+ * `#diagram-canvas` — the element a `bgcolor` means — and **not** `:root`, which
+ * is `<html>` on screen and the `<svg>` after export, so one rule would paint
+ * two different things (§3.2). The theme keys its own canvas block the same way.
  */
 const scopeSelector = (name: T.SubgraphName): T.Selector =>
-  name === "" ? ":root, svg" : `.${name}`;
+  name === "" ? "#diagram-canvas" : `.${name}`;
 
 /**
  * `node [...]` at the root is `.node, .record`; the same inside `cluster_a` is
