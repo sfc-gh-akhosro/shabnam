@@ -189,22 +189,16 @@ page, a later stage than anything in this story.
 
 ---
 
-## Running it
+## Where this lives now
 
-```sh
-bun run ast-layout example-2          # styles, then the point graph, then positions
-bun run ast-layout example-1 --dot    # raw DOT attributes instead of CSS
-bun run ast-layout research-lab/example-1.dot
-```
-
-## The files
+The lab's TypeScript was deleted once `src/dot/` superseded it. This file is
+the design document that outlived the experiment. The live workers are:
 
 | file | worker |
 |---|---|
-| `types.ts` | the types above, and nothing else |
-| `graphviz-ast.ts` | `GraphvizAst` — one walk, then the three answers |
-| `model.ts` | the walk's record → `DiagramModel` (markup resolved) |
-| `styles.ts` | the walk's record → `DotStyles` (provenance kept) |
-| `points.ts` | the walk's record → `PointGraph` (everything stripped) |
-| `dagre-layout.ts` | `DagreLayout` — contraction, layout, expansion |
-| `cli.ts` | prints all three |
+| `src/types.ts` | the types above, completed |
+| `src/dot/graphviz-ast.ts` | `GraphvizAst` — one walk, then the three answers |
+| `src/dot/model.ts` | the walk's record → `DiagramModel` (markup resolved) |
+| `src/dot/styles.ts` | the walk's record → `DotStyles` (provenance kept) |
+| `src/dot/points.ts` | the walk's record → `PointGraph` (everything stripped) |
+| `src/dot/dagre-layout.ts` | `DagreLayout` — contraction, layout, expansion |

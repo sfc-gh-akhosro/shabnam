@@ -6,25 +6,12 @@ Always read these files in each session:
 
 # Current task
 
-Sessions 1 and 2 of the viz-replacement plan are done and in
-[`docs/archive.md`](docs/archive.md) (archive Sessions 6 and 7). The walls are
-live, the three viz workers and `@viz-js/viz` are gone, both suites are green,
-both examples redraw. Next is harvest, then the files agree.
+Sessions 1–3 of the viz-replacement plan are done and in
+[`docs/archive.md`](docs/archive.md) (archive Sessions 6–8). The walls are
+live, viz.js is gone, harvest recorded the sizes, V6 and M4 are closed. Next
+is the files agree.
 
 ---
-
-## Session 3 — harvest
-
-- Measure `dist/index.js` and Export HTML. Both should fall by an order of
-  magnitude; record the real numbers, do not invent them.
-- **V6 dies** (Export HTML was 3.4 MB because it carried viz.js).
-- **M4 dies** — its whole point was provenance, which `styles.ts` now has. What
-  remains of it is only "our own layout maths instead of dagre", which is a
-  separate, smaller, optional question. Say so in `docs/archive.md` rather than
-  leaving a debt tag pointing at finished work.
-- Delete `research-lab/ast/` code once `src/dot/` supersedes it, keeping
-  `readme.md` as the design document it is. Drop the `ast-layout` script from
-  `package.json` with the lab CLI.
 
 ## Session 4 — the files agree
 

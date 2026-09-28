@@ -660,19 +660,19 @@ Both are consumed by `NodeSheller.clusters(...)`: `isInvis` suppresses drawing a
 invisible cluster (`style=invis`), and `label` renders as `.cluster-label` text atop
 the cluster box.
 
-### V6. An export is ~3.4 MB, and that is the floor — **not closable**
+### V6. ~~An export is ~3.4 MB, and that is the floor~~ — **closed in Session 8**
 
-The exported file inlines the whole bundle, viz.js wasm included, as base64: ~3.4 MB
-for a three-node diagram. That is the price of "depends on nothing but a browser".
+The floor was viz.js, not base64. Session 8 measured the live files: `dist/index.js`
+is 255,886 bytes and Export HTML of the starter (theme book inlined) is 353,522
+bytes. The old numbers, kept because they are why this entry existed: Iteration 5's
+export was 3,396,258 bytes; the last committed viz.js bundle was 2,581,985.
 
-**Base64 rather than raw text is a separate price, and the reason matters.** The
-bundle contains `themer.ts`, which contains a template that writes `</script>` — so
-inlined as text, the HTML parser closes the script early and the page dies on
-`Uncaught SyntaxError: Unexpected identifier 'digraph'`. Escaping it in the source
-did not survive the bundler, which normalised `<\/script>` back to the literal.
-
-Recorded so nobody "optimises" the base64 away and reintroduces that. A minified
-export bundle would trim the total; the wasm will not move.
+**Base64 rather than raw text is a separate price, and the reason still stands.**
+The bundle contains a template that writes `</script>` — so inlined as text, the
+HTML parser closes the script early and the page dies on `Uncaught SyntaxError:
+Unexpected identifier 'digraph'`. Escaping it in the source did not survive the
+bundler, which normalised `<\/script>` back to the literal. Do not "optimise" the
+encoding away.
 
 ### V10. The picture *files* have no automated coverage — **left open deliberately, then retired**
 
@@ -1512,5 +1512,52 @@ unwired — malformed DOT throws. `user-story.md` still says a colliding id
 throws. `README.md` still describes `Vizer` / `renderJSON`. Session 3 harvests;
 Session 4 makes the files agree.
 
-**V6 and M4** stay in this archive until Session 3 records the real sizes and
-writes their obituaries. Do not invent the numbers here.
+---
+
+## Session 8 — harvest
+
+Session 3 of the viz-replacement plan. Sessions 6 and 7 put the walls in and
+rewired redraw; this one measures what that actually bought, retires the two
+debts that were waiting on those numbers, and deletes the lab now that `src/dot/`
+is the live path.
+
+### The numbers, measured
+
+Rebuilt with `bun run build` after the viz.js deletion. Last committed
+`dist/index.js` was the unwired Session-6 bundle, still carrying viz.js.
+
+| artefact | before | now | ratio |
+|---|---|---|---|
+| `dist/index.js` | 2,581,985 | 255,886 | 10.1× |
+| Export HTML (starter, theme book) | 3,396,258 | 353,522 | 9.6× |
+
+The bundle gzip-compresses to 94,231 bytes. The export is the same file as
+base64 (341,184 characters) plus `app.css` (7,155), the seed (starter DOT, the
+theme book, the two starter annotations), and the three-line bootstrap. Almost
+the whole file is still the encoded bundle — just not a WASM one.
+
+### V6 dies
+
+3.4 MB was never "the floor of depending on nothing but a browser." It was the
+wasm. The standalone export still inlines the bundle as base64, for the same
+`</script>` reason recorded under V6, and it is 354 KB.
+
+### M4 dies
+
+M4 was two projects welded together: read DOT into a tree, *and* replace
+Graphviz's layout with our own maths. The prize was only ever provenance, and
+`styles.ts` has that — appearance stays on the branch it was written, markup
+is resolved, nothing is tallied. dagre supplies integer `rank` / `order`. What
+is left of M4 is "write Sugiyama ourselves instead of calling dagre", which is
+a separate, smaller, optional question, and not a debt pointing at finished
+work. Not scheduled.
+
+### The lab's code goes; its readme stays
+
+`research-lab/ast/` kept six TypeScript files and a CLI after `src/dot/`
+superseded them. Deleted: `cli.ts`, `graphviz-ast.ts`, `model.ts`, `styles.ts`,
+`points.ts`, `dagre-layout.ts`, `types.ts`. Kept: `readme.md`, the design
+document Session 5 wrote, which is why the lab existed. `package.json` no longer
+has `ast-layout`.
+
+**Not this session.** Session 4 of the plan — the files agree.
