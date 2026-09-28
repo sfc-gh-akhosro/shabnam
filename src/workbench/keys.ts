@@ -15,8 +15,7 @@ export type Command =
   | "export-html"
   | "tab-1"
   | "tab-2"
-  | "tab-3"
-  | "tab-4";
+  | "tab-3";
 
 // `⇧e` was Save SVG and `p` was Save PNG, back when a format was a verb. One
 // dialog now asks which, so one chord opens it and `⇧e` is free.
@@ -29,7 +28,6 @@ const KEY_COMMAND = new Map<string, Command>([
   ["1", "tab-1"],
   ["2", "tab-2"],
   ["3", "tab-3"],
-  ["4", "tab-4"],
 ]);
 
 /** The verb this event asks for, or undefined if it asks for nothing. */

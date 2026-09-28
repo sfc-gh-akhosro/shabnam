@@ -1,4 +1,10 @@
 
+Always read these files in each session:
+- ./user-story.md
+- ./coding-rules.md
+- ./app-architecture.md
+
+
 # Current task
 
 **Annotation overhaul + markdown parser removal.** Four sessions, each a separate
@@ -7,6 +13,10 @@ commit, each ending green on `bun test` and `bun run test:browser`.
 Sessions 1 and 2 are independent and may swap order. 3 depends on both. 4 depends
 on 3. Every session below is written to be read cold — take one, read the law
 (`AGENTS.md` → `app-architecture.md` → `coding-rules.md`), and go.
+
+**Session 1 is done.** Next up: **Session 2** — its section is unchanged and still
+reads cold. Session 1's section below is now a record of what was removed, and
+carries two no-op findings plus a note for Session 3.
 
 ---
 
@@ -80,44 +90,57 @@ Accepted consequences, both fine for names and short labels:
 
 ---
 
-## Session 1 — purge every trace of annotation logic
+## Session 1 — purge every trace of annotation logic ✅ DONE
 
-**Goal.** The app runs with **three** tabs and an empty `#annotation-html`. Nothing
-positions anything. Both suites green.
+**Goal (met).** The app runs with **three** tabs and an empty `#annotation-html`.
+Nothing positions anything. Both suites green — `bun test` 84 pass / 0 fail,
+`bun run test:browser` 63 pass / 0 fail, stage `done`.
 
-Keep exactly two things: the `<div id="annotation-html" />` in `workbench.tsx`, and
-the layer rule that sizes it (`#annotation-html, #diagram-svg { position: absolute;
-inset: 0 }`, which lives in both `app.css` and the theme).
+What was deleted, against the nine items as written:
 
-Delete:
+1. `workbench.tsx` — `STARTER_HTML` gone, `annotation` gone from `STARTER_TEXT`
+   and `seeded()`. The header comment now says "two text tabs".
+2. `engine.ts` — `place()`, `middle()`, the `inject("annotation-html", …)` call
+   and the `annotation-html` entry in `SINK_WRITE` all gone. `T.Point` is no
+   longer imported by name, so the `import * as T` line is untouched. The file
+   header now reads "redraw, sinks, measure".
+3. `types.ts` — `annotation` out of `TabText` (now two keys), `place()` out of
+   `Workbench`, `"annotation"` out of `TabId` (now three). Both doc comments
+   recount.
+4. `tabs.tsx` — the `annotation.html` entry is gone, `TAB_IDS` is three, header
+   says "Three equal buttons". `keys.ts` lost `"tab-4"` from `Command` and `4`
+   from `KEY_COMMAND`; `workbench.tsx` lost the `"tab-4"` handler.
+5. `theme/basic-theme.json` — the `#annotation-html > [data-selector]` block is
+   gone. `#annotation-html, #diagram-svg` stays; that is the layer.
+6. **No-op — nothing to delete.** `src/app.css` has no `#annotation-html div { …
+   --x … --y … red }` block. The only `#annotation-html` mentions left in it are
+   the kept layer rule at line 285 and a prose reference in the comment above
+   `#diagram-svg` explaining why a replaced element needs explicit sizing. Both
+   are correct and stay.
+7. **No-op — no edit needed.** `files.ts` never named `annotation`: the seed is
+   `JSON.stringify({ ...text, styles })`, so dropping the key from `TabText` in
+   item 3 removed it from the export by construction.
+8. `test/browser/checks.ts` — `marks()`, `centre()` (only `marks` used it), the
+   three anchor assertions in `smoke()`, `manyMatches()` and its
+   `publish("anchors")` are gone; the tab assertion now expects
+   `"diagram.dot styles action.js"` and is named "three tabs". Browser check
+   count 67 → 63.
+9. `test/ui-integration.test.ts` — the `annotation: "<div>Note</div>"` seed and
+   its assertion are gone; the test is renamed to "the **two** text tabs".
 
-1. `src/workbench/workbench.tsx` — `STARTER_HTML`, and `annotation` from
-   `STARTER_TEXT` and from `seeded()`.
-2. `src/workbench/engine.ts` — `place()`, the `middle()` helper, the
-   `inject("annotation-html", …)` call in `redraw()`, and the `annotation-html`
-   entry in `SINK_WRITE`.
-3. `src/types.ts` — `annotation` from `TabText`, `place()` from the `Workbench`
-   interface, `"annotation"` from `TabId`.
-4. `src/workbench/tabs.tsx` — the `annotation.html` tab, so `TAB_IDS` drops to
-   three; `tab-4` then leaves the `Command` union and `src/workbench/keys.ts`.
-5. `theme/basic-theme.json` — the whole `#annotation-html > [data-selector]` block.
-   The `#annotation-html, #diagram-svg` block **stays**; that is the layer.
-6. `src/app.css` — the WIP `#annotation-html div { … --x … --y … background-color:
-   red }` block at the bottom. It duplicates the theme's job with different
-   variable names, in the one file the export excludes.
-7. `src/workbench/files.ts` — the `annotation` key in the export seed.
-8. `test/browser/checks.ts` — `marks()`, the three anchor assertions inside
-   `smoke()`, `manyMatches()`, and its `publish("anchors")` registration. Fix the
-   "four tabs" assertion to three and its expected string.
-9. `test/ui-integration.test.ts` — the `annotation: "<div>Note</div>"` seed and its
-   assertion.
+**Verified.** `bunx tsc --noEmit` clean. Tab strip reads
+`diagram.dot styles action.js`. `Cmd+4` does nothing. `grep -rn data-selector
+src/ theme/ test/` finds nothing, and so does `--anchor-x` / `--dx`.
 
-**Note.** Session 3 restores `place()` and the theme block nearly verbatim. That is
-deliberate churn on correct code, chosen so this session leaves nothing behind to
-reason around.
+**Not committed.** The tree also carries an unrelated uncommitted edit to
+`coding-rules.md` that was there before this session started, so staging was left
+to the user rather than swept into this commit.
 
-**Verify.** Both suites green. The tab strip reads `diagram.dot styles action.js`.
-`Cmd+4` is gone. `grep -r data-selector src/` finds nothing.
+**Reminder for Session 3.** `place()` and the theme's
+`#annotation-html > [data-selector]` block are restored nearly verbatim. The
+pre-session text of both is in `git show HEAD:src/workbench/engine.ts` and
+`git show HEAD:theme/basic-theme.json` — copy from there rather than rewriting,
+and bring the long `place()` comment with it.
 
 ---
 

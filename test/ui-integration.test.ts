@@ -113,11 +113,10 @@ describe("UI & Workbench Integration Suite", () => {
     }
   });
 
-  test("The export seed carries the three text tabs and the whole book, sourced", () => {
+  test("The export seed carries the two text tabs and the whole book, sourced", () => {
     const text: TabText = {
       dot: BARE_BONE_DOT,
       action: "console.log('hello');",
-      annotation: "<div>Note</div>",
     };
     const rows: StyleRow[] = [
       { selector: ".node", property: "background", value: "red", id: 1, source: SOURCE.theme },
@@ -130,7 +129,6 @@ describe("UI & Workbench Integration Suite", () => {
 
     expect(parsed.dot).toBe(BARE_BONE_DOT);
     expect(parsed.action).toBe("console.log('hello');");
-    expect(parsed.annotation).toBe("<div>Note</div>");
     // An export paints what you see, so every source travels — and the id does
     // not, because it means nothing on the other page.
     expect(parsed.styles).toEqual({

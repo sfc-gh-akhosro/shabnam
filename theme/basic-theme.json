@@ -85,24 +85,6 @@
       "source": 0
     }
   },
-  "#annotation-html > [data-selector]": {
-    "position": {
-      "value": "absolute",
-      "source": 0
-    },
-    "left": {
-      "value": "calc(var(--anchor-x) + var(--dx, 0px))",
-      "source": 0
-    },
-    "top": {
-      "value": "calc(var(--anchor-y) + var(--dy, 0px))",
-      "source": 0
-    },
-    "transform": {
-      "value": "translate(-50%, -50%)",
-      "source": 0
-    }
-  },
   "#diagram-svg": {
     "width": {
       "value": "100%",

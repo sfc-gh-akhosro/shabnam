@@ -77,11 +77,11 @@ export type ConnectorMetrics = {
   radius: number;
 };
 
-/** Four workbench tabs, in order. `styles` is a rows view, not text. */
-export type TabId = "dot" | "styles" | "annotation" | "action";
+/** Three workbench tabs, in order. `styles` is a rows view, not text. */
+export type TabId = "dot" | "styles" | "action";
 
-/** The three text tabs. The styles tab is not text and is absent on purpose. */
-export type TabText = Record<"dot" | "annotation" | "action", string>;
+/** The two text tabs. The styles tab is not text and is absent on purpose. */
+export type TabText = Record<"dot" | "action", string>;
 
 export type SetTab = (tab: keyof TabText, text: string) => void;
 
@@ -169,7 +169,6 @@ export interface Workbench {
   redraw(): Promise<void>;
   inject(sink: string, text: string): void;
   measure(): Box[];
-  place(): void;
 }
 
 export type PictureFormat = "svg" | "png";

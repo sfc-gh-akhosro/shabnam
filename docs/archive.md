@@ -965,3 +965,63 @@ above was requested, none was discovered by a test, and the working version is
 smaller than the version it replaced at every step. `files.ts` went 246 → 147 lines,
 `export-dialog.tsx` 184 → 97, and 83 lines of dialog CSS left `app.css` entirely.
 The rule that came out of it is now `coding-rules.md` § *No "what if"*.
+
+## Annotation overhaul, session 1 — every trace of annotation logic removed
+
+First of four sessions in the annotation-overhaul plan (`current-task.md`). The
+plan's own framing: the anchoring engine underneath was *good* — `data-selector`
+was a real CSS selector, `place()` published `--anchor-x` / `--anchor-y`, and the
+theme spent them with `calc()` — but the authoring surface was a free-text
+`<textarea>` of raw HTML, where the only thing to do is get the markup wrong. The
+Styles tab had already proved the better shape: typed rows, columns that *are*
+the contract.
+
+**What shipped.** The app now runs on **three** tabs — `diagram.dot styles
+action.js` — with an empty `#annotation-html` and nothing positioning anything.
+`bun test` 84 pass / 0 fail; `bun run test:browser` 63 pass / 0 fail at stage
+`done` (67 → 63, the four anchor checks); `bunx tsc --noEmit` clean.
+
+Removed: `STARTER_HTML` and the `annotation` entry in `STARTER_TEXT` / `seeded()`;
+`place()`, the `middle()` helper, the `inject("annotation-html", …)` call and the
+`annotation-html` entry in `SINK_WRITE`; `annotation` from `TabText`, `place()`
+from the `Workbench` interface, `"annotation"` from `TabId`; the `annotation.html`
+tab, `TAB_IDS` 4 → 3, `"tab-4"` from the `Command` union and `4` from
+`KEY_COMMAND`; the theme's `#annotation-html > [data-selector]` block; and on the
+test side `marks()`, `centre()`, the three anchor assertions in `smoke()`,
+`manyMatches()` and its `publish("anchors")`, plus the ui-integration seed.
+
+Kept, deliberately and exactly: the `<div id="annotation-html" />` in
+`workbench.tsx` and the layer rule that sizes it
+(`#annotation-html, #diagram-svg { position: absolute; inset: 0 }`), which lives
+in both `app.css` and the theme.
+
+**Deliberate churn on correct code.** Session 3 restores `place()` and the theme
+block nearly verbatim, with only their *input* changed. That was chosen over
+adapting them in place so this session leaves nothing behind to reason around —
+worth recording because a reader of the diff will otherwise see a deletion and a
+near-identical re-addition and assume a mistake. The pre-session text of both is
+recoverable from git rather than from memory.
+
+**Two of the plan's nine deletion items turned out to be no-ops**, which is worth
+knowing because both were written as if the code were dirtier than it was:
+
+- The WIP `#annotation-html div { … --x … --y … background-color: red }` block
+  that `src/app.css` was said to carry **does not exist** in the tree. The plan
+  was right about why it would have been wrong — `app.css` is chrome and is
+  excluded from the picture export (§4.1), so a positioning rule there would
+  collapse every annotation to the layer's corner in every exported SVG and PNG —
+  but there was nothing to delete. The only `#annotation-html` mentions left in
+  `app.css` are the kept layer rule and a prose reference in the comment above
+  `#diagram-svg` explaining why a replaced element needs explicit sizing.
+- `files.ts` never named `annotation`. The export seed is
+  `JSON.stringify({ ...text, styles })`, so dropping the key from `TabText`
+  removed it from the export **by construction**. A spread is why the export
+  needed no edit, and is the reason to keep it a spread.
+
+**Left open on purpose.** `app-architecture.md` still describes four tabs and an
+`annotation.html` textarea that no longer exist. The plan assigns those §4 / §7
+law edits to sessions 2 and 3, and this session was closed under an explicit
+instruction not to touch root files — so the contract is knowingly ahead of the
+code for the duration of the overhaul. Next session in: **session 2**, which
+deletes the hand-rolled markdown `MD` map in `node-shaper.ts` and adopts
+`markdown-it`, amending §0 and §7 *before* the library lands in the tree.
