@@ -208,7 +208,10 @@ aside> :last-child {
 }
 
 
-.rows {
+/* The two rows tabs share one shape. `.rows` is the styles book; `.annotations`
+   is the annotation list, and differs only below. */
+.rows,
+.annotations {
   display: flex;
   flex-direction: column-reverse;
   justify-content: stretch;
@@ -271,6 +274,39 @@ aside> :last-child {
 }
 
 
+
+/* An annotation row reads top-down (§4) and wraps into two lines: the text box
+   takes the whole width, so everything before it is line one. The ten-em top
+   padding is the styles tab's, and it is there to keep the reversed list off the
+   top of the pane — a top-down list needs nothing of the kind. */
+.annotations {
+  flex-direction: column;
+  padding: var(--horizontal-pad);
+
+  >.row {
+    flex-wrap: wrap;
+    height: auto;
+
+    >button {
+      width: 2em;
+    }
+
+    >.sel,
+    >.cls {
+      width: 7em;
+    }
+
+    >.dx,
+    >.dy {
+      width: 5em;
+    }
+
+    >.text {
+      flex: 1 0 100%;
+      width: auto;
+    }
+  }
+}
 
 aside>section {
   display: contents;

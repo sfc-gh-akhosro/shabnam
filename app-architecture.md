@@ -172,7 +172,7 @@ DOT text
   │
   ├─ Workbench.measure ────► Box[]
   ├─ Diagram.clusters / shells / connectors ► SVG sinks
-  └─ Workbench.place ──────► annotation.html
+  └─ Workbench.annotate ───► annotation rows → #annotation-html, then anchored
 ```
 
 There is no CSS text anywhere on this path. A rule is data from the moment it is
@@ -392,11 +392,11 @@ Custom keys we care about (`icon`, `shell`, `caption`) are fields on the viz obj
 
 ## 4. Workbench tabs and injection
 
-Tabs, in this order: **diagram.dot · styles · annotation.html · action.js**
+Tabs, in this order: **diagram.dot · styles · annotations · action.js**
 
-Four tabs, and one of them is not text. `SetTab` writes a **text tab** (load, seed, user edit, or a deliberate machine write). `inject` writes a **sink**. Those are different directions. The styles tab is neither: it is a view onto the `Stylist`'s rules, and it edits them through the `Stylist` API.
+Four tabs, and **two** of them are not text. `SetTab` writes a **text tab** (load, seed, user edit, or a deliberate machine write). `inject` writes a **sink**. Those are different directions. The other two are neither: each is a **rows view** onto a model it edits directly — the styles tab onto the `Stylist`'s rules, the annotations tab onto the annotation list.
 
-The coding window is **one `<textarea>`**, and it serves the three text tabs. `tabs.tsx` is a radio strip — four equal buttons, no editor, no store. Workbench owns `active`; when `active` is `styles` it paints the rows table instead of the textarea. No highlighting, no completion, no caret of ours, no component of ours: the textarea is written inline in `workbench.tsx`, because a component that wraps one element and forwards two props is a file for nothing.
+The coding window is **one `<textarea>`**, and it serves the two text tabs. `tabs.tsx` is a radio strip — four equal buttons, no editor, no store. Workbench owns `active`; when `active` is `styles` or `annotation` it paints that tab's rows table instead of the textarea. No highlighting, no completion, no caret of ours, no component of ours: the textarea is written inline in `workbench.tsx`, because a component that wraps one element and forwards two props is a file for nothing.
 
 **The chrome's own CSS is `src/app.css`, and it is deliberately small.** Tokens on `body`, then a skeleton reached by *element and position* — `body > main`, `body > aside`, `nav`, `textarea`, `aside > section` — rather than by a hook per box. The four core classes (`.paper` · `.glass` · `.row` · `.col`) are not here: they belong to the theme and arrive through the sink. The markup therefore carries almost no `class` or `id`: a hook is allowed when the layout needs it, when it is a sink the engine writes, or when a test drives it. Nothing is named for decoration, and the semantic element is preferred to a class — `main`, `aside`, `article`, `section`, `nav`, and `hidden` rather than a `.hidden`. The styles tab came from a ten-line prototype, less its toolbar (`.rows`, `.row`, `.sel`, `.prop`, `.val`, `#selector-list`, `#property-list`) because that prototype is ten lines of CSS, and being restylable in ten lines is the point. The diagram's styling never appears here — it lives in the sinks (§3).
 
@@ -406,11 +406,13 @@ The coding window is **one `<textarea>`**, and it serves the three text tabs. `t
 
 **A styles row is three columns in a narrow pane, and it clips.** The long property names (`--horizontal-gap`, `--raised-shadow`) run past the pane's width mid-word. Every box carries a `title`, so a clipped row is readable on hover; a wrapping grid or a resizable pane both cost more than the annoyance today.
 
+**An annotation row is six columns, so it wraps into two lines** — `❌ selector dx dy class ➕` and then the text across the full width — out of one flex row, because the text box takes the whole width and everything before it is therefore line one. The list reads **top-down**, unlike the styles rows: a style row's neighbours mean nothing, so reversing that list to put the blank on screen costs nothing, while an annotation list's order is the order they were written in and reversing it is a puzzle. Its ❌ removes the entry outright rather than hiding it, for the same reason: the styles list is the book's reflection and has to keep a dropped element until the next re-read, but here the list **is** the model, so dropping an entry re-renders without it in the same turn and a `gone` flag would be a second opinion about what exists.
+
 | Tab | Sink | Who writes it |
 |---|---|---|
 | diagram.dot | source for `renderJSON` | User. Seeded with a starter diagram. |
 | styles | `#style-css` via CSSOM | The `Stylist`. One book, fed by the theme at source `0`, the redraw's derived bag at `1`, and the user's rows at `2`. The tab shows the book, one row per entry, tagged with its source. |
-| annotation.html | `#annotation-html` | User. `data-selector` is a CSS selector; the offset is CSS. |
+| annotations | `#annotation-html` | The annotation list, rendered. A row is `selector · dx · dy · class · text`; the marks are derived from it and never read back. |
 | action.js | `#action-js` | User. Runs last. |
 
 **Editing any row writes at source `2`.** There is one book, so the row *is* the
@@ -432,11 +434,15 @@ There is exactly one shipped theme, `theme/basic-theme.json`, decomposed once fr
 
 Autocomplete is not part of the fiddle. Do not put `suggestions` on `Workbench`.
 
-**An annotation is anchored by us and positioned by CSS.** `data-selector` is a **CSS selector**, run as one — `place()` hands it to `querySelectorAll` against the whole document and publishes the centre of the box containing **every** match onto the mark as two custom properties, `--anchor-x` and `--anchor-y`. So a node is `#core`, and for no extra feature a rank is `.rank`, a cluster is `#cluster_source`, a class of nodes is `.node`, and the drawing's own frame is `#annotation-html`. A mark without the attribute is left in normal flow; a selector matching nothing throws, saying which; a selector that is not one throws from `querySelectorAll`, already naming itself.
+**An annotation is anchored by us and positioned by CSS.** `data-selector` is a **CSS selector**, run as one — `place()` hands it to `querySelectorAll` against the whole document and publishes the centre of the box containing **every** match onto the mark as two custom properties, `--anchor-x` and `--anchor-y`. So a node is `#core`, and for no extra feature a rank is `.rank`, a cluster is `#cluster_source`, a class of nodes is `.node`, and the drawing's own frame is `#annotation-html`. Every mark carries the attribute, because a row with no selector is not emitted at all (below); a selector matching nothing throws, saying which; a selector that is not one throws from `querySelectorAll`, already naming itself.
+
+**A row reaches the sink only when selector and text both say something.** The same gate a style row gets, and for a sharper reason: `querySelectorAll("")` throws, so a half-filled row would take the next `place()` down with it. A blank offset or class is simply left off the element, so the theme's `var(--dx, 0px)` default applies rather than an empty declaration. The rows are the **model** and the marks are derived from them — nothing reads a mark back, because parsing HTML into rows is the parser §3.5 refuses.
 
 They are measured off the **annotation layer**, not the canvas, because the layer is what `left` / `top` on a mark are relative to: it is absolutely positioned inside a scroller, so it travels with the content and its corner *is* the coordinate origin. No scroll term, and no separate case for the canvas.
 
 That is the whole of the engine's part. The theme spends those two numbers:
+
+**And the theme is where that block has to live — `theme/basic-theme.json`, never `src/app.css`.** `app.css` is chrome, and §4.1 keeps chrome out of a picture export on purpose. A rule that positions annotations from there works on screen and then collapses every mark to the layer's corner in every exported SVG and PNG, which is the kind of bug that is invisible until someone opens the file.
 
 ```css
 #annotation-html > [data-selector] {
@@ -447,9 +453,9 @@ That is the whole of the engine's part. The theme spends those two numbers:
 }
 ```
 
-So **the offset is `--dx` / `--dy`, and it is any length CSS accepts** — `200px`, `3em`, `50%`, `min(10vw, 4em)` — written wherever a CSS value can be written: inline on the mark, or as a styles row against a selector. It is never parsed, added, or validated here, because arithmetic on a length we did not parse is arithmetic we cannot do; `calc()` does it, and a malformed value is invalid at computed-value time, so CSS drops the declaration and the mark sits at the layer's corner. **Signs are CSS's, not ours: `--dy` grows downward**, and `%` resolves against the annotation layer. Two things follow for free — an offset restyles live with no redraw, like any other row, and the mark's own **centre** is what lands on the point, without anything measuring the annotation.
+So **the offset is `--dx` / `--dy`, and it is any length CSS accepts** — `200px`, `3em`, `50%`, `min(10vw, 4em)` — written in the row's own `dx` / `dy` column, or as a styles row against a selector. It is never parsed, added, or validated here, because arithmetic on a length we did not parse is arithmetic we cannot do; `calc()` does it, and a malformed value is invalid at computed-value time, so CSS drops the declaration and the mark sits at the layer's corner. **Signs are CSS's, not ours: `--dy` grows downward**, and `%` resolves against the annotation layer. Two things follow for free — an offset restyles live with no redraw, like any other row, and the mark's own **centre** is what lands on the point, without anything measuring the annotation.
 
-**There is no origin form, because it needs none.** The layer is a thing a selector can match, so `data-selector="#annotation-html"` with `--dx: calc(-50% + 1em)` is one em in from the drawing's top-left corner — its centre, less half of itself, expressed in the offset that was already there. A branch in `place()` for "no anchor" would be a second way to say the same thing.
+**There is no origin form, because it needs none.** The layer is a thing a selector can match, so `data-selector="#annotation-html"` with `--dx: calc(-50% + 1em)` is one em in from the drawing's top-left corner — its centre, less half of itself, expressed in the offset that was already there. A branch in `place()` for "no anchor" would be a second way to say the same thing. Both starter marks are exactly these two cases, so the pair is under test on every run.
 
 This supersedes the pixel-pair contract in `docs/archive.md`, iteration 5: `data-anchor`, `data-offset` and the literal `data-anchor="120,40"` form are all gone.
 
@@ -554,7 +560,7 @@ dot text
   → [ browser paints ]
   → Workbench.measure()                       → boxes
   → Diagram.clusters / shells / connectors    → SVG sinks
-  → Workbench.place()                         → annotation.html
+  → Workbench.annotate()                      → #annotation-html, then place()
   → action.js last
 ```
 
@@ -567,6 +573,12 @@ A row edit is the short path: `Stylist.addRule` / `removeRule` → one `setPrope
 `removeProperty` → the browser repaints. No viz, no bag, no frame, no measure. The SVG
 layer is drawn from measured boxes, so a row that changes a size needs a Redraw to move
 the connectors; a row that changes a colour does not.
+
+An annotation row edit is the other short path: `annotate()` → the sink → `place()`.
+No viz, no bag, no frame, and no `await` — `place()` measures with
+`getBoundingClientRect`, which lays out synchronously, so it cannot interleave with
+the conductor and needs no guard flag. It re-anchors every mark, not only the edited
+one, because the whole layer costs a handful of rects.
 
 Must complete in well under a second on a normal diagram.
 
@@ -626,7 +638,7 @@ Closed. Do not reopen in code without updating this file.
 | An accepted overwrite | Destructive and immediate. The value underneath is not kept, so delete is not revert — except for what `@apply` still supplies. |
 | Load vs Redraw | Load DOT resets the book to the theme. Redraw keeps it and re-absorbs the derived bag at source `1`. No purge by source. |
 | Editing a row | Writes at source `2`, in place, keeping the row's id. No shadow row, and no read-only row. |
-| Tab vs sink | `SetTab` writes the three text tabs. `inject` writes sinks. The styles tab edits the `Stylist`. |
+| Tab vs sink | `SetTab` writes the two text tabs. `inject` writes sinks. The styles tab edits the `Stylist`; the annotations tab edits the annotation list. |
 | Who parses CSS | **Nobody, at runtime.** CSSOM receives rules; it is never asked to read a sheet back. The one-shot decomposition lives in `build/` and is not shipped. |
 | Who writes CSS text | Nobody — `sheet.ts`'s `serialize()` asks CSSOM for `cssText` off the Stylist's own sheet, for Save SVG and Save PNG only. It is a free function, not a `Stylist` method: the sheet module owns the sheet, so wrapping it on the class was a hop that carried nothing. Export HTML does not need it: it carries the book as data. |
 | How the picture becomes a file | A `<foreignObject>` wrapper, not a translation. The file holds the cloned canvas and its CSS, and Chromium renders it with the engine that painted the screen. No `rect`/`text` translation, no dictionary to maintain. |
@@ -657,9 +669,14 @@ Closed. Do not reopen in code without updating this file.
 | How icons vary | Files in `icon/` (borrowed) |
 | Custom attrs | Fields on the viz object |
 | Config tab | Never existed. Behavior → `:root` or action.js |
-| Workbench tabs | diagram.dot, styles, annotation.html, action.js |
+| Workbench tabs | diagram.dot, styles, annotations, action.js |
+| What an annotation is | A row: `selector · dx · dy · class · text`, in an **ordered list** with a minted id — not a map keyed by selector, because two marks may point at the same node and the second is not an overwrite. The rows are the model; the marks are derived and never read back. |
+| When a row becomes a mark | Selector **and** text both say something. `querySelectorAll("")` throws, so a half-filled row would take `place()` down; a blank `dx` / `dy` / `class` is left off the element so the theme's default applies. |
+| Annotation text | Block markdown (`render()`), so a note gets paragraphs and lists. A label is inline. One `\n` contract across both. |
+| Annotation repaint | The short path, like a style row: re-derive the sink and re-anchor. No viz, no bag, no frame, and no waiting for a paint, so it cannot interleave with the conductor (§5). |
+| Annotation ❌ | Removes the entry. Unlike a style row's, which hides — there the book is the truth and the list its reflection, here the list *is* the truth. |
 | Shortcuts | A `Map` registry in `workbench/keys.ts`, not a switch |
-| Tab editor | A bare `<textarea>`, inline in `workbench.tsx`. One instance, for the three text tabs. Radio strip selects. No highlighting, no completion. |
+| Tab editor | A bare `<textarea>`, inline in `workbench.tsx`. One instance, for the two text tabs. Radio strip selects. No highlighting, no completion. |
 | The styles tab | A rows table, not an editor. Native `input list=` for selector and property. A `header` of three checkboxes hides rows by source — view state only, so nothing is written and nothing is fed. A hidden row keeps its place in the book: the edit verbs address a row by position, so the filter carries the book index with each visible row rather than renumbering them. |
 | The waiting row | The list always ends with an untouched blank row, and `.rows` is `column-reverse`, so that blank sits at the **top** of the screen — a rule is added by typing, never by asking for a row first. Filling it in appends the next one. ➕ opens another blank after any row; a re-read settles back to exactly one. |
 | ❌ | Out of the book, out of CSSOM, and then the element is only **hidden** — not spliced out. The book is the source of truth and the list is rebuilt from it on the next sync, where the row simply will not be. Removing the element as well would be the UI keeping a second opinion about what exists. |
@@ -722,6 +739,7 @@ src/
     files.ts          Files: DOT, export HTML, the picture snapshot (§4.1)
     export-dialog.tsx format, transparency, scale — in a native <dialog>, unstyled
     keys.ts           KEY_COMMAND registry
+    annotations.tsx   the annotation list, and the rows tab that is its only view
 ```
 
 `stylist/` is the one package outside `workbench/` that touches a browser API, and §3 says why that is allowed and how far it goes. Missing CSSOM throws. It owns `rows.tsx` rather than `workbench/` because the rows *are* the rules — splitting the view from the data would put a fourth file in `workbench/`'s budget to no benefit.
@@ -763,6 +781,11 @@ The types.ts should closely follow this sesions (but with more proper signiture 
 type VizJson = unknown
 type TabId = "dot" | "styles" | "annotation" | "action"
 
+// an annotation row — the model, in an ordered list. The mark is derived from it.
+type Annotation = {
+  id: number; selector: string; dx: string; dy: string; class: string; text: string
+}
+
 // the book: selector → property → (value, id, source). Insertion order is row order.
 type Source     = 0 | 1 | 2                                     // theme · dot · user
 type Rule       = { value: string; id: number; source: Source }
@@ -803,7 +826,8 @@ interface Workbench {
   redraw(): Promise<void>
   inject(sink: string, text: string): void
   measure(): Box[]
-  place(boxes: Box[]): void
+  annotate(): void                      // rows → sink → place(). The short path.
+  place(): void
 }
 
 interface Files {
@@ -815,7 +839,7 @@ interface Files {
 }
 ```
 
-`Node` / `Edge` / `Cluster` / `DiagramModel` / `Box` / `Layout` are unchanged. `ConnectorMetrics` (§3.4) is the measured pair the router needs, and it is data the workbench supplies — the same arrangement as `Box[]`, for the same reason. `TabText` covers the three text tabs only — the styles tab is not text. Registries (`SHAPE_HTML`, `SHELL_SVG`, `ATTR_CSS`) live with the workers that consult them.
+`Node` / `Edge` / `Cluster` / `DiagramModel` / `Box` / `Layout` are unchanged. `ConnectorMetrics` (§3.4) is the measured pair the router needs, and it is data the workbench supplies — the same arrangement as `Box[]`, for the same reason. `TabText` covers the two text tabs only — the styles and annotations tabs are not text. Registries (`SHAPE_HTML`, `SHELL_SVG`, `ATTR_CSS`) live with the workers that consult them.
 
 The `Stylist` is seven methods, which is the budget. A new verb replaces one or
 goes to a registry — it does not become the eighth.

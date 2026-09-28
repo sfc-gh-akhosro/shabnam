@@ -1117,3 +1117,68 @@ that one is the sandbox inventing contention where there is none, this one is re
 contention that misreports itself as a dependency bug. The rule that covers both is
 to read `lsof` before believing either story. Filed in `current-task.md`'s Risks
 alongside its sibling.
+
+## Session 3 — annotations as a rows table
+
+**What shipped.** Annotations are authored as typed rows, and no HTML is written
+by hand. `Annotation` (`id · selector · dx · dy · class · text`) is an ordered
+list in a Solid store, held by the workbench and read by the engine at the moment
+it derives the sink — the same arrangement `text` has. `annotations.tsx` holds
+both the list and the tab, for the reason `stylist/rows.tsx` does: the rows are
+the model, so splitting the view off would spend a file in `workbench/`'s budget
+and buy nothing. That budget is now exactly 7.
+
+`place()` and `middle()` came back verbatim from `git show
+e2265dd^:src/workbench/engine.ts`, long comment included, as the plan required;
+`annotation-html` returned to `SINK_WRITE`, and the theme's
+`#annotation-html > [data-selector]` block was restored unchanged. Only
+`place()`'s input changed. `renderAnnotation()` joined `renderLabel()` in
+`markdown.ts` — block mode, same `\n` pre-pass — closing the gap Session 2 left.
+The export seed carries the rows, not the marks. §4, §5, §7, §8 and §10 were
+brought in line, including the four-tabs-and-a-textarea prose Session 1 had left
+describing a tab that no longer existed.
+
+**Green.** `bun test` 93 / 0, `bun run test:browser` 75 / 0 stage `done`,
+`bunx tsc --noEmit` clean, `bun run build` fine. Twelve new browser checks: the
+three deleted anchor checks ported to drive rows, plus the many-match union, the
+blank-selector row, markdown and `\n` into a mark, the class column, and ❌.
+
+**Three decisions the plan left open.**
+
+- **A row edit repaints live, on `change`.** The tempting reading was "wait for
+  Redraw, like the DOT tab". But `annotate()` is the *style row* shape, not the
+  redraw shape — synchronous, no `await`, no frame — so it cannot interleave with
+  the conductor and §5's one-trigger rule is untouched. A rows tab whose effect
+  you cannot see is not a fiddle. Committing on `change` rather than `input` also
+  satisfies Session 4's item 1 for these rows in advance.
+- **❌ removes the entry** rather than hiding it. The styles tab's
+  hide-then-resync exists because there the book is the truth and the list is its
+  reflection; here the list *is* the model, so dropping re-renders without the row
+  in the same turn and a `gone` flag would be the UI keeping a second opinion.
+- **Seeding goes through `ready()`.** Found by a failing check: the tab opened
+  with two rows and no blank, because `ready` only ran on edit, so the first mark
+  would have needed a ➕ first.
+
+**Two harness findings, both of which cost a diagnosis.**
+
+- **A throw inside a check stage is invisible.** The run stops, the report keeps
+  the last published stage, and *nothing* is printed — `checks.ts`'s
+  `unhandledrejection` → `publish("crashed")` does not fire for a rejection out of
+  the module's own top-level `await`. The fast diagnosis is a temporary
+  `.catch((e) => check("DEBUG", false, e.stack))` at the call site, reached for
+  immediately rather than re-reading the stage. Both failures this session were
+  found that way, and one was a typo in the check itself (`class` for the `cls`
+  hook).
+- **Do not hold a row element across an edit.** Filling the last row appends the
+  next blank, so a helper that captures the element and reuses it asserts against
+  a stale position. `fillMark` addresses a row by index and re-reads it.
+
+**What this session got wrong, and did not fix.** The feature cost 191 code lines
+in `src/`, and roughly 30 of them are fat — the CSS block in particular. The plan
+said "no styling beyond what the Styles rows already use" and `app.css` says
+"nothing is named for decoration", and the tab arrived with 23 lines of per-column
+widths plus four class hooks (`.sel` `.dx` `.dy` `.cls`) that exist only to carry
+them. That collapses to eight lines with `flex: 1`, and three of the four hooks
+die with it; `FIELD` and `field()` lose their `hook` and `placeholder` columns at
+the same time. Raised at the end of the session and **deliberately deferred** to a
+general refactor rather than patched here — see `current-task.md`, **For Later**.

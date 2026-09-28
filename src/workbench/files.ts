@@ -9,6 +9,7 @@ export class Files implements T.Files {
     private text: T.TabText,
     private setTab: T.SetTab,
     private stylist: Stylist,
+    private annotations: T.Annotation[],
   ) {}
 
   loadDot(dot: string): void {
@@ -24,7 +25,7 @@ export class Files implements T.Files {
 
   async exportHtml(): Promise<string> {
     const [css, app] = await Promise.all([asset("app-css"), asset("app-js")]);
-    return page(css, app, seed(this.text, bookFile(this.stylist.rows())));
+    return page(css, app, seed(this.text, bookFile(this.stylist.rows()), this.annotations));
   }
 
   async exportPicture(options: T.PictureOptions): Promise<Blob> {
@@ -120,8 +121,11 @@ function decode(base64: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-function seed(text: T.TabText, styles: T.StyleFile): string {
-  return JSON.stringify({ ...text, styles }).replace(/</g, "\\u003c");
+/** The seed the exported page boots from: both text tabs, the whole book, and the
+ *  annotation list. The list travels, not the marks — the rows are the model, and
+ *  the exported page derives its own HTML from them exactly as this one does. */
+function seed(text: T.TabText, styles: T.StyleFile, annotations: T.Annotation[]): string {
+  return JSON.stringify({ ...text, styles, annotations }).replace(/</g, "\\u003c");
 }
 
 function page(css: string, app: string, json: string): string {

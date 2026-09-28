@@ -7,259 +7,9 @@ Always read these files in each session:
 
 # Current task
 
-**Annotation overhaul + markdown parser removal.** Four sessions, each a separate
-commit, each ending green on `bun test` and `bun run test:browser`.
-
-Sessions 1 and 2 are independent and may swap order. 3 depends on both. 4 depends
-on 3. Every session below is written to be read cold — take one, read the law
-(`AGENTS.md` → `app-architecture.md` → `coding-rules.md`), and go.
-
-**Sessions 1 and 2 are done.** Next up: **Session 3** — its section is unchanged
-and still reads cold. The two finished sections below are now records of what was
-removed, and carry the findings Session 3 needs.
-
----
-
-## Why
-
-Two problems, discovered together.
-
-**Annotations are authored as raw HTML in a textarea.** The anchoring engine
-underneath is good — `data-selector` is a real CSS selector, `place()` publishes
-`--anchor-x` / `--anchor-y`, and the theme spends them with `calc()` — but the
-authoring surface is a free-text box where the only thing to do is get the markup
-wrong. The Styles tab already proved the better shape: typed rows, columns that
-*are* the contract.
-
-**We ship a hand-rolled markdown parser.** `node-shaper.ts` carries an `MD` map of
-six regexes plus image surgery plus manual escaping, and its own comment calls it
-*"the second grammar we own"* — directly against §1's "there is never a second
-grammar". It arrived inside commit `6393453` ("Visual cluster SVG boxes, smart
-connectors, 1:1 workbench parity, and CodeJar editors"), undiscussed, and the law
-names it once in §3.2 only as a wart. Nobody writes a markdown parser; they call
-one. §0 says hand-rolling what a mature library does properly, to avoid a
-conversation, is the worse outcome.
-
-The two meet because annotation text is markdown too.
-
----
-
-## Decisions already taken
-
-Do not relitigate these in a session. If one is wrong, say so and stop.
-
-| Question | Answer |
-|---|---|
-| Anchoring | **Kept.** `left: calc(var(--anchor-x) + var(--dx, 0px))`. The rows table is a typed front-end for the existing §4 contract, not a replacement. |
-| Offset names | `--dx` / `--dy`. Not `--left` / `--top` — already in the theme, §4, `docs/archive.md` and the browser checks. |
-| Where annotation positioning CSS lives | `theme/basic-theme.json`, **never `src/app.css`**. `app.css` is chrome and is excluded from the picture export (§4.1) — a rule there positions on screen and collapses every annotation to the layer's corner in every exported SVG and PNG. |
-| Annotation text | Markdown, **block** (`render()`) — lists and paragraphs work. |
-| Node / record labels | Markdown, **inline** (`renderInline()`) — no `<p>` wrapper. |
-| Markdown engine | `markdown-it`, with `html: true`, `breaks: true`, `linkify: true`. |
-| Line break | **`\n`** — literal backslash, letter n. See below. |
-| Source of truth | The annotation **rows are the model**; the HTML is derived into the sink. Parsing HTML back into rows is the parser §3.5 refuses. |
-| Annotation identity | An **ordered list** with a minted id, not a map — two annotations may share a selector. |
-| Row hook | `[data-selector]`, which the theme already selects on. **No `.annotation` class** — a second way to say the same thing, and a user editing the class column could type it away. |
-| List direction | Annotation rows read **top-down**, not inheriting the Styles tab's `column-reverse`. Reversing a positional list is more confusing than reversing a map. |
-
-### The line-break contract
-
-Users type labels and annotations into a single-line `<input>`, which makes **both**
-CommonMark break mechanisms unreachable: Enter inserts no character, so a real `\n`
-can never be produced, and neither can a two-trailing-spaces hard break. The break
-must therefore be typeable as visible characters — and the app already has that
-vocabulary, because `\n` is what a DOT author writes in a label today and what
-`node-shaper.ts` already converts.
-
-```
-user types:   Batch\nColumnar\nVectors
-pre-pass:     \n \l \r   →  real newline
-markdown-it:  breaks: true   →  <br>
-```
-
-One convention for node labels, record labels and annotations. This promotes the
-pre-pass from a Graphviz implementation detail to a **§7 decision** covering all
-label and annotation text.
-
-Accepted consequences, both fine for names and short labels:
-
-- `\n\n` is a **paragraph** break in block mode, so a two-paragraph annotation is a
-  taller box under the same `--dy`.
-- A literal backslash-n needs `\\n` — markdown's own escape, costing us nothing.
-- `html: true` also lets someone type `<br>`, but `\n` is the documented way.
-
----
-
-## Session 1 — purge every trace of annotation logic ✅ DONE
-
-**Goal (met).** The app runs with **three** tabs and an empty `#annotation-html`.
-Nothing positions anything. Both suites green — `bun test` 84 pass / 0 fail,
-`bun run test:browser` 63 pass / 0 fail, stage `done`.
-
-What was deleted, against the nine items as written:
-
-1. `workbench.tsx` — `STARTER_HTML` gone, `annotation` gone from `STARTER_TEXT`
-   and `seeded()`. The header comment now says "two text tabs".
-2. `engine.ts` — `place()`, `middle()`, the `inject("annotation-html", …)` call
-   and the `annotation-html` entry in `SINK_WRITE` all gone. `T.Point` is no
-   longer imported by name, so the `import * as T` line is untouched. The file
-   header now reads "redraw, sinks, measure".
-3. `types.ts` — `annotation` out of `TabText` (now two keys), `place()` out of
-   `Workbench`, `"annotation"` out of `TabId` (now three). Both doc comments
-   recount.
-4. `tabs.tsx` — the `annotation.html` entry is gone, `TAB_IDS` is three, header
-   says "Three equal buttons". `keys.ts` lost `"tab-4"` from `Command` and `4`
-   from `KEY_COMMAND`; `workbench.tsx` lost the `"tab-4"` handler.
-5. `theme/basic-theme.json` — the `#annotation-html > [data-selector]` block is
-   gone. `#annotation-html, #diagram-svg` stays; that is the layer.
-6. **No-op — nothing to delete.** `src/app.css` has no `#annotation-html div { …
-   --x … --y … red }` block. The only `#annotation-html` mentions left in it are
-   the kept layer rule at line 285 and a prose reference in the comment above
-   `#diagram-svg` explaining why a replaced element needs explicit sizing. Both
-   are correct and stay.
-7. **No-op — no edit needed.** `files.ts` never named `annotation`: the seed is
-   `JSON.stringify({ ...text, styles })`, so dropping the key from `TabText` in
-   item 3 removed it from the export by construction.
-8. `test/browser/checks.ts` — `marks()`, `centre()` (only `marks` used it), the
-   three anchor assertions in `smoke()`, `manyMatches()` and its
-   `publish("anchors")` are gone; the tab assertion now expects
-   `"diagram.dot styles action.js"` and is named "three tabs". Browser check
-   count 67 → 63.
-9. `test/ui-integration.test.ts` — the `annotation: "<div>Note</div>"` seed and
-   its assertion are gone; the test is renamed to "the **two** text tabs".
-
-**Verified.** `bunx tsc --noEmit` clean. Tab strip reads
-`diagram.dot styles action.js`. `Cmd+4` does nothing. `grep -rn data-selector
-src/ theme/ test/` finds nothing, and so does `--anchor-x` / `--dx`.
-
-**Not committed.** The tree also carries an unrelated uncommitted edit to
-`coding-rules.md` that was there before this session started, so staging was left
-to the user rather than swept into this commit.
-
-**Reminder for Session 3.** `place()` and the theme's
-`#annotation-html > [data-selector]` block are restored nearly verbatim. The
-pre-session text of both is in `git show HEAD:src/workbench/engine.ts` and
-`git show HEAD:theme/basic-theme.json` — copy from there rather than rewriting,
-and bring the long `place()` comment with it.
-
----
-
-## Session 2 — kill the hand-rolled markdown, adopt markdown-it ✅ DONE
-
-**Goal (met).** No regex-based markup translation anywhere in `src/`. One library
-call. `bun test` 85 pass / 0 fail, `bun run test:browser` 63 pass / 0 fail,
-`bunx tsc --noEmit` clean. Full record in `docs/archive.md`.
-
-Against the seven items as written:
-
-1. `markdown-it` + `@types/markdown-it` installed.
-2. Law amended first — §0's stack, four new §7 rows (Markdown, Line break, HTML in
-   a label, Markdown images), §8's tree, §9's note on `diagram/`, and §3.2's
-   markdown wart reference. `docs/archive.md` records the `6393453` provenance.
-3. The `MD` map and the regex chain in `text()` are gone — `node-shaper.ts` is 68
-   lines lighter.
-4. Pre-pass kept and promoted to the line-break contract, rewritten as a
-   left-to-right walk. A chained `/\\[nlr]/` matches the **second** backslash of
-   `\\n` and would eat the escape we document; the walk does not.
-5. Manual HTML escaping dropped. The test that asserted `<b>` arrives escaped now
-   asserts the opposite and says why.
-6. Icons go through markdown-it's `image` renderer rule. `ICONS` and `iconSrc`
-   moved out of `node-shaper.ts` into `markdown.ts`, since the rule is what owns
-   them now.
-7. `src/diagram/markdown.ts`. `diagram/` is one file further over its soft 7, and
-   §9 now names the reason.
-
-**Two extra renderer overrides, both earning their line.** `softbreak` emits
-`<br />` with no trailing newline — markdown-it pretty-prints one, and in an inline
-label that newline is rendered whitespace, so every continuation line started with
-a stray space. `xhtmlOut: true` because a picture export is parsed as XML (§4.1).
-
-**Two behaviour changes, on purpose.** HTML in a label passes through (`html: true`).
-`~~x~~` is `<s>`, not the old `<del>` — the library's word wins.
-
-**The regression check.** Every label piece in the starter and both fixtures,
-rendered through the old chain and the new one and diffed: **111 pieces, 14 differ,
-all one case.** `"GCP \n Services"` was `GCP <br /> Services` and is now
-`GCP<br />Services` — CommonMark trims the spaces the blind replace kept, which
-removes a leading space from every continuation line. The library is correcting us.
-No markdown construct in either fixture changed meaning.
-
-**Reminder for Session 3, and it is a real gap.** Only `renderLabel()` exists.
-The plan asked for two entry points, but `render()` had no caller once Session 1
-purged annotations, and an unused export is dead code. **Add `renderAnnotation()`
-to `src/diagram/markdown.ts`** — block mode, `md.render()`, same `unescape()`
-pre-pass — when the rows table gives it a caller. §7's Markdown row already
-describes both halves.
-
----
-
-## Session 3 — annotations as a rows table
-
-**Goal.** Annotations are authored as typed rows. No HTML is written by hand.
-
-### Model
-
-```ts
-type Annotation = {
-  id: number;       // minted; an ordered list, not keyed by selector
-  selector: string; // a CSS selector, handed to querySelectorAll
-  dx: string;       // any CSS length
-  dy: string;
-  class: string;    // free, styled from the Styles tab
-  text: string;     // markdown
-};
-```
-
-An ordered `Annotation[]`, replacing `TabText.annotation`. Home: a small
-`annotations.ts` in `workbench/`. The export seed carries `annotations` as an array.
-
-### Emission
-
-A row reaches the sink only when **selector and text both say something** — the same
-gate `keyed()` gives a style row, and for a sharper reason: `querySelectorAll("")`
-throws `SyntaxError`, so a half-filled row would take the app down.
-
-```html
-<div data-selector="#core" class="note" style="--dx: 1em; --dy: 4em">
-  …markdown-it render() output…
-</div>
-```
-
-Omit `--dx` / `--dy` when blank, so the theme's `var(--dx, 0px)` default applies.
-Emit `div`, not `span`: `position: absolute` makes display moot, and the existing
-selectors and starter already assume a div.
-
-### The tab
-
-Two lines per annotation, no styling beyond what the Styles rows already use:
-
-```
-line 1:  [x 2em] [selector 7em] [dx 5em] [dy 5em] [class 7em] [+ 2em]
-line 2:  [ text — full width ]
-```
-
-Reuse the Styles-tab conventions wholesale: a waiting blank at the end, `title` on
-every box because the pane clips, and the remove button hides the row while the next
-sync rebuilds from the model.
-
-### Engine
-
-`place()` comes back **unchanged from the version Session 1 deleted** — selector →
-`querySelectorAll` → union of rects → `--anchor-x` / `--anchor-y` measured off the
-layer. It was correct; only its input changes. The theme's
-`#annotation-html > [data-selector]` block is restored verbatim too.
-
-### Law edits
-
-§4's tab table loses the `annotation.html` row, and "four tabs, one of them is not
-text" becomes "four tabs, **two** of them are not text". §4's annotation prose keeps
-the anchoring contract and drops the "the user writes HTML" framing. `TabId` regains
-`"annotation"`; `TabText` does not.
-
-**Verify.** Port the three deleted anchor checks to drive the rows instead of the
-textarea — node anchor, layer-as-origin, `%` offset — and add: the many-match union;
-a blank-selector row emitting nothing rather than throwing; `**bold**` and `\n`
-surviving into a mark.
+**Annotation overhaul + markdown parser removal — sessions 1, 2 and 3 are done
+and archived.** Their full records, including the reasoning and the findings, are
+in `docs/archive.md`. What is left of that plan is Session 4 below.
 
 ---
 
@@ -284,7 +34,12 @@ CSSOM.
    reactive redraw later. No code change expected here; if one is needed, that is a
    finding worth reporting.
 
-Annotation rows inherit all three, being built on the same conventions in Session 3.
+**What Session 3 already settled.** Item 1 is **done for annotation rows** — they
+never had an `onInput`, so only the styles tab's value box is left. Item 2 does
+**not** extend to annotation rows and should not be made to: an offset is never
+parsed by us (§4), and a bad one is dropped by CSS at computed-value time, so there
+is no `supported()` equivalent and no `.invalid` for them. Items 2 and 3 are
+otherwise untouched.
 
 **Verify.** A check that types an invalid value and asserts the sheet still holds
 the previous value while the row wears `.invalid`. A check that typing in the DOT
@@ -294,12 +49,52 @@ console error, so the invalid-value check must assert its own error line and the
 
 ---
 
+## For Later
+
+### A refactor and cleanup pass over the whole of `src/`
+
+Raised at the end of Session 3 and **deliberately deferred**: the annotations
+feature cost **191 code lines** in `src/`, which prompted measuring the whole tree
+for the first time in a while.
+
+```
+src/            3,661 lines total       2,358 excluding blanks and comments
+  before Session 3                      2,167
+  Session 3                               191
+```
+
+The number worth keeping in view is that one feature was 8% of the codebase, and
+that `stylist/rows.tsx` — the tab it mirrors — is 159 code lines on its own. A
+rows tab is simply an expensive shape. If that price is wrong, the thing to
+reopen is the decision to give annotations a tab, not the implementation of it.
+
+**Known fat, already identified, roughly 30 code lines plus comments:**
+
+- **`src/app.css`'s `.annotations` block is 23 lines and should be 8.** Session 3's
+  own plan said "no styling beyond what the Styles rows already use", and §4 says
+  nothing is named for decoration — then the tab arrived with per-column widths.
+  `flex: 1` on the line-one inputs replaces all of them; only `.text`'s
+  `flex: 1 0 100%` earns its keep, because it is the wrap point.
+- **Three of five class hooks die with those widths.** `.sel` `.dx` `.dy` `.cls`
+  exist only to carry a width. The browser checks address rows through them
+  (`markBox`), so they would move to addressing inputs by position, which is what a
+  person does anyway.
+- **`FIELD` and `field()` lose their `hook` and `placeholder` columns** at the same
+  time — the array becomes one line of field names.
+- **`mark()`'s offset chain is five lines doing two lines' work.**
+- **Comment density.** `annotations.tsx` is 80 comment/blank lines of 177. That is
+  in line with the house voice (`rows.tsx` carries 131), so it is a question about
+  the voice rather than about this file, and it should be answered once for the
+  whole tree rather than file by file.
+
+Nothing here is urgent and nothing here is broken: both suites are green and the
+law describes what the code does. This is a tidy, and it wants one pass with a
+whole-tree view rather than a patch inside the next feature.
+
+---
+
 ## Risks
 
-- **~~Session 2 can visibly change existing diagrams.~~** Checked and closed: 111
-  label pieces across the starter and both fixtures, 14 differ, all the same
-  whitespace-around-`\n` case, all improvements. See the Session 2 record above.
-- **~~`html: true` widens what a label can do.~~** In §7 explicitly now.
 - **`bun run test:browser` needs `dangerously_disable_sandbox: true`.** The sandbox
   refuses the port 3101 bind and surfaces it as `EADDRINUSE`, which reads exactly
   like a stale run but is not — `lsof -nP -iTCP:3101 -sTCP:LISTEN` shows nothing.
@@ -309,6 +104,11 @@ console error, so the invalid-value check must assert its own error line and the
   `bun add`, it serves a **500 whose body is a resolution error** for the new
   dependency while `bun run build` succeeds from the same tree. The symptom points
   at the dependency; the cause is the process. Kill and restart it.
+- **A throw inside a browser check stage is silent.** The run stops, the report
+  keeps the last published stage, and nothing is printed — `publish("crashed")`
+  does not fire for a rejection out of the checks module's own top-level `await`.
+  Reach straight for a temporary `.catch((e) => check("DEBUG", false, e.stack))` at
+  the call site rather than re-reading the stage.
 - **`git push` needs `dangerously_disable_sandbox: true` too.** The sandbox proxy
   answers `CONNECT tunnel failed, response 403`, which looks like a credentials
   problem and is not.

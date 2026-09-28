@@ -1,4 +1,4 @@
-// Workbench runtime: redraw, sinks, measure.
+// Workbench runtime: redraw, sinks, measure, annotate, place.
 //
 // The style sink is not here. `#style-css` belongs to the `Stylist`,
 // which drives it through CSSOM (§3) — writing its `textContent` from `inject`
@@ -8,6 +8,7 @@ import { Diagram } from "../diagram/diagram.ts";
 import { Vizer } from "../diagram/vizer.ts";
 import { bagEntries, Stylist } from "../stylist/stylist.ts";
 import * as T from "../types.ts";
+import { annotationHtml } from "./annotations.tsx";
 
 const asHtml = (element: Element, text: string) => {
   element.innerHTML = text;
@@ -25,6 +26,7 @@ const SINK_WRITE = new Map<string, (element: Element, text: string) => void>([
   ["cluster-shells", asHtml],
   ["node-shells", asHtml],
   ["connector-paths", asHtml],
+  ["annotation-html", asHtml],
   ["action-js", asScript],
 ]);
 
@@ -35,6 +37,7 @@ export class Engine implements T.Workbench {
   constructor(
     private text: T.TabText,
     private stylist: Stylist,
+    private annotations: T.Annotation[],
   ) {}
 
   async redraw(): Promise<void> {
@@ -53,7 +56,18 @@ export class Engine implements T.Workbench {
     this.inject("cluster-shells", this.diagram.clusters(boxes, model));
     this.inject("node-shells", this.diagram.shells(boxes, model));
     this.inject("connector-paths", this.diagram.connectors(boxes, model, this.metrics()));
+    this.annotate();
     this.inject("action-js", this.text.action);
+  }
+
+  // The short path, and the same shape as a style row's (§5): the rows are the
+  // model, so re-deriving the sink and re-anchoring is all an edit needs. No viz,
+  // no bag, no frame, and no `await` — `place()` measures with
+  // `getBoundingClientRect`, which lays out synchronously, so nothing here can
+  // interleave with the conductor.
+  annotate(): void {
+    this.inject("annotation-html", annotationHtml(this.annotations));
+    this.place();
   }
 
   inject(sink: string, text: string): void {
@@ -72,6 +86,22 @@ export class Engine implements T.Workbench {
     }));
   }
 
+  place(): void {
+    const layer = document.getElementById("annotation-html")!;
+    const origin = layer.getBoundingClientRect();
+    for (const mark of layer.querySelectorAll<HTMLElement>("[data-selector]")) {
+      const selector = mark.dataset.selector!;
+      const found = document.querySelectorAll(selector);
+      // A selector that matches nothing is a typo, and the only useful thing to
+      // say about it is what it was. A selector that is not a selector throws
+      // from `querySelectorAll`, already naming itself.
+      if (found.length === 0) throw new Error(`annotation selector "${selector}" matches nothing`);
+      const at = middle([...found].map((element) => element.getBoundingClientRect()));
+      mark.style.setProperty("--anchor-x", `${at.x - origin.left}px`);
+      mark.style.setProperty("--anchor-y", `${at.y - origin.top}px`);
+    }
+  }
+
   // The other half of measuring: the two numbers the router needs are CSS, and a
   // pure worker cannot read CSS (§3.4). `1em` is the clearance a route prefers to
   // keep off a foreign node; `--connector-radius` curves its bends.
@@ -81,6 +111,15 @@ export class Engine implements T.Workbench {
     const em = parseFloat(style.fontSize);
     return { clearance: em, radius: px(style.getPropertyValue("--connector-radius"), em) };
   }
+}
+
+// The centre of the box that contains every match, in viewport coordinates. One
+// match is the ordinary case and falls out of the same arithmetic.
+function middle(rects: DOMRect[]): T.Point {
+  return {
+    x: (Math.min(...rects.map((rect) => rect.left)) + Math.max(...rects.map((rect) => rect.right))) / 2,
+    y: (Math.min(...rects.map((rect) => rect.top)) + Math.max(...rects.map((rect) => rect.bottom))) / 2,
+  };
 }
 
 // One frame, or a turn of the event loop — whichever comes first.

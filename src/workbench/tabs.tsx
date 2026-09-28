@@ -1,4 +1,4 @@
-// Radio strip. Three equal buttons. No editor. Workbench owns the window.
+// Radio strip. Four equal buttons. No editor. Workbench owns the window.
 
 import { For } from "solid-js";
 import type { TabId } from "../types.ts";
@@ -6,6 +6,7 @@ import type { TabId } from "../types.ts";
 const TAB_LABEL = new Map<TabId, string>([
   ["dot", "diagram.dot"],
   ["styles", "styles"],
+  ["annotation", "annotations"],
   ["action", "action.js"],
 ]);
 

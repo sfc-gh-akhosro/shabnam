@@ -77,13 +77,36 @@ export type ConnectorMetrics = {
   radius: number;
 };
 
-/** Three workbench tabs, in order. `styles` is a rows view, not text. */
-export type TabId = "dot" | "styles" | "action";
+/** Four workbench tabs, in order. `styles` and `annotation` are rows views. */
+export type TabId = "dot" | "styles" | "annotation" | "action";
 
-/** The two text tabs. The styles tab is not text and is absent on purpose. */
+/** The two text tabs. The two rows tabs are not text and are absent on purpose. */
 export type TabText = Record<"dot" | "action", string>;
 
 export type SetTab = (tab: keyof TabText, text: string) => void;
+
+/**
+ * One annotation, as its row holds it — and the row is the model (§4). The mark
+ * in the sink is derived from this; nothing ever reads the mark back, because
+ * parsing HTML into rows is the parser §3.5 refuses.
+ *
+ * An **ordered list**, not a map keyed by selector: two annotations may point at
+ * the same node, and the second is not an overwrite of the first. `id` is minted
+ * so a row can be pointed at; like a `Rule`'s id it is live-DOM only.
+ *
+ * `selector` is a real CSS selector, handed to `querySelectorAll` (§4). `dx` and
+ * `dy` are any CSS length, spent by the theme inside `calc()` — never parsed
+ * here. `class` is free, and styled from the styles tab like anything else.
+ * `text` is markdown, rendered in block mode.
+ */
+export type Annotation = {
+  id: number;
+  selector: string;
+  dx: string;
+  dy: string;
+  class: string;
+  text: string;
+};
 
 // ---------------------------------------------------------------------------
 // style — one book: selector → property → (value, id, source)
@@ -169,6 +192,11 @@ export interface Workbench {
   redraw(): Promise<void>;
   inject(sink: string, text: string): void;
   measure(): Box[];
+  /** The annotation rows → the sink, then anchored. The short path: no viz, no
+   *  bag, no frame, and no waiting for a paint, so a row edit shows at once. */
+  annotate(): void;
+  /** Publish `--anchor-x` / `--anchor-y` onto every mark. CSS spends them. */
+  place(): void;
 }
 
 export type PictureFormat = "svg" | "png";

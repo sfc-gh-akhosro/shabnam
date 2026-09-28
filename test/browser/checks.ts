@@ -85,6 +85,13 @@ const FIELD = new Map<Field, string>([
 ]);
 
 const rows = () => $$(".rows > .row");
+// The annotation layer's marks, in document order.
+const marks = () => $$("#annotation-html [data-selector]");
+/** A box's centre in viewport coordinates, rounded the way the DOM reports it. */
+const centre = (element: HTMLElement) => {
+  const at = element.getBoundingClientRect();
+  return { x: Math.round(at.left + at.width / 2), y: Math.round(at.top + at.height / 2) };
+};
 // A dropped row is hidden, not removed (§4), so "what the user can see" and "what
 // is in the list" are now two different questions.
 const live = () => rows().filter((row) => !row.hasAttribute("hidden"));
@@ -119,11 +126,24 @@ async function resync(): Promise<void> {
 const box = (row: HTMLElement, field: Field) =>
   row.querySelector(FIELD.get(field)!) as HTMLInputElement;
 
+// The annotation tab is the same rows shape with its own columns (§4). Its list
+// reads top-down, so the waiting blank is the last row here as it is there — it
+// is simply at the bottom of the pane rather than the top.
+const markRows = () => $$(".annotations > .row");
+const blankMarkRow = () => markRows()[markRows().length - 1]!;
+const markBox = (row: HTMLElement, hook: string) => row.querySelector(`.${hook}`) as HTMLInputElement;
+/** Fill a whole annotation row, the way a person tabs through it. Addressed by
+ *  position and re-read each time: filling the last row appends the next blank,
+ *  and a held element would be a stale opinion about where the row is. */
+async function fillMark(at: number, fields: Array<[hook: string, value: string]>): Promise<void> {
+  for (const [hook, value] of fields) await type(markBox(markRows()[at]!, hook), value, "change");
+}
+
 function smoke(): void {
   check("the workbench mounts", document.querySelector("body > main") !== null, tabs().length + " tabs");
   check(
-    "three tabs, named as the spec names them",
-    tabs().map((tab) => tab.textContent).join(" ") === "diagram.dot styles action.js",
+    "four tabs, named as the spec names them",
+    tabs().map((tab) => tab.textContent).join(" ") === "diagram.dot styles annotations action.js",
     tabs().map((tab) => tab.textContent).join(" "),
   );
 
@@ -237,6 +257,126 @@ async function blankRowFlow(): Promise<void> {
   const two = rows().filter((row) => row.id === "").length;
   await resync();
   check("➕ opens another blank, and a re-read settles back to one", two === 2 && rows().filter((row) => row.id === "").length === 1, `${two} → ${rows().filter((row) => row.id === "").length}`);
+}
+
+/**
+ * The annotation tab: rows in, marks out.
+ *
+ * Every assertion is read off the live DOM, so this is the anchoring contract of
+ * §4 end to end — the row is typed, the sink is derived, `place()` publishes
+ * `--anchor-x` / `--anchor-y`, and CSS spends them in `calc()`. Nothing here
+ * touches the annotation model directly.
+ *
+ * It runs before any styles row is typed, because the ported checks measure the
+ * starter's own geometry and a stray `padding` on `#core` would move it.
+ */
+async function annotations(): Promise<void> {
+  tabs()[2]!.click();
+  await tick();
+
+  // Two starter marks, and the blank waiting under them. A mark is added by
+  // typing, exactly as a rule is.
+  check(
+    "the annotation tab lists the starter marks, plus a waiting blank",
+    markRows().length === 3 && marks().length === 2,
+    `${markRows().length} rows, ${marks().length} marks`,
+  );
+  check(
+    "a row is a typed selector, not markup",
+    markBox(markRows()[0]!, "sel").value === "#core" && markBox(markRows()[0]!, "dy").value === "4em",
+    `${markBox(markRows()[0]!, "sel").value} dy=${markBox(markRows()[0]!, "dy").value}`,
+  );
+  check("and no textarea is in sight", $$("aside textarea").length === 0, $$("aside textarea").length);
+
+  // `4em` is the theme's, not ours, and `em` here is the mark's own font size —
+  // so the expectation resolves the length off the mark rather than hard-coding
+  // a pixel count.
+  const mark = marks()[0]!;
+  const anchored = $(mark.dataset.selector!);
+  const em = parseFloat(getComputedStyle(mark).fontSize);
+  const node = centre(anchored);
+  const want = { x: node.x, y: Math.round(node.y + 4 * em) };
+  const got = centre(mark);
+  check(
+    "a mark's centre lands on its selector's centre, plus a length CSS resolved",
+    getComputedStyle(mark).position === "absolute" && got.x === want.x && got.y === want.y,
+    `${JSON.stringify(got)} vs ${JSON.stringify(want)} at ${em}px/em`,
+  );
+
+  // The origin, which is not a special case in the code: the layer is a thing a
+  // selector can match, so its centre less half of itself is its corner. This is
+  // the only check that would notice `place()` growing a branch for it.
+  const second = marks()[1]!;
+  const layer = $("#annotation-html").getBoundingClientRect();
+  const corner = centre(second);
+  check(
+    "a mark selecting the layer itself measures from the drawing's corner",
+    corner.x === Math.round(layer.left + em) && corner.y === Math.round(layer.top + em),
+    `${JSON.stringify(corner)} vs ${JSON.stringify({ x: Math.round(layer.left + em), y: Math.round(layer.top + em) })}`,
+  );
+
+  // Pass-through, proved in the one unit we could never have added ourselves: a
+  // percentage resolves against the containing block, which is the annotation
+  // layer. It also proves the offset is live CSS — no redraw, no `place()`.
+  await type(markBox(markRows()[0]!, "dx"), "50%", "change");
+  const shifted = centre(marks()[0]!).x - got.x;
+  await type(markBox(markRows()[0]!, "dx"), "", "change");
+  check(
+    "a percentage offset resolves against the layer",
+    shifted === Math.round(layer.width / 2),
+    `${shifted}px of ${layer.width}px`,
+  );
+
+  // `data-selector` is run as a selector, so it can match more than one thing,
+  // and then the anchor is the box containing all of them. Typed into the waiting
+  // blank, and no Redraw: a row edit is the short path (§5).
+  await fillMark(markRows().length - 1, [["sel", ".node"], ["text", "every node"]]);
+  const many = marks()[2]!;
+  const rects = $$("#diagram-html .node").map((one) => one.getBoundingClientRect());
+  const union = {
+    x: Math.round((Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2),
+    y: Math.round((Math.min(...rects.map((r) => r.top)) + Math.max(...rects.map((r) => r.bottom))) / 2),
+  };
+  const centred = centre(many);
+  check(
+    "a selector matching many anchors to the box that holds them all",
+    centred.x === union.x && centred.y === union.y,
+    `${JSON.stringify(centred)} vs ${JSON.stringify(union)} over ${rects.length} nodes`,
+  );
+  check("and the edit reached the sink with no Redraw", marks().length === 3, `${marks().length} marks`);
+
+  // The gate, and the reason it is a gate rather than politeness: an empty
+  // selector reaching `querySelectorAll` throws `SyntaxError`. The suite's last
+  // check fails on any console error, so this passing quietly is the assertion.
+  await type(markBox(blankMarkRow(), "text"), "text but no selector", "change");
+  check(
+    "a row with no selector emits nothing rather than throwing",
+    marks().length === 3,
+    `${marks().length} marks, ${markRows().length} rows`,
+  );
+
+  // Markdown, in block mode, and the one line-break convention (§7).
+  await fillMark(markRows().length - 1, [["sel", "#app"], ["text", "**bold**\\nsecond"], ["cls", "note"]]);
+  const rich = marks()[3]!;
+  check(
+    "markdown and `\\n` survive into a mark",
+    rich.innerHTML.includes("<strong>bold</strong>") && rich.innerHTML.includes("<br"),
+    rich.innerHTML,
+  );
+  check("and the class column reaches the element", rich.classList.contains("note"), rich.className);
+
+  // ❌ removes the entry outright: the list is the model, so there is no second
+  // opinion for a hidden row to hold.
+  const before = markRows().length;
+  dropRow(markRows()[3]!);
+  await tick();
+  dropRow(markRows()[2]!);
+  await tick();
+  check(
+    "❌ takes the row and its mark away",
+    markRows().length === before - 2 && marks().length === 2,
+    `${before} → ${markRows().length} rows, ${marks().length} marks`,
+  );
 }
 
 /** The whole point of the rewrite: one `setProperty`, no redraw, no re-layout. */
@@ -513,6 +653,8 @@ smoke();
 publish("smoke");
 stylesheet();
 publish("stylesheet");
+await annotations();
+publish("annotations");
 await rowsTab();
 publish("rows");
 await blankRowFlow();

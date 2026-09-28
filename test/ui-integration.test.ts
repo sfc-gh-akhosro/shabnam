@@ -6,8 +6,9 @@ import { LayoutFramer } from "../src/diagram/layout-framer.ts";
 import { NodeSheller } from "../src/diagram/node-sheller.ts";
 import { EdgeDrawer } from "../src/diagram/edge-drawer.ts";
 import { Vizer } from "../src/diagram/vizer.ts";
-import type { StyleRow, TabText } from "../src/types.ts";
+import type { Annotation, StyleRow, TabText } from "../src/types.ts";
 import { SOURCE } from "../src/types.ts";
+import { annotation, annotationHtml } from "../src/workbench/annotations.tsx";
 import { bookFile } from "../src/workbench/files.ts";
 import basicTheme from "../theme/basic-theme.json";
 
@@ -113,7 +114,7 @@ describe("UI & Workbench Integration Suite", () => {
     }
   });
 
-  test("The export seed carries the two text tabs and the whole book, sourced", () => {
+  test("The export seed carries the two text tabs, the whole book, and the annotations", () => {
     const text: TabText = {
       dot: BARE_BONE_DOT,
       action: "console.log('hello');",
@@ -124,8 +125,9 @@ describe("UI & Workbench Integration Suite", () => {
       { selector: ".node", property: "@apply", value: ".glass", id: 3, source: SOURCE.user },
       { selector: "#a", property: "border-width", value: "2px", id: 4, source: SOURCE.user },
     ];
+    const annotations: Annotation[] = [annotation({ selector: "#a", dy: "4em", text: "note" })];
 
-    const parsed = JSON.parse(JSON.stringify({ ...text, styles: bookFile(rows) }));
+    const parsed = JSON.parse(JSON.stringify({ ...text, styles: bookFile(rows), annotations }));
 
     expect(parsed.dot).toBe(BARE_BONE_DOT);
     expect(parsed.action).toBe("console.log('hello');");
@@ -139,7 +141,76 @@ describe("UI & Workbench Integration Suite", () => {
       },
       "#a": { "border-width": { value: "2px", source: 2 } },
     });
+    // The rows travel, not the marks: the exported page derives its own HTML.
+    expect(parsed.annotations).toHaveLength(1);
+    expect(parsed.annotations[0].selector).toBe("#a");
+    expect(parsed.annotations[0].text).toBe("note");
     expect(parsed.theme).toBeUndefined();
+  });
+});
+
+// The annotation rows are the model and the mark is derived from them (§4). This
+// is that derivation, which is the only direction there is.
+describe("an annotation row becomes a mark", () => {
+  test("selector and text are the gate, and a half-filled row emits nothing", () => {
+    // Not politeness: `querySelectorAll("")` throws, so a row with no selector
+    // would take the next `place()` down with it.
+    expect(annotationHtml([annotation({ text: "orphan" })])).toBe("");
+    expect(annotationHtml([annotation({ selector: "#a" })])).toBe("");
+    expect(annotationHtml([annotation()])).toBe("");
+    expect(annotationHtml([annotation({ selector: "#a", text: "both" })])).toContain("both");
+  });
+
+  test("an offset is a style custom property, and a blank one is left out", () => {
+    const both = annotationHtml([annotation({ selector: "#a", dx: "1em", dy: "4em", text: "x" })]);
+    expect(both).toContain('style="--dx: 1em; --dy: 4em"');
+
+    // Omitted rather than emitted empty, so the theme's `var(--dy, 0px)` applies.
+    const one = annotationHtml([annotation({ selector: "#a", dy: "4em", text: "x" })]);
+    expect(one).toContain('style="--dy: 4em"');
+    expect(one).not.toContain("--dx");
+
+    const none = annotationHtml([annotation({ selector: "#a", text: "x" })]);
+    expect(none).not.toContain("style=");
+    expect(none).not.toContain("class=");
+  });
+
+  test("any CSS length passes through, because nothing here parses one", () => {
+    const html = annotationHtml([annotation({ selector: "#a", dx: "calc(-50% + 1em)", text: "x" })]);
+    expect(html).toContain("--dx: calc(-50% + 1em)");
+  });
+
+  test("the class column reaches the mark, where the styles tab can select it", () => {
+    expect(annotationHtml([annotation({ selector: "#a", class: "note", text: "x" })])).toContain('class="note"');
+  });
+
+  test("text is block markdown, so a list is a list", () => {
+    const html = annotationHtml([annotation({ selector: "#a", text: "**bold** and *it*" })]);
+    expect(html).toContain("<strong>bold</strong>");
+    expect(html).toContain("<em>it</em>");
+    // Block mode, unlike a label: a note wants paragraphs.
+    expect(html).toContain("<p>");
+  });
+
+  test("`\\n` breaks a line here exactly as it does in a label", () => {
+    const html = annotationHtml([annotation({ selector: "#a", text: "one\\ntwo" })]);
+    expect(html).toContain("one<br />two");
+  });
+
+  test("a quote in a selector survives as an attribute", () => {
+    // How text enters an attribute, not a guard: `[data-kind="x"]` is an ordinary
+    // selector, and an unescaped quote would end the attribute early.
+    const html = annotationHtml([annotation({ selector: '[data-kind="x"]', text: "y" })]);
+    expect(html).toContain('data-selector="[data-kind=&quot;x&quot;]"');
+  });
+
+  test("the list is ordered, and two marks may share a selector", () => {
+    const html = annotationHtml([
+      annotation({ selector: "#a", text: "first" }),
+      annotation({ selector: "#a", text: "second" }),
+    ]);
+    expect(html.indexOf("first")).toBeLessThan(html.indexOf("second"));
+    expect(html.match(/data-selector/g)).toHaveLength(2);
   });
 });
 

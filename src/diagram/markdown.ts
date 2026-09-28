@@ -84,3 +84,10 @@ function unescape(label: string): string {
 export function renderLabel(label: string): string {
   return md.renderInline(unescape(label));
 }
+
+// An annotation is the opposite: a note wants paragraphs and lists, so it is
+// block mode. Same pre-pass, so `\n` means the same thing in both (§7) — with
+// `\n\n` reading as a paragraph break here, which is the point of block mode.
+export function renderAnnotation(text: string): string {
+  return md.render(unescape(text));
+}

@@ -1,6 +1,6 @@
 // SolidJS shell: canvas skeleton, the radio strip, and one textarea for the
-// two text tabs. The styles tab is not text — it is a rows view onto the
-// `Stylist`, so it renders `Rows` instead of the textarea.
+// two text tabs. The styles and annotation tabs are not text — each is a rows
+// view onto its own model, so they render `Rows` and `Annotations` instead.
 //
 // The textarea is the whole coding window: no highlighting, no completion, no
 // caret of ours. Only the ids the engine's sinks and the export need survive
@@ -22,7 +22,8 @@ import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { Rows } from "../stylist/rows.tsx";
 import { documentEntries, Stylist } from "../stylist/stylist.ts";
-import type { StyleDocument, StyleFile, TabId, TabText } from "../types.ts";
+import type { Annotation, StyleDocument, StyleFile, TabId, TabText } from "../types.ts";
+import { Annotations, loadAnnotations, starterAnnotations } from "./annotations.tsx";
 import { Engine } from "./engine.ts";
 import { download, Files } from "./files.ts";
 import { ExportDialog, showExportDialog } from "./export-dialog.tsx";
@@ -54,9 +55,9 @@ const STARTER_TEXT: TabText = {
   action: "",
 };
 
-function seeded(): { text: TabText; styles: StyleFile | StyleDocument } {
+function seeded(): { text: TabText; styles: StyleFile | StyleDocument; annotations: Annotation[] } {
   const seed = document.getElementById("app-seed");
-  if (seed === null) return { text: STARTER_TEXT, styles: {} };
+  if (seed === null) return { text: STARTER_TEXT, styles: {}, annotations: starterAnnotations() };
   const parsed = JSON.parse(seed.textContent!);
   return {
     text: {
@@ -64,19 +65,23 @@ function seeded(): { text: TabText; styles: StyleFile | StyleDocument } {
       action: parsed.action ?? "",
     },
     styles: parsed.styles ?? {},
+    annotations: parsed.annotations === undefined ? starterAnnotations() : loadAnnotations(parsed.annotations),
   };
 }
 
 export function Workbench() {
   const seed = seeded();
   const [text, setText] = createStore<TabText>(seed.text);
+  // The list is the model (§4), and a store so the engine can read it at the
+  // moment it derives the sink — the same arrangement `text` has.
+  const [annotations, setAnnotations] = createStore<Annotation[]>(seed.annotations);
   const [active, setActive] = createSignal<TabId>("dot");
   const [stamp, setStamp] = createSignal(0);
   const [frozen, setFrozen] = createSignal(true);
   const [isAsideHidden, setAsideHidden] = createSignal(false);
   const stylist = new Stylist();
-  const engine = new Engine(text, stylist);
-  const files = new Files(text, (tab, value) => setText(tab, value), stylist);
+  const engine = new Engine(text, stylist, annotations);
+  const files = new Files(text, (tab, value) => setText(tab, value), stylist, annotations);
   let dotPicker!: HTMLInputElement;
 
   // The stamp tells the styles tab that the book has taken the DOT's rules.
@@ -105,6 +110,7 @@ export function Workbench() {
     "tab-1": () => setActive(TAB_IDS[0]!),
     "tab-2": () => setActive(TAB_IDS[1]!),
     "tab-3": () => setActive(TAB_IDS[2]!),
+    "tab-4": () => setActive(TAB_IDS[3]!),
   };
 
   onMount(() => {
@@ -178,6 +184,13 @@ export function Workbench() {
           <Show when={active() === "styles"}>
             <Rows stylist={stylist} stamp={stamp()} />
           </Show>
+          <Show when={active() === "annotation"}>
+            <Annotations
+              list={annotations}
+              setList={(list) => setAnnotations(list)}
+              annotate={() => engine.annotate()}
+            />
+          </Show>
           <Show when={textTab(active())} keyed>
             {(tab) => (
               <textarea
@@ -193,7 +206,7 @@ export function Workbench() {
 }
 
 function textTab(tab: TabId): keyof TabText | undefined {
-  return tab === "styles" ? undefined : tab;
+  return tab === "dot" || tab === "action" ? tab : undefined;
 }
 
 function favicon(): void {
