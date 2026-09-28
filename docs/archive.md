@@ -1102,3 +1102,18 @@ tested), `bun run test:browser` 63 pass / 0 fail, stage `done`.
 `annotation.html` textarea that do not exist. Those edits belong to Session 3,
 which restores `place()` and the theme's `#annotation-html > [data-selector]`
 block verbatim from `git show`, per the reminder Session 1 left.
+
+**One operational finding, because it wasted a diagnosis.** The live verification
+first reported that `markdown-it`'s ESM entry "could not resolve `entities`" — as a
+500 from the dev server, while `bun run build` succeeded from the same tree and
+`node_modules/entities` was plainly on disk. The dependency was never the problem:
+`build/dev.ts` bundles per request, and the process serving those requests had been
+started before `bun add` ran, so its resolution predated the install. `lsof -nP
+-iTCP:3000 -sTCP:LISTEN` showed a real `bun` listening. Kill and restart, and it
+serves 200.
+
+This is the counterpart to the phantom `EADDRINUSE` already in `coding-rules.md`:
+that one is the sandbox inventing contention where there is none, this one is real
+contention that misreports itself as a dependency bug. The rule that covers both is
+to read `lsof` before believing either story. Filed in `current-task.md`'s Risks
+alongside its sibling.
