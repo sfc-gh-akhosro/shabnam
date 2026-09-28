@@ -7,45 +7,12 @@ Always read these files in each session:
 
 # Current task
 
-**Annotation overhaul + markdown parser removal — sessions 1, 2 and 3 are done
-and archived.** Their full records, including the reasoning and the findings, are
-in `docs/archive.md`. What is left of that plan is Session 4 below.
+**Nothing open.** The annotation overhaul and the markdown parser removal are
+finished — sessions 1, 2, 3 and 4 are all done and archived, with the reasoning in
+`docs/archive.md`. Session 4's law about when a change reaches the picture is in
+`app-architecture.md` §5.
 
----
-
-## Session 4 — repaint discipline
-
-**Goal.** Nothing updates while you are typing, and nothing invalid ever reaches
-CSSOM.
-
-1. **Commit on `change`, never on `input`.** `src/stylist/rows.tsx` binds the value
-   box to `onInput`, so every keystroke is a `setProperty` and a repaint. That is a
-   bug, not a feature. Move it to `onChange`, matching the selector and property
-   boxes.
-2. **An invalid value is not written at all.** Today `write()` calls `addRule`
-   unconditionally and *then* checks `supported()`, so a bad value reaches the book
-   and CSSOM before being marked. Invert it: when `supported()` is false, mark the
-   row `.invalid` and **do not touch the book**. The row keeps the user's text and
-   the picture keeps the last good value. `removeRule` on rekey still runs, so a row
-   cannot leave a stale entry behind.
-3. **Text tabs never live-update.** Already true — the `<textarea>`'s `onInput` only
-   writes the store, and the store is read at `redraw()`. This session's job is to
-   **record it as law** in §5 ("one conductor means one trigger") so nobody wires a
-   reactive redraw later. No code change expected here; if one is needed, that is a
-   finding worth reporting.
-
-**What Session 3 already settled.** Item 1 is **done for annotation rows** — they
-never had an `onInput`, so only the styles tab's value box is left. Item 2 does
-**not** extend to annotation rows and should not be made to: an offset is never
-parsed by us (§4), and a bad one is dropped by CSS at computed-value time, so there
-is no `supported()` equivalent and no `.invalid` for them. Items 2 and 3 are
-otherwise untouched.
-
-**Verify.** A check that types an invalid value and asserts the sheet still holds
-the previous value while the row wears `.invalid`. A check that typing in the DOT
-textarea changes nothing until Redraw. Remember the harness fails the run on any
-console error, so the invalid-value check must assert its own error line and then
-`errors.splice()` it back out.
+The next session picks from **For Later** below.
 
 ---
 

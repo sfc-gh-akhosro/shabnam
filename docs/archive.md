@@ -1182,3 +1182,52 @@ them. That collapses to eight lines with `flex: 1`, and three of the four hooks
 die with it; `FIELD` and `field()` lose their `hook` and `placeholder` columns at
 the same time. Raised at the end of the session and **deliberately deferred** to a
 general refactor rather than patched here — see `current-task.md`, **For Later**.
+
+---
+
+## Session 4 — repaint discipline — **done**
+
+The last session of the annotation-overhaul plan, and the only one that touched no
+markup: three items about *when* a change is allowed to reach the picture.
+
+**What shipped.**
+
+- **The styles value box commits on `change`.** `rows.tsx` bound it to `onInput`,
+  so every keystroke was an `addRule` and a repaint — the picture flickered through
+  `1`, `1p`, `1px` on the way to a typed value. Selector and property were already
+  on `change`; the split had been written up as deliberate ("the picture follows the
+  caret"), which is why it survived three sessions. It was a bug.
+- **An unsupported value is refused before the book, not marked after it.**
+  `write()` called `addRule` unconditionally and *then* asked `supported()`, so a
+  value CSSOM cannot parse reached the sheet, was dropped in silence, and took the
+  previous value with it. Inverted into a `commit()` helper: unsupported logs and
+  returns the row's existing id, and the book is never touched. The row keeps the
+  text and still wears `.invalid` — the class is derived from the row, not stored,
+  so nothing there had to change. The rekey `removeRule` still runs ahead of the
+  refusal, so a refused row cannot leave a stale entry behind under its old name.
+- **"A text tab never live-updates" is now law**, in §5 under the one-trigger rule,
+  with the two halves kept apart: a text tab is stale until Redraw because the
+  store is read at `redraw()`, while a rows tab commits on `change` for a different
+  reason — it cannot interleave a draw, it would simply flicker. No code change was
+  needed, which was the expected outcome.
+
+**The cost was in the harness, not in `src/`.** Every browser check drove the value
+box with an `input` event — ten call sites — so item 1 broke the suite until they
+moved to `change`. Worth remembering as the general shape: a check that dispatches
+the event the component *currently* listens for is coupled to that choice, and the
+grep for it is `box(…, "value")`.
+
+**The invalid-value check had to be rewritten, not extended.** It typed `0px0` into
+a *fresh* row, which after this change proves nothing — a blank row has no last good
+value to keep. It now types the bad value over `#core`'s `10px` and asserts the
+sheet still reads `10px`, which is the behaviour the session is actually about. The
+fresh-row case stayed as a second, weaker assertion: an invalid new row enters
+neither the book nor the sheet, so it carries no id.
+
+**One trap in the new text-tab check.** It replaces the DOT and clicks Redraw, so
+the diagram it leaves behind has to keep a node called `core` — a starter annotation
+anchors to `#core`, and a selector matching nothing throws (§4), which would have
+surfaced as a console error and failed the suite's last check rather than as
+anything pointing at the DOT. It runs last for the same reason.
+
+**Verified.** 93 pure tests, 80 browser checks, `tsc --noEmit` clean.

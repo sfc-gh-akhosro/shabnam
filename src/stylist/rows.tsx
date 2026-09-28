@@ -23,15 +23,15 @@
 // its element carries none; there is nothing to point at until all three boxes
 // say something. It picks one up on the next sync.
 //
-// Selector and property commit on `change`; the value commits on every
-// keystroke. The split is deliberate — a value is one `setProperty` and the
-// picture follows the caret, while a half-typed selector must never reach
-// `insertRule`.
+// All three boxes commit on `change`, never on `input`. Nothing updates while
+// you are typing: a half-typed selector must not reach `insertRule`, and a
+// half-typed value is a rule the user has not finished saying yet.
 //
 // A row whose value CSSOM will not take wears `.invalid`, which nothing styles:
 // it is a hook for the browser checks and for a reader of the DOM, and the
-// console carries the message. The rule stays in the book either way — the user
-// typed it, so it is theirs to fix or to ❌.
+// console carries the message. That row **does not reach the book** — the
+// picture keeps the last good value, and the row keeps the text as typed, so it
+// is there to fix or to ❌.
 
 import { createEffect, createSignal, Index } from "solid-js";
 import * as T from "../types.ts";
@@ -149,24 +149,37 @@ export function Rows(props: RowsProps) {
     const before = rows()[at]!;
     const after = { ...before, [field]: value, source: T.SOURCE.user };
     // Only a changed key removes the old entry. Rewriting the value in place is
-    // what keeps the row's id, and the id is the whole reason it exists.
+    // what keeps the row's id, and the id is the whole reason it exists. This
+    // runs even when the new value is refused below, so a rekeyed row cannot
+    // leave a stale entry behind under its old name.
     const rekeyed = before.selector !== after.selector || before.property !== after.property;
     if (rekeyed && keyed(before)) props.stylist.removeRule(before.selector, before.property);
-    // The book mints the id, and the row wears it from the moment the rule exists
-    // — waiting for the next sync would leave a live rule with no way to point at
-    // its element. A user write is source 2 and cannot be refused, but if it ever
-    // were, the row keeps whatever id it had.
-    const minted = keyed(after) ? props.stylist.addRule(after.selector, after.property, after.value, T.SOURCE.user) : REFUSED;
-    const id = minted === REFUSED ? after.id : minted;
-    // Said once, here, rather than in the render: a rejected row keeps its class
-    // for as long as it is wrong, and saying so again on every re-render would
-    // bury the one line that matters.
-    if (!supported(after)) {
-      console.error(`[styles] ${after.selector} { ${after.property}: ${after.value} } rejected by CSSOM`);
-    }
     // `ready` runs on the way out: filling in the waiting blank is what puts the
     // next one there, so the top of the list is never occupied for long.
-    setRows(ready(rows().map((row, i) => (i === at ? { ...after, id } : row))));
+    setRows(ready(rows().map((row, i) => (i === at ? { ...after, id: commit(after) } : row))));
+  };
+
+  /**
+   * The row into the book, or not at all — and the id the row then wears.
+   *
+   * A value CSSOM will not take is **not written**: the book and the sheet keep
+   * whatever they held, so the picture never flickers through a broken value on
+   * the way to a good one. The row still shows the text and still wears
+   * `.invalid`, because the class is derived from the row rather than stored.
+   *
+   * The book mints the id, and the row wears it from the moment the rule exists
+   * — waiting for the next sync would leave a live rule with no way to point at
+   * its element. A user write is source 2 and cannot be refused, but if it ever
+   * were, the row keeps whatever id it had.
+   */
+  const commit = (row: Listed): number => {
+    if (!supported(row)) {
+      console.error(`[styles] ${row.selector} { ${row.property}: ${row.value} } rejected by CSSOM`);
+      return row.id;
+    }
+    if (!keyed(row)) return row.id;
+    const minted = props.stylist.addRule(row.selector, row.property, row.value, T.SOURCE.user);
+    return minted === REFUSED ? row.id : minted;
   };
 
   const insert = (at: number) => setRows([...rows().slice(0, at + 1), blank(), ...rows().slice(at + 1)]);
@@ -245,7 +258,7 @@ export function Rows(props: RowsProps) {
               placeholder="value"
               title={row().value}
               value={row().value === "" && swatched(row()) ? "#000000" : row().value}
-              onInput={(event) => write(at(), "value", event.currentTarget.value)}
+              onChange={(event) => write(at(), "value", event.currentTarget.value)}
             />
             <button title="insert a row below" onClick={() => insert(at())}>➕</button>
           </div>

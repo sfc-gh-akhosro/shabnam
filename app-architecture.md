@@ -382,7 +382,7 @@ Invisible clusters (`style=invis`) are not drawn. They still contribute a class 
 - A config object or a config tab
 - A second geometry source alongside the measured boxes
 - **A CSS parser, a CSS serializer on the paint path, or CSS algebra.** A rule is a map entry; CSSOM is the only thing that turns it into paint.
-- **A CSS selector validator.** `Stylist.addRule` ends in `sheet.insertRule`, which throws on a selector CSSOM cannot parse. The rows tab keeps mid-typing state away from it — selector and property commit on `change`, not on keystroke — but a *finished* typo (`.`, `#`) reaches `insertRule` and takes the app down with a stack. That is the preferred failure (fail loud). If it ever becomes intolerable the honest fix is a browser-supplied probe, never a grammar of our own.
+- **A CSS selector validator.** `Stylist.addRule` ends in `sheet.insertRule`, which throws on a selector CSSOM cannot parse. The rows tab keeps mid-typing state away from it — **all three boxes commit on `change`, never on keystroke** (§5) — but a *finished* typo (`.`, `#`) reaches `insertRule` and takes the app down with a stack. That is the preferred failure (fail loud). If it ever becomes intolerable the honest fix is a browser-supplied probe, never a grammar of our own.
 
 Custom keys we care about (`icon`, `shell`, `caption`) are fields on the viz object. If Graphviz ever drops a key, we add **one** name→value map for that key — not a grammar.
 
@@ -569,6 +569,13 @@ holding only the theme. Redraw does not.
 
 **One conductor means one trigger.** Redraw is a button and a keyboard shortcut, never a keystroke handler, so two overlapping calls cannot happen — which matters because `redraw` awaits a paint in the middle and interleaved calls would inject the SVG layer in either order. Nothing in the UI can cause that today. Anything that could — hot reload, a watcher, the `ResizeObserver` of §3.4 — has to bring a guard flag with it.
 
+**So nothing repaints while you are typing, and that is law rather than an accident of the wiring.** Two halves, and they are separate mechanisms:
+
+- **A text tab never live-updates.** The `<textarea>`'s `onInput` writes the store and does nothing else; the store is read at `redraw()`. The picture is therefore exactly as stale as the last Redraw. Do not wire a reactive redraw here — an `onInput` that draws is the interleaving the paragraph above forbids, arriving one keystroke at a time.
+- **A rows tab commits on `change`.** All three style boxes, and all of the annotation ones. A row edit is the short path and repaints with no redraw, so a keystroke handler here would not interleave a draw — but it would make every intermediate state of a value a `setProperty`, and the picture would flicker through `1`, `1p`, `1px` on the way to being typed. The value box was bound to `onInput` until Session 4; that was a bug, not a feature.
+
+**And a value CSSOM will not take is not written at all.** `supported()` is asked *before* `addRule`, so the book and the sheet keep their last good value, and the row carries the user's text plus `.invalid`. Writing first and marking afterwards — which is what the code did — meant a half-typed `0px0` reached CSSOM, was dropped in silence, and took the previous value down with it. The rekey `removeRule` still runs, so a refused row cannot leave a stale entry behind under its old name.
+
 A row edit is the short path: `Stylist.addRule` / `removeRule` → one `setProperty` or
 `removeProperty` → the browser repaints. No viz, no bag, no frame, no measure. The SVG
 layer is drawn from measured boxes, so a row that changes a size needs a Redraw to move
@@ -678,6 +685,8 @@ Closed. Do not reopen in code without updating this file.
 | Shortcuts | A `Map` registry in `workbench/keys.ts`, not a switch |
 | Tab editor | A bare `<textarea>`, inline in `workbench.tsx`. One instance, for the two text tabs. Radio strip selects. No highlighting, no completion. |
 | The styles tab | A rows table, not an editor. Native `input list=` for selector and property. A `header` of three checkboxes hides rows by source — view state only, so nothing is written and nothing is fed. A hidden row keeps its place in the book: the edit verbs address a row by position, so the filter carries the book index with each visible row rather than renumbering them. |
+| When a row commits | On `change`, all three boxes, never on `input` (§5). A text tab commits at Redraw. Nothing in the app repaints on a keystroke. |
+| An unsupported value | Refused before the book, not marked after it. The picture keeps its last good value; the row keeps the text and wears `.invalid`. |
 | The waiting row | The list always ends with an untouched blank row, and `.rows` is `column-reverse`, so that blank sits at the **top** of the screen — a rule is added by typing, never by asking for a row first. Filling it in appends the next one. ➕ opens another blank after any row; a re-read settles back to exactly one. |
 | ❌ | Out of the book, out of CSSOM, and then the element is only **hidden** — not spliced out. The book is the source of truth and the list is rebuilt from it on the next sync, where the row simply will not be. Removing the element as well would be the UI keeping a second opinion about what exists. |
 | A row's id | Minted by the book on first sight of a `(selector, property)` and worn by the element from that moment — `addRule` returns it, so a rule is never live with no way to point at its element. |

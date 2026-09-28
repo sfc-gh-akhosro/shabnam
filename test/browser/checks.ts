@@ -225,7 +225,7 @@ async function blankRowFlow(): Promise<void> {
   const typed = blankRow();
   await type(box(typed, "selector"), ".scratch-flow", "change");
   await type(box(typed, "property"), "opacity", "change");
-  await type(box(typed, "value"), "0.5", "input");
+  await type(box(typed, "value"), "0.5", "change");
 
   check("filling the blank row adds the rule", typed.id !== "" && /^\d+$/.test(typed.id), `id=${typed.id || "(none)"}`);
   check(
@@ -390,7 +390,7 @@ async function liveRepaint(): Promise<void> {
   const row = blankRow();
   await type(box(row, "selector"), ".node", "change");
   await type(box(row, "property"), "background", "change");
-  await type(box(row, "value"), "#ff0000", "input");
+  await type(box(row, "value"), "#ff0000", "change");
 
   const painted = $$("#diagram-html .node").map((node) => getComputedStyle(node).backgroundColor);
   check("a user row repaints live, with no redraw", painted.every((colour) => colour === "rgb(255, 0, 0)"), JSON.stringify(painted));
@@ -421,7 +421,7 @@ async function survivesRedraw(): Promise<void> {
   const row = blankRow();
   await type(box(row, "selector"), "#diagram-canvas, svg", "change");
   await type(box(row, "property"), "--primary-color", "change");
-  await type(box(row, "value"), "#ff00ff", "input");
+  await type(box(row, "value"), "#ff00ff", "change");
   check("a user row overwrites what the DOT derived", token() === "#ff00ff", `${derived} → ${token()}`);
 
   await resync();
@@ -445,7 +445,7 @@ async function applyAndResync(): Promise<void> {
   const row = blankRow();
   await type(box(row, "selector"), ".scratch", "change");
   await type(box(row, "property"), "@apply", "change");
-  await type(box(row, "value"), ".glass", "input");
+  await type(box(row, "value"), ".glass", "change");
 
   check("an @apply row feeds without leaking @apply", !cssTexts().join("").includes("@apply"), `${sheet().cssRules.length} rules`);
   dropRow(row);
@@ -463,6 +463,11 @@ async function applyAndResync(): Promise<void> {
  * beats `.node` on specificity, so the `.node` row wins here or `!important`
  * never reached CSSOM.
  *
+ * An unsupported value is **not written at all**, so the interesting case is a
+ * row that already holds a good one: the sheet must still hold it afterwards.
+ * That is why the invalid value is typed over `#core`'s `10px` rather than into a
+ * fresh row — a blank row has no last good value to keep.
+ *
  * The rejected row logs, on purpose, and the last check of the suite fails on any
  * console error — so this stage takes its own expected lines back out of `errors`
  * rather than muting the channel.
@@ -476,13 +481,13 @@ async function importantAndInvalid(): Promise<void> {
   const specific = blankRow();
   await type(box(specific, "selector"), "#core", "change");
   await type(box(specific, "property"), "padding", "change");
-  await type(box(specific, "value"), "10px", "input");
+  await type(box(specific, "value"), "10px", "change");
   check("an #id row outranks a class row", padding() === "10px", padding());
 
   const shout = blankRow();
   await type(box(shout, "selector"), ".node", "change");
   await type(box(shout, "property"), "padding", "change");
-  await type(box(shout, "value"), "0 !important", "input");
+  await type(box(shout, "value"), "0 !important", "change");
   check("!important reaches CSSOM as a priority", padding() === "0px", `padding: ${padding()}`);
   check(
     "and the book keeps the value as typed",
@@ -490,18 +495,26 @@ async function importantAndInvalid(): Promise<void> {
     `"${box(shout, "value").value}" invalid=${shout.classList.contains("invalid")}`,
   );
 
-  // The old behaviour, now impossible: the priority inside the value made the
-  // whole declaration unparseable, so this used to paint nothing at all.
+  // The refusal, over a row that already says something. `0px0` is the old
+  // trap — unparseable, and dropped in silence by `setProperty` — so before this
+  // session it reached the book and took `10px` down with it.
   const before = errors.length;
+  await type(box(specific, "value"), "0px0", "change");
+  check("a value CSSOM rejects marks the row", specific.classList.contains("invalid"), specific.className);
+  check("and never reaches the sheet", declaration("#core", "padding") === "10px", `padding: "${declaration("#core", "padding")}"`);
+  check("so the row keeps the text and the book keeps the value", box(specific, "value").value === "0px0", `"${box(specific, "value").value}"`);
+  check("and it says so once, in the console", errors.length === before + 1, JSON.stringify(errors.slice(before)));
+
+  // A brand-new row that is invalid from the start has nothing to keep, so what
+  // it must not do is enter the book at all.
   const bad = blankRow();
   await type(box(bad, "selector"), ".scratch-bad", "change");
   await type(box(bad, "property"), "margin", "change");
-  await type(box(bad, "value"), "0px0", "input");
-  check("a value CSSOM rejects marks the row", bad.classList.contains("invalid"), bad.className);
-  check("and says so once, in the console", errors.length === before + 1, JSON.stringify(errors.slice(before)));
+  await type(box(bad, "value"), "0px0", "change");
+  check("an invalid new row enters neither the book nor the sheet", bad.id === "" && !cssTexts().join("").includes("scratch-bad"), `id=${bad.id || "(none)"}`);
 
-  await type(box(bad, "value"), "0px", "input");
-  check("fixing the value clears the mark", !bad.classList.contains("invalid"), bad.className);
+  await type(box(bad, "value"), "0px", "change");
+  check("fixing the value clears the mark and adds the rule", !bad.classList.contains("invalid") && /^\d+$/.test(bad.id), `${bad.className} id=${bad.id || "(none)"}`);
 
   // Expected, and already asserted. Out of the list so the suite's last check
   // still means "nothing went wrong that we did not ask for".
@@ -577,6 +590,34 @@ async function redrawStillWorks(): Promise<void> {
   check("Redraw still draws the picture", nodes === 3 && connectors > 0, `${nodes} nodes, ${connectors} connector parts`);
 }
 
+/**
+ * A text tab never live-updates (§5).
+ *
+ * The textarea's `onInput` writes the store and nothing else; the store is read
+ * at `redraw()`. So the picture is exactly as stale as the last Redraw, which is
+ * what keeps the one conductor the one trigger — a reactive redraw here could
+ * interleave two draws across the paint each one waits for.
+ *
+ * Runs last, because it leaves a different diagram on the canvas. `core` stays in
+ * the DOT: a starter annotation anchors to `#core`, and a selector matching
+ * nothing throws (§4).
+ */
+async function textTabsWaitForRedraw(): Promise<void> {
+  tabs()[0]!.click();
+  await tick();
+
+  const area = $("body > aside textarea") as HTMLTextAreaElement;
+  const drawn = () => $$("#diagram-html .node").length;
+  const before = drawn();
+
+  await type(area, "digraph { rankdir=LR core -> app -> sink -> extra }", "input");
+  check("typing in the DOT tab draws nothing", drawn() === before, `${before} → ${drawn()} nodes`);
+
+  redrawButton().click();
+  for (let waited = 0; waited < 200 && drawn() !== 4; waited += 1) await tick();
+  check("and Redraw is what draws it", drawn() === 4, `${drawn()} nodes`);
+}
+
 // The app's own `onMount` kicks the first redraw, so wait for the picture rather
 // than for a timer.
 async function mounted(): Promise<void> {
@@ -636,14 +677,14 @@ async function sourceFilter(): Promise<void> {
   // suite failure) the day a `text-align` rule landed at the end of the list. A
   // CSS-wide keyword is valid for every property, which is what this check needs:
   // it is asserting *where* the write lands, not what the value means.
-  await type(box(probe(), "value"), "initial", "input");
+  await type(box(probe(), "value"), "initial", "change");
   check(
     "editing a row under a filter writes to that row",
     probe().id === id && box(probe(), "selector").value === selector && box(probe(), "property").value === property && box(probe(), "value").value === "initial",
     `#${id} ${selector} ${property}: ${box(probe(), "value").value}`,
   );
 
-  await type(box(probe(), "value"), original, "input");
+  await type(box(probe(), "value"), original, "change");
   await flip(themeBox);
   check("re-checking a source brings its rows back", rows().length === all, `${rows().length} of ${all}`);
 }
@@ -672,5 +713,7 @@ publish("important");
 await exportDialog();
 publish("export");
 await redrawStillWorks();
+publish("redraw");
+await textTabsWaitForRedraw();
 check("no console or uncaught errors", errors.length === 0, JSON.stringify(errors));
 publish("done");
