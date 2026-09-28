@@ -1231,3 +1231,128 @@ surfaced as a console error and failed the suite's last check rather than as
 anything pointing at the DOT. It runs last for the same reason.
 
 **Verified.** 93 pure tests, 80 browser checks, `tsc --noEmit` clean.
+
+---
+
+## Session 5 — the defining files got shorter, and the reader got replaced on paper
+
+Two halves, and no `src/` behaviour changed in either. The first shrank the law;
+the second designed its replacement and proved it in a lab.
+
+### The law, minus the clutter
+
+| | before | after |
+|---|---|---|
+| `user-story.md` | 167 | 121 → 128 |
+| `app-architecture.md` | 854 | 458 |
+| `coding-rules.md` | 299 | 239 |
+| `src/types.ts` | 229 | 210 |
+
+`user-story.md` was carrying a **pasted conversation** — two real findings buried
+in transcript scaffolding (`## 1. Is there a rank property? No — I checked`, `##
+The rewrite`). The findings were folded into the narrative and the scaffolding
+deleted.
+
+Three things left `app-architecture.md` because they belong to another file, which
+is the division the story now states outright: **§7's decision log** (~85 rows,
+every one a compressed restatement of a section above it — the single biggest
+source of two-places-to-update), **§9 Soft 7** (coding-rules'), and **§10 Types**
+(`types.ts`'). **§6 Build Order** went because it described work finished long
+ago; that is archive material, not contract.
+
+`src/types.ts` only lost 19 lines, and that is the honest answer: it is almost all
+signature already, so the reduction was doc-comments that argued a case the
+architecture now makes.
+
+### The reader: `ts-graphviz` + `dagre` replace viz.js
+
+Measured, not characterised. Both candidate parsers are PEG-generated over the
+real DOT grammar; neither wraps Graphviz. Ten nasty inputs — HTML labels, escaped
+quotes, ports, `{rank=same}`, both comment styles, chained edges, semicolon-free
+bodies, Unicode ids, `strict` — parsed **ten for ten in both**.
+
+The bloat fear was inverted: bundled and minified, `@ts-graphviz/ast` is **39 KB**
+and `dotparser` **44 KB**. What decided it was value fidelity:
+
+```
+ts-graphviz:  penwidth="3"  height="0.02"   strings, plus a `quoted` flag
+dotparser:    penwidth=3    height=0.02     JS numbers
+```
+
+`dotparser` coerces numerics, so `height=1.0` arrives as `1` and the author's
+trailing zero is gone before we see it. It also drops whether a value was quoted —
+the distinction the `<…>` HTML-label form rests on. Add shipped types and
+`location` line/col and it was not close. The counter-argument in `dotparser`'s
+favour, kept because it is fair: DOT's grammar is frozen, so untouched-since-2022
+reads as stable rather than abandoned.
+
+**Why M4 stalled, and the unblock.** M4 was two projects welded together: read DOT
+into a tree, *and* replace Graphviz's layout with our own maths. The second is
+Sugiyama, which is large and subtle — and it was chained to the prize, which was
+only ever provenance. Splitting them is the whole move: `ts-graphviz` for
+attributes, dagre for coordinates.
+
+**`rank=same` is why dagre was dropped before.** It has no native support, and
+four mechanisms were probed: `rank: "same"` on a node is **ignored**, a pre-set
+numeric `rank` is **ignored**, a zero-`minlen` edge **throws**, and a compound
+parent pulls members together only as a side effect of cluster rank-contiguity —
+not a guarantee. What works is **contraction**: collapse the group to one stand-in
+node, rewrite its edges onto the stand-in, lay out, expand so members inherit the
+rank and spread across it. Exact, about fifteen lines.
+
+**Verified against viz.js on both example files: the rank partition matches
+exactly**, and all four of example-2's `rank=same` groups hold. dagre also returns
+`rank` and `order` as integers, which retires the 2-point coordinate bucketing
+entirely.
+
+### Three claims in the law that were wrong
+
+Found by probing rather than reading, which is the lesson worth keeping.
+
+- **`cluster_consumer` does not come back with `nodes: []`.** §2 said it did, in
+  `example-1.dot` specifically. viz.js reports all six members. The note was stale
+  and the "declaration-scoped boundary" it justified does not bite there.
+- **My own first walk had the same bug in reverse.** DOT membership is
+  *cumulative* — `bq` belongs to both an anonymous subgraph and `cluster_a` — and
+  recording only the first declaration silently lost `cluster_a`. viz.js was right
+  and the lab was wrong until fixed.
+- **Id collision-throw was replaced** with the one-line space→underscore the user
+  asked for. A user who gave a node no real name was never going to select it.
+
+### Open, and needing a decision before Session 2
+
+**Unitless lengths reaching CSS — pre-existing, and probably never painted.**
+`ATTR_CSS` maps `fontsize → font-size` and `penwidth → border-width`, and DOT
+values are bare numbers. `font-size: 12` and `border-width: 3` are **invalid CSS**
+— a `<length>` needs a unit unless zero — so CSSOM has been refusing them, meaning
+`#horizon`'s `fontsize=12` in `example-2.dot` has never once reached the screen.
+
+This is a genuine collision between two laws: values pass through uncorrected, and
+a rule must be valid CSS. Recommended: give those two units (`pt`, `px`) and drop
+the `width` / `height` mappings added in the lab. Appending a unit *is* a
+correction, so it needs saying out loud in the architecture if taken.
+
+**Edge weights are dropped by `PointGraph`, and `example-2` tunes layout with
+them** — `weight=0` twice, `weight=100`, `constraint=false`, `concentrate=true`.
+Ranks matched exactly, so the partition survives; ordering *within* a rank will
+move. If it looks wrong, the honest fix is optional `weight` and `minlen` on
+`Arrow`, since those are structure rather than style.
+
+### The process this session established
+
+Written into `coding-rules.md` as **story → types → architecture → code**, because
+it produced a better design than the previous route did: tell the story in prose
+until a reader says "oh, I get it"; let the types fall out of it, with every
+atomic type named (`NodeId[][]`, never `string[][]`); record the decisions
+formally; then implement. Experiment in `research-lab/<topic>/` first, with a CLI
+that **prints what you store rather than a view of it**, and **probe rather than
+assert** — three confident claims fell to a five-line probe this session. Each
+library is walled behind one class named after it, so the type list alone says
+where a dependency could leak from.
+
+`research-lab/ast/readme.md` is the design document and outlives the lab's code.
+The lab is 7 files, 405 code lines plus 123 comments, against the ~590 in `src/`
+it replaces.
+
+**Verified.** `tsc --noEmit` clean, 93 pure tests green, `src/` untouched. Both
+new dependencies are dev-only until Session 2 promotes them.
