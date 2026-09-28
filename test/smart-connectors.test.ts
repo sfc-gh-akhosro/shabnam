@@ -6,15 +6,14 @@
 // instead of picking them out of curves.
 
 import { expect, test } from "bun:test";
-import { DiagramBagger } from "../src/diagram/diagram-bagger.ts";
 import { EdgeDrawer } from "../src/diagram/edge-drawer.ts";
-import { Vizer } from "../src/diagram/vizer.ts";
-import type { Box, ConnectorMetrics, VizModel, Point } from "../src/types.ts";
+import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
+import type { Box, ConnectorMetrics, DiagramModel, Point } from "../src/types.ts";
 
 const SHARP: ConnectorMetrics = { clearance: 14, radius: 0 };
 
-async function makeModel(dot: string): Promise<VizModel> {
-  return new DiagramBagger().bag(await new Vizer().render(dot));
+function makeModel(dot: string): DiagramModel {
+  return new GraphvizAst(dot).model();
 }
 
 function pathOf(svg: string, id: string): string {
@@ -65,8 +64,8 @@ function bends(way: Point[]): number {
 
 // ---------------------------------------------------------------------------
 
-test("a cross-rank edge attaches on the sides, and leaves perpendicular", async () => {
-  const model = await makeModel("digraph { rankdir=LR; a -> b }");
+test("a cross-rank edge attaches on the sides, and leaves perpendicular", () => {
+  const model = makeModel("digraph { rankdir=LR; a -> b }");
   const boxes: Box[] = [
     { id: "a", left: 0, top: 100, width: 80, height: 40 },
     { id: "b", left: 300, top: 260, width: 80, height: 40 },
@@ -84,7 +83,7 @@ test("a cross-rank edge attaches on the sides, and leaves perpendicular", async 
 test("a same-rank edge attaches top and bottom instead", async () => {
   // A side attachment here would have to leave the right edge and loop back to
   // the left to get in, which is worse than the vertical it would replace.
-  const model = await makeModel("digraph { rankdir=LR; a -> b }");
+  const model = makeModel("digraph { rankdir=LR; a -> b }");
   const boxes: Box[] = [
     { id: "a", left: 100, top: 0, width: 80, height: 40 },
     { id: "b", left: 100, top: 200, width: 80, height: 40 },
@@ -99,7 +98,7 @@ test("a same-rank edge attaches top and bottom instead", async () => {
 });
 
 test("the snake goes round a node in the way, not through it", async () => {
-  const model = await makeModel("digraph { rankdir=LR; a -> b; blocker }");
+  const model = makeModel("digraph { rankdir=LR; a -> b; blocker }");
   const blocker: Box = { id: "blocker", left: 200, top: 100, width: 80, height: 40 };
   const boxes: Box[] = [
     { id: "a", left: 0, top: 100, width: 80, height: 40 },
@@ -119,7 +118,7 @@ test("the snake goes round a node in the way, not through it", async () => {
 });
 
 test("clearance is kept off a node the edge does not belong to", async () => {
-  const model = await makeModel("digraph { rankdir=LR; a -> b; blocker }");
+  const model = makeModel("digraph { rankdir=LR; a -> b; blocker }");
   const blocker: Box = { id: "blocker", left: 200, top: 100, width: 80, height: 40 };
   const boxes: Box[] = [
     { id: "a", left: 0, top: 100, width: 80, height: 40 },
@@ -141,7 +140,7 @@ test("clearance is kept off a node the edge does not belong to", async () => {
 test("a clear pair takes the fewest bends that reach it", async () => {
   // Nothing in the way, two ranks, different rows: a Z is two bends and there is
   // no reason for a third.
-  const model = await makeModel("digraph { rankdir=LR; a -> b }");
+  const model = makeModel("digraph { rankdir=LR; a -> b }");
   const boxes: Box[] = [
     { id: "a", left: 0, top: 0, width: 80, height: 40 },
     { id: "b", left: 300, top: 200, width: 80, height: 40 },
@@ -153,7 +152,7 @@ test("a clear pair takes the fewest bends that reach it", async () => {
 });
 
 test("radius 0 is sharp, and a radius curves the same corners", async () => {
-  const model = await makeModel("digraph { rankdir=LR; a -> b }");
+  const model = makeModel("digraph { rankdir=LR; a -> b }");
   const boxes: Box[] = [
     { id: "a", left: 0, top: 0, width: 80, height: 40 },
     { id: "b", left: 300, top: 200, width: 80, height: 40 },
@@ -173,7 +172,7 @@ test("radius 0 is sharp, and a radius curves the same corners", async () => {
 test("a corner radius never overruns the segments it joins", async () => {
   // A huge radius against a tight route: clamping is what stops the curve from
   // overshooting into the segment beyond the corner.
-  const model = await makeModel("digraph { rankdir=LR; a -> b }");
+  const model = makeModel("digraph { rankdir=LR; a -> b }");
   const boxes: Box[] = [
     { id: "a", left: 0, top: 0, width: 80, height: 40 },
     { id: "b", left: 120, top: 60, width: 80, height: 40 },
@@ -187,7 +186,7 @@ test("a corner radius never overruns the segments it joins", async () => {
 });
 
 test("the same boxes route to the same path, twice", async () => {
-  const model = await makeModel("digraph { rankdir=LR; a -> b; blocker }");
+  const model = makeModel("digraph { rankdir=LR; a -> b; blocker }");
   const boxes: Box[] = [
     { id: "a", left: 0, top: 100, width: 80, height: 40 },
     { id: "blocker", left: 200, top: 100, width: 80, height: 40 },
@@ -201,7 +200,7 @@ test("the same boxes route to the same path, twice", async () => {
 test("a route with nowhere to go is still drawn", async () => {
   // Boxes packed tight enough that no corridor satisfies the clearance. Falling
   // back to a tight route beats leaving the edge off the picture (§3.4).
-  const model = await makeModel("digraph { rankdir=LR; a -> b; wall }");
+  const model = makeModel("digraph { rankdir=LR; a -> b; wall }");
   const boxes: Box[] = [
     { id: "a", left: 0, top: 0, width: 80, height: 1000 },
     { id: "wall", left: 80, top: 0, width: 80, height: 1000 },
@@ -214,10 +213,10 @@ test("a route with nowhere to go is still drawn", async () => {
   expect(points(d).length).toBeGreaterThanOrEqual(2);
 });
 
-test("an edge's style words become classes, the way a node's do", async () => {
+test("an edge's style words become classes, the way a node's do", () => {
   // `edge [style=invis]` is how DOT holds a rank in place without drawing
   // anything, so the class has to reach the path for the theme to hide it.
-  const model = await makeModel("digraph { rankdir=LR; a -> b [style=invis] }");
+  const model = makeModel("digraph { rankdir=LR; a -> b [style=invis] }");
   const boxes: Box[] = [
     { id: "a", left: 50, top: 50, width: 80, height: 40 },
     { id: "b", left: 200, top: 120, width: 80, height: 40 },
@@ -226,8 +225,8 @@ test("an edge's style words become classes, the way a node's do", async () => {
   expect(new EdgeDrawer().draw(boxes, model, SHARP)).toContain('class="edge invis"');
 });
 
-test("every connector still carries the arrowhead marker", async () => {
-  const model = await makeModel("digraph { rankdir=LR; a -> b }");
+test("every connector still carries the arrowhead marker", () => {
+  const model = makeModel("digraph { rankdir=LR; a -> b }");
   const boxes: Box[] = [
     { id: "a", left: 0, top: 0, width: 80, height: 40 },
     { id: "b", left: 300, top: 0, width: 80, height: 40 },

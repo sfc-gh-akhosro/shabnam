@@ -5,7 +5,8 @@
 // would wipe every rule the Stylist inserted, so the sink is not in the map.
 
 import { Diagram } from "../diagram/diagram.ts";
-import { Vizer } from "../diagram/vizer.ts";
+import { DagreLayout } from "../dot/dagre-layout.ts";
+import { GraphvizAst } from "../dot/graphviz-ast.ts";
 import { bagEntries, Stylist } from "../stylist/stylist.ts";
 import * as T from "../types.ts";
 import { annotationHtml } from "./annotations.tsx";
@@ -31,7 +32,7 @@ const SINK_WRITE = new Map<string, (element: Element, text: string) => void>([
 ]);
 
 export class Engine implements T.Workbench {
-  private vizer = new Vizer();
+  private layout = new DagreLayout();
   private diagram = new Diagram();
 
   constructor(
@@ -41,15 +42,14 @@ export class Engine implements T.Workbench {
   ) {}
 
   async redraw(): Promise<void> {
-    const json = await this.vizer.render(this.text.dot);
-
-    const model = this.diagram.bag(json);
+    const ast = new GraphvizAst(this.text.dot);
+    const model = ast.model();
     // The book is kept, not flushed (§1). The DOT's rules arrive at source 1 and
     // are refused wherever the user has written at 2, so a redraw cannot take a
     // typed row back off them. `absorb` paints once at the end.
-    this.stylist.absorb(bagEntries(this.diagram.derived(model), T.SOURCE.dot));
+    this.stylist.absorb(bagEntries(ast.styles(), T.SOURCE.dot));
 
-    this.inject("diagram-html", this.diagram.frame(model));
+    this.inject("diagram-html", this.diagram.frame(model, this.layout.place(ast.points())));
 
     await painted();
     const boxes = this.measure();
@@ -61,8 +61,8 @@ export class Engine implements T.Workbench {
   }
 
   // The short path, and the same shape as a style row's (§5): the rows are the
-  // model, so re-deriving the sink and re-anchoring is all an edit needs. No viz,
-  // no bag, no frame, and no `await` — `place()` measures with
+  // model, so re-deriving the sink and re-anchoring is all an edit needs. No
+  // parse, no frame, and no `await` — `place()` measures with
   // `getBoundingClientRect`, which lays out synchronously, so nothing here can
   // interleave with the conductor.
   annotate(): void {

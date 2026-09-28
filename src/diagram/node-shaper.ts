@@ -10,7 +10,7 @@ export const SHAPE_HTML: T.ShapeHtml = new Map([
   ["record", record],
 ]);
 
-export function shapeHtml(node: T.Node): string {
+export function shapeHtml(node: T.DiagramNode): string {
   const render = SHAPE_HTML.get(node.shape) ?? SHAPE_HTML.get("box")!;
   return render(node);
 }
@@ -25,18 +25,15 @@ export function shapeHtml(node: T.Node): string {
 // subgraph of the same name already lives (§3.1).
 const SHAPE_CLASS: T.ShapeClass = new Map([["record", "record"]]);
 
-function box(node: T.Node): string {
+function box(node: T.DiagramNode): string {
   return `<div ${identity(node)}><span class="label">${renderLabel(node.label)}</span></div>`;
 }
 
 // ------------------------------------------------------------------ shape=record
 //
-// The record label is the one grammar we own. `renderJSON` hands it over
-// unexpanded — the JSON describes the same nesting in `rects` and `_draw_`, but
-// as geometry, and geometry is the Measurer's (§3.4) — so the tree exists only in
-// the string. A split, not a parser: `|` separates cells, `{}` flips the flex
-// axis. Depth rises at `{` and falls at `}`, so flipping at both reproduces depth
-// parity without counting it.
+// The record label is the one grammar we own. A split, not a parser: `|`
+// separates cells, `{}` flips the flex axis. Depth rises at `{` and falls at
+// `}`, so flipping at both reproduces depth parity without counting it.
 //
 // A cell's class is its **path**: `._2_1` is the first field inside the second
 // top-level item. Positional, but positional the way a filesystem is — inserting
@@ -61,7 +58,7 @@ type Cursor = {
   pending: Cell | null; // one cell of lookbehind, so an empty slot can grow it
 };
 
-function record(node: T.Node): string {
+function record(node: T.DiagramNode): string {
   const label = node.label.trim();
   const outer = label.startsWith("{");
   const dir = outer ? "col" : "row";
@@ -181,20 +178,18 @@ function splitPort(text: string): [string, string] {
 
 // --------------------------------------------------------------------- shared
 
-function identity(node: T.Node): string {
+function identity(node: T.DiagramNode): string {
   const kind = SHAPE_CLASS.get(node.shape) ?? "node";
-  const classes = [kind, ...styleWords(node.attrs), ...node.classes].join(" ");
+  const classes = [kind, ...styleWords(node.style), ...node.classes].join(" ");
   const shape = kind === "node" ? ` data-shape="${node.shape}"` : "";
   return `id="${node.id}" class="${classes}"${shape}`;
 }
 
-// `style="invis,filled"` → `invis filled`. Graphviz's `style` is a comma-list of
-// words, and a word is what a class is, so each one travels as a class and the
-// theme decides what it means — `.invis` is hidden, and the others are there to
-// be styled if we ever want them. Split on the comma, nothing else: the words
-// are the author's.
-export function styleWords(attrs: Map<string, string>): string[] {
-  return (attrs.get("style") ?? "")
+// `style="invis,filled"` → `invis filled`. A word is what a class is, so each
+// one travels as a class and the theme decides what it means — `.invis` is
+// hidden. Split on the comma, nothing else: the words are the author's.
+export function styleWords(style: string): string[] {
+  return style
     .split(",")
     .map((word) => word.trim())
     .filter((word) => word !== "");

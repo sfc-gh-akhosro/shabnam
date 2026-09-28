@@ -1,63 +1,23 @@
-// Model → ranks → `#diagram-html` (§3.3). Graphviz `pos` decides which rank a
-// node is in, and nothing else — size and position are the Measurer's (§3.4).
+// Model + positions → `#diagram-html` (§3.3). Ranks arrive as integers, so
+// framing is a group-and-emit. Size and position are the Measurer's (§3.4).
 
 import type * as T from "../types.ts";
 import { shapeHtml } from "./node-shaper.ts";
 
-// Ranks are at least 36 points apart, so bucketing within 2 points is
-// unambiguous — and exact float equality would scatter one rank across
-// several columns (§3.3).
-const TOLERANCE = 2;
-
-// rankdir → how a node's position becomes a rank key, how ranks order, and how
-// nodes order inside one. LR/RL group on x, TB/BT on y; Graphviz's y grows
-// upward, so "first" is the larger y. Rank and order are all we take from `pos`.
-type Axes = {
-  key: (node: T.Node) => number;
-  columns: number;
-  within: (node: T.Node) => number;
-  inside: number;
-};
-
-const AXES = new Map<string, Axes>([
-  ["LR", { key: (n) => n.x, columns: 1, within: (n) => n.y, inside: -1 }],
-  ["RL", { key: (n) => n.x, columns: -1, within: (n) => n.y, inside: -1 }],
-  ["TB", { key: (n) => n.y, columns: -1, within: (n) => n.x, inside: 1 }],
-  ["BT", { key: (n) => n.y, columns: 1, within: (n) => n.x, inside: 1 }],
-]);
-
 export class LayoutFramer {
-  columns(model: T.VizModel): T.VizLayout {
-    const axes = AXES.get(model.rankdir) ?? AXES.get("TB")!;
-    const buckets = bucket(model.nodes, axes);
-
-    for (const column of buckets) {
-      column.sort((a, b) => (axes.within(a) - axes.within(b)) * axes.inside);
-    }
-    return buckets;
-  }
-
-  frame(model: T.VizModel): string {
-    const columns = this.columns(model).map(
-      (column) => `<div class="rank">${column.map((node) => shapeHtml(node)).join("")}</div>`,
+  frame(model: T.DiagramModel, positions: T.Positions): string {
+    const ranks = this.ranks(model, positions).map(
+      (rank) => `<div class="rank">${rank.map((node) => shapeHtml(node)).join("")}</div>`,
     );
-    return `<div class="diagram">${columns.join("")}</div>`;
+    return `<div class="diagram">${ranks.join("")}</div>`;
   }
-}
 
-// One pass over position-sorted nodes: a node opens a new rank as soon as it is
-// more than the tolerance away from the rank it would otherwise join.
-function bucket(nodes: T.Node[], axes: Axes): T.Node[][] {
-  const sorted = [...nodes].sort((a, b) => (axes.key(a) - axes.key(b)) * axes.columns);
-  const columns: T.Node[][] = [];
-  let anchor = Infinity;
-
-  for (const node of sorted) {
-    if (Math.abs(axes.key(node) - anchor) > TOLERANCE) {
-      anchor = axes.key(node);
-      columns.push([]);
+  private ranks(model: T.DiagramModel, positions: T.Positions): T.DiagramNode[][] {
+    const rows: T.DiagramNode[][] = [];
+    for (const node of model.nodes.values()) {
+      const at = positions.get(node.id)!;
+      (rows[at.rank] ??= [])[at.order] = node;
     }
-    columns[columns.length - 1]!.push(node);
+    return rows;
   }
-  return columns;
 }

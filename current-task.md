@@ -6,86 +6,25 @@ Always read these files in each session:
 
 # Current task
 
-**Replace viz.js with `ts-graphviz` + `dagre`.** The design is proven in
-[`research-lab/ast/readme.md`](research-lab/ast/readme.md) — story, types, and a
-working CLI over both example files. This plan brings it into `src/`.
-
-The prize is not the swap, it is what the swap deletes: the statistical recovery
-of DOT defaults, the coordinate bucketing, and a 2.5 MB WASM payload.
-
-```
-today                          after (Session 1 actuals, comments included)
-  vizer.ts            16         (deleted)
-  diagram-bagger.ts  239         graphviz-ast.ts   130
-  css-bagger.ts      275         styles.ts          71  + model.ts 88
-  layout-framer.ts    63         layout-framer.ts  ~35   (bucketing dies)
-                                 points.ts          41
-                                 dagre-layout.ts    96
-  ─────────────────────          ─────────────────────
-                     593                           426 + ~35
-  dist/index.js     2.5 MB       expect < 300 KB
-```
-
-The two walls came in slightly over the projection, all of it comment: §3.1's
-parallel-edge ids and label escapes were missing from the lab and had to be
-written (see the archive).
-
-**Architecture and types are already rewritten to the target**, so the document
-leads the code for the length of this task — which is the intended direction, not
-drift. Session 4 closes the gap and re-checks every claim.
+Sessions 1 and 2 of the viz-replacement plan are done and in
+[`docs/archive.md`](docs/archive.md) (archive Sessions 6 and 7). The walls are
+live, the three viz workers and `@viz-js/viz` are gone, both suites are green,
+both examples redraw. Next is harvest, then the files agree.
 
 ---
-
-**Session 1 is done** — `src/dot/` holds both walls and their three readings,
-unwired, and `src/types.ts` holds the new shapes. The record, the two decisions it
-settled and the bug it found are in [`docs/archive.md`](docs/archive.md).
-
----
-
-## Session 2 — redraw changes hands
-
-- `Workbench.redraw` builds a `GraphvizAst`, then asks it for the three answers
-  and hands the `PointGraph` to `DagreLayout`.
-- Delete `vizer.ts`, `diagram-bagger.ts`, `css-bagger.ts` — and with them
-  `VizJson`, `Node`, `Edge`, `Cluster`, `VizModel`, `VizLayout` and the `Vizer` /
-  `Diagram` verbs that carry them. Session 1 renamed the last two rather than
-  the new shapes, so nothing is renamed back; it is all deletion.
-- `layout-framer.ts` takes `Positions` instead of reading `pos`: the `AXES` map,
-  the 2-point tolerance and `bucket()` all go. Ranks arrive as integers and
-  `order` is already correct, so framing is a group-and-emit.
-- `node-shaper.ts` reads `DiagramNode`'s named fields rather than an `attrs` bag.
-- Rewrite the five tests that name viz: `model-identity`, `base-css`,
-  `record-shape`, `smart-connectors`, `ui-integration`.
-- Drop `@viz-js/viz` from dependencies; promote `@ts-graphviz/ast` and
-  `@dagrejs/dagre` from dev to runtime.
-
-**Settled before Session 2 opened: nobody emits a token block, because nobody
-may.** The question was "theme or `Stylist`?" and the answer was "neither, and the
-claim was wrong". The old `css-bagger` preamble invented `"blue"`, `"green"`,
-`"orange"` and `"14px"` when the DOT was silent, took a secondary colour from the
-first node that happened to carry one, and wrote at source `1` onto the canvas
-selector the theme owns at `0` — so it replaced the theme's real palette on every
-redraw. All seventeen tokens are already in `basic-theme.json`. §3.2 now says a
-derived rule never invents *anything*, and `example-1` deriving nothing is the
-demonstration rather than a gap. A root graph attribute lands on
-`#diagram-canvas`, not `:root`, because `:root` is `<html>` on screen and the
-`<svg>` after export.
-
-**Done when** both suites are green, no file imports viz, and a redraw of both
-examples is inspected in the browser — this is the session where the picture
-visibly moves, so look at it.
 
 ## Session 3 — harvest
 
 - Measure `dist/index.js` and Export HTML. Both should fall by an order of
-  magnitude; record the real numbers.
+  magnitude; record the real numbers, do not invent them.
 - **V6 dies** (Export HTML was 3.4 MB because it carried viz.js).
 - **M4 dies** — its whole point was provenance, which `styles.ts` now has. What
   remains of it is only "our own layout maths instead of dagre", which is a
   separate, smaller, optional question. Say so in `docs/archive.md` rather than
   leaving a debt tag pointing at finished work.
 - Delete `research-lab/ast/` code once `src/dot/` supersedes it, keeping
-  `readme.md` as the design document it is.
+  `readme.md` as the design document it is. Drop the `ast-layout` script from
+  `package.json` with the lab CLI.
 
 ## Session 4 — the files agree
 
@@ -96,29 +35,24 @@ visibly moves, so look at it.
   space→underscore. A second was suspected and checked: the rank passage is
   already correctly in the past tense, so there is nothing to fix there. It gets
   the brief version, no duplication of the readme.
-- `coding-rules.md` carries the story → types → architecture → code loop.
+- **The one sanctioned `try/catch` is still unwired.** The story and §5 say
+  malformed DOT shows the message and leaves the last picture standing;
+  `Engine.redraw` currently lets parse throw.
+- **`README.md` still describes `Vizer` / `renderJSON` / `@viz-js/viz`.** Sync it
+  to the live pipeline, or delete the stale how-it-works block.
+- `coding-rules.md` already carries the story → types → architecture → code loop.
 - Closing ceremony: archive, clean desk, canary, commit.
 
 ---
 
 ## Problems found, which the plan does not silently absorb
 
-**1. Unitless lengths reaching CSS — settled at Session 1.** A bare number gains
-`px` in `styles.ts`, and the premise was probed rather than remembered: the
-browser suite now drives a `font-size: 12` row and watches CSSOM refuse it, then
-the same number with a unit and watches it land. So `#horizon`'s `fontsize=12`
-paints for the first time. `width` and `height` kept their mappings, since one
-numeric test serves every length; §3.1 carries the correction and §3.2 the
-registry line.
-
 **2. `PointGraph` drops edge weights, and `example-2` tunes layout with them.**
 It uses `weight=0` twice, `weight=100`, `constraint=false` and a graph-level
-`concentrate=true`. Today those steer Graphviz. The design says layout gets no
-weights, so the picture will differ by more than "same algorithm family" implies.
-Ranks matched exactly in the lab, so the *partition* survives; it is ordering
-within a rank that will move. If it looks wrong in Session 2, the fix is to let
-`Arrow` carry an optional `weight` and `minlen` — those are structure, not style,
-so they belong in the point graph and it stays honest.
+`concentrate=true`. Session 2 inspected the picture: the rank partition held
+and no weights were added. Leave them off unless a later look says the order
+inside a rank is wrong. The honest fix then is optional `weight` and `minlen`
+on `Arrow` — those are structure, not style.
 
 **3. Anonymous subgraph names change**, `%1` → `subgraph_1`, and it is now under
 test both ways round. Any saved style naming `.subgraph_N` in the old form
@@ -134,16 +68,13 @@ today. Noted, not fixed.
 
 ### The refactor pass over the rest of `src/`
 
-Deferred at Session 3 of the previous task and still open, though **Session 2
-above eats a good part of it**: `layout-framer` loses its bucketing, `node-shaper`
-loses its attribute bag, and two 250-line baggers leave the tree.
-
-What it does not touch, and what still wants a tidy: `app.css`'s `.annotations`
-block is 23 lines and should be 8, three of its five class hooks exist only to
-carry a width, `FIELD` / `field()` lose two columns with them, and `mark()`'s
-offset chain is five lines doing two lines' work. Plus the open question of
-comment density across the whole tree, which wants one answer rather than a file
-at a time.
+Session 2 ate the baggers, the bucketing and the attribute bag. What it does
+not touch, and what still wants a tidy: `app.css`'s `.annotations` block is 23
+lines and should be 8, three of its five class hooks exist only to carry a
+width, `FIELD` / `field()` lose two columns with them, and `mark()`'s offset
+chain is five lines doing two lines' work. Plus the open question of comment
+density across the whole tree, which wants one answer rather than a file at a
+time.
 
 ### Two design threads still open
 
@@ -161,10 +92,10 @@ at a time.
 - **`bun add` and `bun run test:browser` both need `dangerously_disable_sandbox`.**
   The sandbox refuses the install tempdir (`EPERM`) and the port 3101 bind
   (`EADDRINUSE`); neither is a real conflict, and `lsof` shows nothing listening.
-- **That note has a real-process sibling.** A dev server left running holds port
-  3000 for real, and `build/dev.ts` bundles per request from a process that
-  predates your `bun add` — so it serves a 500 naming the new dependency while
-  `bun run build` succeeds from the same tree. Kill and restart it.
+- **A dev server left running holds port 3000 for real**, and `build/dev.ts`
+  bundles per request from a process that predates your `bun add` — so it serves
+  a 500 naming the new dependency while `bun run build` succeeds from the same
+  tree. Kill and restart it.
 - **A throw inside a browser check stage is silent.** The run stops and the report
   keeps the last published stage. Reach for a temporary
   `.catch((e) => check("DEBUG", false, e.stack))` at the call site.

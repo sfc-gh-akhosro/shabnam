@@ -42,6 +42,9 @@ export type DiagramNode = {
   label: string;
   icon: string;
   caption: string;
+  shell: string;
+  /** `style="invis,filled"` as written. Words become classes at the HTML. */
+  style: string;
 };
 
 export type DiagramEdge = {
@@ -49,6 +52,7 @@ export type DiagramEdge = {
   from: NodeId;
   to: NodeId;
   classes: SubgraphName[];
+  style: string;
 };
 
 export type DiagramCluster = {
@@ -149,58 +153,6 @@ export type Written = {
 // ---------------------------------------------------------------------------
 // types — data only
 // ---------------------------------------------------------------------------
-
-// --- the viz.js shapes, departing -----------------------------------------
-//
-// `Node` … `VizLayout` and the `Vizer` / `Diagram` verbs that carry them are
-// the old pipeline's, kept only so the app keeps drawing while `dot/` lands
-// unwired. They and their three workers go in Session 2; nothing new reads them.
-
-/** Graphviz `renderJSON` output. Opaque: `Diagram.bag` is the only reader. */
-export type VizJson = unknown;
-
-/** `id` is the sanitized DOT name. `x` / `y` are numeric here, never a `pos`. */
-export type Node = {
-  id: string;
-  classes: string[];
-  shape: string;
-  shell: string;
-  icon: string;
-  label: string;
-  caption: string;
-  x: number;
-  y: number;
-  attrs: Map<string, string>;
-};
-
-export type Edge = {
-  id: string;
-  from: string;
-  to: string;
-  classes: string[];
-  attrs: Map<string, string>;
-};
-
-export type Cluster = {
-  name: string;
-  label: string;
-  isInvis: boolean;
-  nodes: string[];
-  clusters: string[];
-  attrs: Map<string, string>;
-};
-
-export type VizModel = {
-  rankdir: string;
-  nodes: Node[];
-  edges: Edge[];
-  clusters: Cluster[];
-  attrs: Map<string, string>;
-};
-
-export type VizLayout = Node[][];
-
-// --- ours ------------------------------------------------------------------
 
 export type Point = { x: number; y: number };
 
@@ -310,17 +262,11 @@ export interface Layout {
   place(graph: PointGraph): Positions;
 }
 
-export interface Vizer {
-  render(dot: string): Promise<VizJson>;
-}
-
 export interface Diagram {
-  bag(json: VizJson): VizModel;
-  frame(model: VizModel): string;
-  derived(model: VizModel): StyleBag;
-  clusters(boxes: Box[], model: VizModel): string;
-  shells(boxes: Box[], model: VizModel): string;
-  connectors(boxes: Box[], model: VizModel, metrics: ConnectorMetrics): string;
+  frame(model: DiagramModel, positions: Positions): string;
+  clusters(boxes: Box[], model: DiagramModel): string;
+  shells(boxes: Box[], model: DiagramModel): string;
+  connectors(boxes: Box[], model: DiagramModel, metrics: ConnectorMetrics): string;
 }
 
 export interface Stylist {
@@ -342,7 +288,7 @@ export interface Workbench {
   redraw(): Promise<void>;
   inject(sink: string, text: string): void;
   measure(): Box[];
-  /** Rows → sink → `place()`. A short path: no viz, no bag, no frame, and no
+  /** Rows → sink → `place()`. A short path: no parse, no frame, and no
    *  waiting for a paint, so it cannot interleave with the conductor (§5). */
   annotate(): void;
   /** Publish `--anchor-x` / `--anchor-y` onto every mark. CSS spends them. */
@@ -371,7 +317,7 @@ export interface Files {
 // registry shapes — live with the workers that consult them
 // ---------------------------------------------------------------------------
 
-export type ShapeHtml = Map<string, (node: Node) => string>;
+export type ShapeHtml = Map<string, (node: DiagramNode) => string>;
 /** shape → the node's type class. Absent means `.node` plus `data-shape`. */
 export type ShapeClass = Map<string, string>;
 export type ShellSvg = Map<string, string>;

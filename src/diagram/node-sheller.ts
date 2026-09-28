@@ -42,8 +42,8 @@ const ICON_SVG = new Map([
 ]);
 
 export class NodeSheller {
-  shells(boxes: T.Box[], model: T.VizModel): string {
-    const nodes = new Map(model.nodes.map((node) => [node.id, node]));
+  shells(boxes: T.Box[], model: T.DiagramModel): string {
+    const nodes = model.nodes;
     const pairs = boxes.map((box) => [box, nodes.get(box.id)!] as const);
 
     // Every shell paints before every caption. An SVG sibling drawn later covers
@@ -56,7 +56,7 @@ export class NodeSheller {
     ].join("");
   }
 
-  clusters(boxes: T.Box[], model: T.VizModel): string {
+  clusters(boxes: T.Box[], model: T.DiagramModel): string {
     const boxMap = new Map(boxes.map((b) => [b.id, b]));
     const visualClusters = model.clusters.filter(
       (cluster) => cluster.name.startsWith("cluster") && !cluster.isInvis,
@@ -74,8 +74,8 @@ const CLUSTER_PAD_TOP_LABEL = 28;
 const CLUSTER_PAD_TOP_NOLABEL = 16;
 
 function renderCluster(
-  cluster: T.Cluster,
-  model: T.VizModel,
+  cluster: T.DiagramCluster,
+  model: T.DiagramModel,
   boxMap: Map<string, T.Box>,
 ): string {
   const memberIds = clusterNodeIds(cluster, model);
@@ -110,7 +110,7 @@ function renderCluster(
   );
 }
 
-function clusterNodeIds(cluster: T.Cluster, model: T.VizModel): string[] {
+function clusterNodeIds(cluster: T.DiagramCluster, model: T.DiagramModel): string[] {
   const ids = new Set<string>(cluster.nodes);
   for (const childName of cluster.clusters) {
     const child = model.clusters.find((c) => c.name === childName);
@@ -133,7 +133,7 @@ function shellRect(box: T.Box): Record<string, number> {
   };
 }
 
-function shell(box: T.Box, node: T.Node): string {
+function shell(box: T.Box, node: T.DiagramNode): string {
   const rect = shellRect(box);
   const template = node.shell && node.shell !== "none" ? (SHELL_SVG.get(node.shell) ?? SHELL_SVG.get("box")) : undefined;
   const shellMarkup = template ? fill(template, rect) : "";
@@ -157,7 +157,7 @@ function fill(template: string, rect: Record<string, number>): string {
 
 // The logo sits on the shell's top-left corner, outside the measured box, so it
 // cannot collide with the label the HTML layer already drew.
-function badge(node: T.Node, rect: Record<string, number>): string {
+function badge(node: T.DiagramNode, rect: Record<string, number>): string {
   const markup = ICON_SVG.get(node.icon);
   if (markup === undefined) return "";
 
@@ -170,7 +170,7 @@ function badge(node: T.Node, rect: Record<string, number>): string {
 // The HTML layer owns the node's text, so a caption strip is drawn only when the
 // DOT asked for one. `caption` falls back to `label` in the model (§3.1), and an
 // unasked-for caption would print every label twice.
-function caption(box: T.Box, node: T.Node): string {
+function caption(box: T.Box, node: T.DiagramNode): string {
   if (node.caption === node.label) return "";
 
   const rect = shellRect(box);

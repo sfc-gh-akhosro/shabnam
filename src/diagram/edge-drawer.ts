@@ -16,7 +16,7 @@ const ARROW = `<defs><marker id="connector-arrow" class="arrow" viewBox="0 0 10 
 export class EdgeDrawer {
   private router = new EdgeRouter();
 
-  draw(boxes: T.Box[], model: T.VizModel, metrics: T.ConnectorMetrics): string {
+  draw(boxes: T.Box[], model: T.DiagramModel, metrics: T.ConnectorMetrics): string {
     const byId = new Map(boxes.map((box) => [box.id, box]));
 
     const paths = model.edges.map((edge) => {
@@ -34,11 +34,11 @@ export class EdgeDrawer {
   }
 }
 
-function edgePath(edge: T.Edge, waypoints: T.Point[], radius: number): string {
+function edgePath(edge: T.DiagramEdge, waypoints: T.Point[], radius: number): string {
   // The same rule the nodes use: a `style` word is a class, and the theme says
   // what it means. `edge [style=invis]` is how DOT holds a rank in place without
   // drawing anything, so this is the one that earns its keep.
-  const classes = ["edge", ...styleWords(edge.attrs), ...edge.classes].join(" ");
+  const classes = ["edge", ...styleWords(edge.style), ...edge.classes].join(" ");
 
   return (
     `<path id="${edge.id}" class="${classes}"` +

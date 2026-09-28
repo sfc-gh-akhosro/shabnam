@@ -1,44 +1,33 @@
-// The derived bag must be identical for identical input, or every diff is
-// noise (§3.2). That claim rests on three interacting rules — absence counts as
-// a value, ties break on the lexicographically smallest, and ATTR_CSS insertion
-// order is declaration order — which is exactly what a test is for.
-//
-// The rest of these guard the two §3.2 rules that are easy to regress: naming is
-// DOT naming, and no colour is invented. They assert map entries, because the
-// bagger returns a `StyleBag` and nothing on this path is ever text.
+// Appearance is read off the branch it was written on (§3.2). The bag is
+// identical for identical input because nothing is counted and nothing is
+// invented: a silent DOT derives nothing at all, and a colour traces to the
+// attribute the author typed.
 
 import { expect, test } from "bun:test";
-import { CssBagger } from "../src/diagram/css-bagger.ts";
-import { DiagramBagger } from "../src/diagram/diagram-bagger.ts";
-import { Vizer } from "../src/diagram/vizer.ts";
+import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
 import type * as T from "../src/types.ts";
 
 const FIXTURE = new URL("../research-lab/example-1.dot", import.meta.url).pathname;
 
-const vizer = new Vizer();
-
-async function rules(dot: string): Promise<T.StyleBag> {
-  return new CssBagger().bag(new DiagramBagger().bag(await vizer.render(dot)));
+function rules(dot: string): T.DotStyles {
+  return new GraphvizAst(dot).styles();
 }
 
-// Insertion order is part of the contract, so compare the ordered JSON. The
-// bagger emits a bag, not the book — no ids, no source — so this nests it
-// straight rather than going through `asFile`.
-function shape(out: T.StyleBag): string {
+function shape(out: T.DotStyles): string {
   return JSON.stringify(
     Object.fromEntries([...out].map(([selector, properties]) => [selector, Object.fromEntries(properties)])),
   );
 }
 
 const dot = await Bun.file(FIXTURE).text();
-const out = await rules(dot);
+const out = rules(dot);
 
-test("the same DOT bags to the same map, twice through the whole pipeline", async () => {
-  expect(shape(await rules(dot))).toBe(shape(await rules(dot)));
+test("the same DOT bags to the same map, twice through the whole pipeline", () => {
+  expect(shape(rules(dot))).toBe(shape(rules(dot)));
 });
 
-test("one edge in twelve does not thicken the other eleven", async () => {
-  const sample = await rules(`digraph {
+test("one edge in twelve does not thicken the other eleven", () => {
+  const sample = rules(`digraph {
     node [shape=box]
     a -> b
     b -> c
@@ -53,45 +42,38 @@ test("one edge in twelve does not thicken the other eleven", async () => {
     k -> l
     a -> l [penwidth=3]
   }`);
-  expect(sample.get(".edge")?.get("stroke-width")).toBeUndefined();
-  expect(sample.get("#a_l")?.get("stroke-width")).toBe("3pt");
+  expect(sample.get(".edge")?.get("border-width")).toBeUndefined();
+  expect(sample.get("#a_l")?.get("border-width")).toBe("3px");
 });
 
-test("the most common value becomes the class rule", async () => {
-  const sample = await rules(`digraph {
+test("a `node [...]` is one rule on the branch, not a tally of the leaves", () => {
+  const sample = rules(`digraph {
     node [shape=box fillcolor="#BBDEFB" style=filled]
     a; b; c; d;
     e [fillcolor="#ddffdd"]
   }`);
   expect(sample.get(".node, .record")?.get("background-color")).toBe("#BBDEFB");
+  expect(sample.get("#e")?.get("background-color")).toBe("#ddffdd");
 });
 
-test("tokens land on the canvas and on svg, not on the canvas alone", () => {
-  expect(out.has("#diagram-canvas, svg")).toBe(true);
-  expect(out.has("#diagram-canvas")).toBe(false);
-  expect(out.has(":root, svg")).toBe(false);
-  expect(out.get("#diagram-canvas, svg")?.get("--primary-color")).toBeDefined();
+test("a diagram of pure markup derives nothing — tokens are the theme's", () => {
+  expect([...out.keys()]).toEqual([]);
 });
 
-test("selectors are DOT names, and as short as still identifies the place", async () => {
+test("selectors are DOT names, and as short as still identifies the place", () => {
   const selectors = [...out.keys()];
   expect(selectors.some((s) => s.includes(".diagram ."))).toBe(false);
-  expect(selectors).not.toContain(".diagram.columns");
-  // A cluster is never drawn, so a `.graph` block would style nothing (§3.2).
   expect(selectors.some((s) => s.includes(".graph"))).toBe(false);
-  // CSSOM has no nesting, so a composed selector never carries `&` (§3.2).
   expect(selectors.some((s) => s.includes("&"))).toBe(false);
 
-  // `cluster_` is not stripped: the class is the token the DOT wrote (§3.1).
-  const named = await rules(`digraph {
+  const named = rules(`digraph {
     a; subgraph cluster_source { b [fillcolor=pink style=filled] }
   }`);
-  expect(named.get(".cluster_source.node, .cluster_source.record")?.get("background-color"))
-    .toBe("pink");
+  expect(named.get("#b")?.get("background-color")).toBe("pink");
 });
 
-test("a nested subgraph composes its classes flat", async () => {
-  const sample = await rules(`digraph {
+test("a nested subgraph composes its classes flat", () => {
+  const sample = rules(`digraph {
     subgraph cluster_outer {
       node [fillcolor=pink style=filled]
       a;
@@ -105,8 +87,8 @@ test("a nested subgraph composes its classes flat", async () => {
   expect(sample.get(inner)?.get("background-color")).toBe("teal");
 });
 
-test("an empty subgraph says nothing", async () => {
-  const sample = await rules(`digraph {
+test("an empty subgraph says nothing", () => {
+  const sample = rules(`digraph {
     {
       node [fillcolor="#ddffdd" style=filled]
       a; b;
@@ -118,8 +100,8 @@ test("an empty subgraph says nothing", async () => {
   expect([...sample.keys()].some((s) => s.includes(".cluster_a"))).toBe(false);
 });
 
-test("an anonymous subgraph collapses multiple #id rules into one class", async () => {
-  const sample = await rules(`digraph {
+test("an anonymous subgraph is one class rule, not one `#id` per member", () => {
+  const sample = rules(`digraph {
     node [fillcolor="#ffffff" style=filled]
     {
       node [fillcolor="#ddffdd"]
@@ -132,14 +114,14 @@ test("an anonymous subgraph collapses multiple #id rules into one class", async 
   expect(shape(sample).match(/#ddffdd/g)).toHaveLength(1);
 });
 
-test("no colour is invented — every one traces to the DOT", async () => {
+test("no colour is invented — every one traces to the DOT", () => {
   const sampleDot = `digraph {
     graph [bgcolor="#FAFAFA"]
     node [fillcolor="#BBDEFB" color="#1565C0" style=filled]
     edge [color="#555555"]
     a -> b
   }`;
-  const sampleOut = shape(await rules(sampleDot));
+  const sampleOut = shape(rules(sampleDot));
   const dotColours = new Set(
     (sampleDot.match(/#[0-9A-Fa-f]{3,8}\b/g) ?? []).map((hex) => hex.toLowerCase()),
   );
@@ -151,38 +133,32 @@ test("no colour is invented — every one traces to the DOT", async () => {
   expect(cssColours.size).toBe(dotColours.size);
 });
 
-test("a node needs no rule for what it inherits from the wrapper", async () => {
-  const sample = await rules(`digraph {
+test("a graph font lands on the canvas, and is not copied onto every node", () => {
+  const sample = rules(`digraph {
     graph [fontname="Helvetica"]
     node [fontname="Helvetica"]
     a -> b
   }`);
-  expect(sample.get(".diagram")?.get("font-family")).toBe("Helvetica");
-  expect(sample.get(".node, .record")?.get("font-family")).toBeUndefined();
+  expect(sample.get("#diagram-canvas")?.get("font-family")).toBe("Helvetica");
+  expect(sample.get(".node, .record")?.get("font-family")).toBe("Helvetica");
 });
 
-test("a size is passed through exactly as Graphviz reported it", async () => {
-  // Graphviz clamps `height=0` to `0.02` and `width=0` to `0.01` before
-  // `renderJSON` shows them. We do not correct that: the number we were given is
-  // the number we emit. Laying out DOT is Graphviz's job, and second-guessing its
-  // output here would put a rule in the bagger that the author cannot see (§3.2).
-  const sample = await rules(`digraph {
-    ghost [height=0 width=0 fixedsize=true]
+test("a size is the number the author typed, with `px`", () => {
+  const sample = rules(`digraph {
+    ghost [height=0 width=0]
     ghost -> real
   }`);
   const passed = sample.get("#ghost")!;
-  expect(passed.get("height")).toBe("0.02in");
-  expect(passed.get("width")).toBe("0.01in");
-  // And nothing is invented alongside it.
+  expect(passed.get("height")).toBe("0px");
+  expect(passed.get("width")).toBe("0px");
   expect(passed.get("padding")).toBeUndefined();
-  expect(passed.get("overflow")).toBeUndefined();
 });
 
-test("a non-zero size keeps the inches Graphviz measured it in", async () => {
-  const sample = await rules(`digraph {
-    wide [width=3 height=2 fixedsize=true]
+test("a non-zero size is the same number, not Graphviz inches", () => {
+  const sample = rules(`digraph {
+    wide [width=3 height=2]
     wide -> other
   }`);
-  expect(sample.get("#wide")?.get("width")).toBe("3in");
-  expect(sample.get("#wide")?.get("height")).toBe("2in");
+  expect(sample.get("#wide")?.get("width")).toBe("3px");
+  expect(sample.get("#wide")?.get("height")).toBe("2px");
 });

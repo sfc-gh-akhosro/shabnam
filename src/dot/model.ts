@@ -7,7 +7,7 @@
 import type * as T from "../types.ts";
 
 /** The attributes that decide markup, and so belong to the model, not to style. */
-const ATTR_MARKUP = ["shape", "label", "icon", "caption"] as const;
+const ATTR_MARKUP = ["shape", "label", "icon", "caption", "shell", "style"] as const;
 
 export function buildModel(written: T.Written): T.DiagramModel {
   return {
@@ -18,6 +18,7 @@ export function buildModel(written: T.Written): T.DiagramModel {
       from: edge.from,
       to: edge.to,
       classes: [...edge.scope],
+      style: resolveEdge(edge, written),
     } satisfies T.DiagramEdge)),
     clusters: [...written.scopes.keys()]
       .filter((name) => name.startsWith("cluster"))
@@ -28,14 +29,28 @@ export function buildModel(written: T.Written): T.DiagramModel {
 function node(id: T.NodeId, written: T.Written): T.DiagramNode {
   const classes = [...(written.members.get(id) ?? [])];
   const markup = resolve(id, classes, written);
+  const label = named(markup.get("label") ?? id, "N", id);
   return {
     id,
     classes,
     shape: markup.get("shape") ?? "box",
-    label: named(markup.get("label") ?? id, "N", id),
+    label,
     icon: markup.get("icon") ?? "",
-    caption: markup.get("caption") ?? "",
+    caption: named(markup.get("caption") ?? label, "N", id),
+    shell: markup.get("shell") ?? "",
+    style: markup.get("style") ?? "",
   };
+}
+
+/** An `edge [...]` whose scope encloses this statement, then the edge itself. */
+function resolveEdge(edge: T.EdgeStated, written: T.Written): string {
+  const resolved = new Map<T.DotAttr, T.DotValue>();
+  const enclosing = written.declarations
+    .filter((one) => one.about === "edge" && encloses(one.scope, edge.scope))
+    .sort((a, b) => a.scope.length - b.scope.length);
+  for (const one of enclosing) keep(resolved, one.attrs);
+  keep(resolved, edge.attrs);
+  return resolved.get("style") ?? "";
 }
 
 /**

@@ -89,7 +89,7 @@ dot ──parse──▶ Ast ──┬──▶ DiagramModel     who exists, who
                      └──▶ PointGraph ──layout──▶ Positions
 ```
 
-**An attribute is either markup or appearance**, and every attribute falls on one side. `label`, `shape`, `icon` and `caption` decide what HTML we build, so they belong to the model. Anything `ATTR_CSS` recognises becomes a rule and belongs to the styles. Anything in neither is not our business and is dropped.
+**An attribute is either markup or appearance**, and every attribute falls on one side. `label`, `shape`, `icon`, `caption`, `shell` and `style` decide what HTML we build — or which SVG template, or which extra classes — so they belong to the model. Anything `ATTR_CSS` recognises becomes a rule and belongs to the styles. Anything in neither is not our business and is dropped.
 
 **Markup is resolved; appearance keeps its provenance.** This asymmetry is the whole reason an AST beats a laid-out JSON, so it is worth stating plainly. A node must know its own shape, so a `node [shape=record]` written on a cluster is pushed down onto every member as the model is built, innermost winning. A colour must **not** be pushed down, because the branch it sits on *is* the selector we want: `node [fillcolor=coral]` inside `cluster_a` becomes `.cluster_a.node, .cluster_a.record`, one rule, not three `#id` rules and a statistical guess at which value was the default.
 
@@ -159,7 +159,7 @@ Reads the walk's record, emits `DotStyles` — data, not text. Appearance only, 
 
 Translation is a registry, not scattered logic: `ATTR_CSS` maps `fillcolor` and `bgcolor` to `background-color`, `color` to `border-color`, `fontcolor` to `color`, `fontname` to `font-family`, `fontsize` to `font-size`, `penwidth` to `border-width`, and `width` / `height` to themselves. Unmapped attributes are skipped, and being unmapped is the definition of not being appearance. A value on the way through gains `px` if it is a bare number (§3.1).
 
-**A scope's own attributes name that scope, and the root names both.** A subgraph's are `.cluster_a` — the bare class, not the composed nesting a `node [...]` gets, because the attribute is about that subgraph rather than about its members. The root graph's are `:root, svg`, and the two forms agree: a bare `bgcolor="white"` and a `graph [bgcolor="white"]` produce the same rule, since both are the scope talking about itself.
+**A scope's own attributes name that scope, and the root names the canvas.** A subgraph's are `.cluster_a` — the bare class, not the composed nesting a `node [...]` gets, because the attribute is about that subgraph rather than about its members. The root graph's are `#diagram-canvas`, and the two forms agree: a bare `bgcolor="white"` and a `graph [bgcolor="white"]` produce the same rule, since both are the scope talking about itself.
 
 **Derived rules never invent a colour** — and never invent anything else either. Every value traces to a DOT attribute the author wrote. If the DOT declares four colours, four is what the reader finds; if it declares none, the reader emits nothing and the theme does all the talking. `example-1.dot` is exactly that case: pure markup, not one derived rule.
 

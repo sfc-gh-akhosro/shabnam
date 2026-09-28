@@ -1,16 +1,15 @@
 // Cluster shells: SVG bounding boxes drawn around member nodes of `subgraph cluster_...`.
 
 import { expect, test } from "bun:test";
-import { DiagramBagger } from "../src/diagram/diagram-bagger.ts";
 import { NodeSheller } from "../src/diagram/node-sheller.ts";
-import { Vizer } from "../src/diagram/vizer.ts";
-import type { Box, VizModel } from "../src/types.ts";
+import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
+import type { Box, DiagramModel } from "../src/types.ts";
 
-async function makeModel(dot: string): Promise<VizModel> {
-  return new DiagramBagger().bag(await new Vizer().render(dot));
+function makeModel(dot: string): DiagramModel {
+  return new GraphvizAst(dot).model();
 }
 
-test("clusters draw an SVG box enclosing member node bounding boxes", async () => {
+test("clusters draw an SVG box enclosing member node bounding boxes", () => {
   const dot = `digraph {
     subgraph cluster_sources {
       label = "Data Sources"
@@ -18,7 +17,7 @@ test("clusters draw an SVG box enclosing member node bounding boxes", async () =
     }
   }`;
 
-  const model = await makeModel(dot);
+  const model = makeModel(dot);
   const sheller = new NodeSheller();
 
   const boxes: Box[] = [
@@ -28,17 +27,12 @@ test("clusters draw an SVG box enclosing member node bounding boxes", async () =
 
   const svg = sheller.clusters(boxes, model);
 
-  // Group container with cluster id and class
   expect(svg).toContain('<g id="cluster_sources" class="cluster_">');
-
-  // Enclosing rect: minLeft=100, maxRight=190, minTop=50, maxBottom=160
-  // padX=16 -> x = 100 - 16 = 84, width = (190 - 100) + 32 = 122
-  // padTop=28 (has label) -> y = 50 - 28 = 22, height = (160 - 50) + 28 + 16 = 154
   expect(svg).toContain('<rect x="84" y="22" width="122" height="154" rx="8" ry="8" />');
   expect(svg).toContain('<text class="label" x="96" y="39">Data Sources</text>');
 });
 
-test("cluster with style=invis is omitted from cluster SVG output", async () => {
+test("cluster with style=invis is omitted from cluster SVG output", () => {
   const dot = `digraph {
     subgraph cluster_hidden {
       style = invis
@@ -49,7 +43,7 @@ test("cluster with style=invis is omitted from cluster SVG output", async () => 
     }
   }`;
 
-  const model = await makeModel(dot);
+  const model = makeModel(dot);
   const sheller = new NodeSheller();
 
   const boxes: Box[] = [
@@ -63,7 +57,7 @@ test("cluster with style=invis is omitted from cluster SVG output", async () => 
   expect(svg).toContain("cluster_visible");
 });
 
-test("non-cluster subgraphs (anonymous or without cluster prefix) do not emit cluster boxes", async () => {
+test("non-cluster subgraphs (anonymous or without cluster prefix) do not emit cluster boxes", () => {
   const dot = `digraph {
     subgraph anon {
       a;
@@ -73,7 +67,7 @@ test("non-cluster subgraphs (anonymous or without cluster prefix) do not emit cl
     }
   }`;
 
-  const model = await makeModel(dot);
+  const model = makeModel(dot);
   const sheller = new NodeSheller();
 
   const boxes: Box[] = [
@@ -85,7 +79,7 @@ test("non-cluster subgraphs (anonymous or without cluster prefix) do not emit cl
   expect(svg).toBe("");
 });
 
-test("nested clusters compute bounds encompassing member nodes", async () => {
+test("nested clusters compute bounds encompassing member nodes", () => {
   const dot = `digraph {
     subgraph cluster_parent {
       label = "Parent Cluster"
@@ -97,7 +91,7 @@ test("nested clusters compute bounds encompassing member nodes", async () => {
     }
   }`;
 
-  const model = await makeModel(dot);
+  const model = makeModel(dot);
   const sheller = new NodeSheller();
 
   const boxes: Box[] = [

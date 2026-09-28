@@ -1,11 +1,8 @@
 import { readdirSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
-import { DiagramBagger } from "../src/diagram/diagram-bagger.ts";
-import { CssBagger } from "../src/diagram/css-bagger.ts";
 import { LayoutFramer } from "../src/diagram/layout-framer.ts";
-import { NodeSheller } from "../src/diagram/node-sheller.ts";
-import { EdgeDrawer } from "../src/diagram/edge-drawer.ts";
-import { Vizer } from "../src/diagram/vizer.ts";
+import { DagreLayout } from "../src/dot/dagre-layout.ts";
+import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
 import type { Annotation, StyleRow, TabText } from "../src/types.ts";
 import { SOURCE } from "../src/types.ts";
 import { annotation, annotationHtml } from "../src/workbench/annotations.tsx";
@@ -34,35 +31,25 @@ const RECORD_DOT = `digraph records {
 }
 `;
 
+const layout = new DagreLayout();
+const framer = new LayoutFramer();
+
+function drawn(dot: string): string {
+  const ast = new GraphvizAst(dot);
+  return framer.frame(ast.model(), layout.place(ast.points()));
+}
+
 describe("UI & Workbench Integration Suite", () => {
   test("theme/ ships exactly one theme, and no CSS file", () => {
     expect(readdirSync("theme").sort()).toEqual(["basic-theme.json"]);
   });
 
-  test("Bare-bone DOT derives only the token block", async () => {
-    const vizer = new Vizer();
-    const bagger = new DiagramBagger();
-    const cssBagger = new CssBagger();
-
-    const json = await vizer.render(BARE_BONE_DOT);
-    const model = bagger.bag(json);
-    const derived = cssBagger.bag(model);
-
-    expect([...derived.keys()]).toEqual(["#diagram-canvas, svg"]);
-    const tokens = derived.get("#diagram-canvas, svg")!;
-    expect(tokens.get("--primary-color")).toBeDefined();
-    expect(tokens.get("--secondary-color")).toBeDefined();
-    expect(tokens.get("--accent-color")).toBeDefined();
+  test("Bare-bone DOT derives nothing — tokens are the theme's", () => {
+    expect([...new GraphvizAst(BARE_BONE_DOT).styles().keys()]).toEqual([]);
   });
 
-  test("shape=record correctly parses and builds nested flex structure", async () => {
-    const vizer = new Vizer();
-    const bagger = new DiagramBagger();
-    const framer = new LayoutFramer();
-
-    const json = await vizer.render(RECORD_DOT);
-    const model = bagger.bag(json);
-    const html = framer.frame(model);
+  test("shape=record correctly parses and builds nested flex structure", () => {
+    const html = drawn(RECORD_DOT);
 
     expect(html).toContain('class="record"');
     expect(html).toContain('class="cell _1"');
@@ -76,14 +63,8 @@ describe("UI & Workbench Integration Suite", () => {
     expect(html).toContain("Footer");
   });
 
-  test("LayoutFramer generates pure semantic HTML with zero inline styles", async () => {
-    const vizer = new Vizer();
-    const bagger = new DiagramBagger();
-    const framer = new LayoutFramer();
-
-    const json = await vizer.render(BARE_BONE_DOT);
-    const model = bagger.bag(json);
-    const html = framer.frame(model);
+  test("LayoutFramer generates pure semantic HTML with zero inline styles", () => {
+    const html = drawn(BARE_BONE_DOT);
 
     expect(html).toContain('<div class="diagram">');
     expect(html).toContain('<div class="rank">');
@@ -93,20 +74,11 @@ describe("UI & Workbench Integration Suite", () => {
     expect(html).not.toContain("style=");
   });
 
-  test("CssBagger derives no margin — a node is spaced by the theme alone", async () => {
-    const vizer = new Vizer();
-    const bagger = new DiagramBagger();
-    const cssBagger = new CssBagger();
-
+  test("a derived bag never invents a margin", async () => {
     const FIXTURE = new URL("../research-lab/example-1.dot", import.meta.url).pathname;
-    const dot = await Bun.file(FIXTURE).text();
-    const json = await vizer.render(dot);
-    const model = bagger.bag(json);
-    const derived = cssBagger.bag(model);
+    const derived = new GraphvizAst(await Bun.file(FIXTURE).text()).styles();
 
-    expect(derived.has("#diagram-canvas, svg")).toBe(true);
-    // `pos` buys a rank and an order in it, nothing else. Spacing is the theme's
-    // and the author's — no margin is computed from the layout.
+    expect(derived.size).toBe(0);
     for (const [, properties] of derived) {
       for (const property of properties.keys()) {
         expect(property).not.toStartWith("margin");
@@ -217,40 +189,32 @@ describe("an annotation row becomes a mark", () => {
 // Shape and style are carried, not interpreted (§3.1). `record` is the one shape
 // with a renderer and a class of its own; every other shape is a `.node` that
 // says which shape it is. A `style` word becomes a class and the theme decides
-// what it means — `.invis` is the theme's, not the bagger's.
+// what it means — `.invis` is the theme's, not the reader's.
 describe("shape and style reach the DOM as themselves", () => {
-  async function frame(dot: string): Promise<string> {
-    const model = new DiagramBagger().bag(await new Vizer().render(dot));
-    return new LayoutFramer().frame(model);
-  }
-
-  test("shape=record is a class, and carries no data-shape", async () => {
-    const html = await frame('digraph { r [shape=record label="{a|b}"]; r -> x }');
+  test("shape=record is a class, and carries no data-shape", () => {
+    const html = drawn('digraph { r [shape=record label="{a|b}"]; r -> x }');
     expect(html).toContain('id="r" class="record"');
     expect(html).not.toContain('id="r" class="record" data-shape');
   });
 
-  test("every other shape is a .node that names itself in data-shape", async () => {
-    const html = await frame("digraph { n [shape=none]; d [shape=box3d]; n -> d }");
+  test("every other shape is a .node that names itself in data-shape", () => {
+    const html = drawn("digraph { n [shape=none]; d [shape=box3d]; n -> d }");
     expect(html).toContain('id="n" class="node" data-shape="none"');
     expect(html).toContain('id="d" class="node" data-shape="box3d"');
   });
 
-  test("the default shape says so too, rather than being a special case", async () => {
-    // Graphviz resolves the default onto every node, so `box` arrives like any
-    // other value. Suppressing it would be a rule the author cannot see.
-    const html = await frame("digraph { plain; plain -> other }");
+  test("the default shape says so too, rather than being a special case", () => {
+    const html = drawn("digraph { plain; plain -> other }");
     expect(html).toContain('id="plain" class="node" data-shape="box"');
   });
 
-  test("a style word is a class, one per word", async () => {
-    const html = await frame("digraph { g [style=invis]; f [style=\"filled,dashed\"]; g -> f }");
+  test("a style word is a class, one per word", () => {
+    const html = drawn('digraph { g [style=invis]; f [style="filled,dashed"]; g -> f }');
     expect(html).toContain('id="g" class="node invis"');
     expect(html).toContain('id="f" class="node filled dashed"');
   });
 
-  test("the theme is what makes .invis mean hidden", async () => {
-    // The bagger never emits `display`. Hiding is the theme's word on the class.
+  test("the theme is what makes .invis mean hidden", () => {
     expect(basicTheme[".invis"]!.display!.value).toBe("none");
   });
 });

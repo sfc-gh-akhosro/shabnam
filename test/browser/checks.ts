@@ -161,7 +161,7 @@ function stylesheet(): void {
   const nodeBg = background("core");
   check("the theme paints a node", nodeBg !== "rgba(0, 0, 0, 0)" && nodeBg !== "", nodeBg);
   const token = getComputedStyle(document.getElementById("diagram-canvas")!).getPropertyValue("--primary-color");
-  check("derived tokens reach the canvas", token.trim() !== "", token);
+  check("theme tokens reach the canvas", token.trim() !== "", token);
 }
 
 async function rowsTab(): Promise<void> {
@@ -172,7 +172,7 @@ async function rowsTab(): Promise<void> {
     const source = row.dataset.source!;
     return { ...count, [source]: (count[source] ?? 0) + 1 };
   }, {});
-  check("the styles tab lists the book, source-tagged", rows().length > 0 && sources["0"]! > 0 && sources["1"]! > 0, JSON.stringify(sources));
+  check("the styles tab lists the book, source-tagged", rows().length > 0 && sources["0"]! > 0, JSON.stringify(sources));
 
   // The whole point of one book: the theme and the DOT both write
   // `#diagram-canvas, svg` and `.node`, and a repeated key is an overwrite — so
@@ -407,10 +407,12 @@ async function liveRepaint(): Promise<void> {
 
 /** The source guard, end to end: a redraw must not take a typed row back.
  *
- *  The scratch key is `--primary-color` on purpose — the theme owns it *and* the
- *  DOT derives it, so it is the one place all three sources meet. The row is left
- *  standing at the end: deleting it would take the theme's entry with it, which
- *  is the design (§1) and not something to do behind a later stage's back. */
+ *  The scratch key is `--primary-color` on purpose — the theme owns it, and a
+ *  silent DOT no longer invents a competing source-1 row. The user write is
+ *  still refused a take-back, because absorb at source 1 cannot beat source 2.
+ *  The row is left standing at the end: deleting it would take the theme's
+ *  entry with it, which is the design (§1) and not something to do behind a
+ *  later stage's back. */
 async function survivesRedraw(): Promise<void> {
   const token = () =>
     getComputedStyle(document.getElementById("diagram-canvas")!)
@@ -422,7 +424,7 @@ async function survivesRedraw(): Promise<void> {
   await type(box(row, "selector"), "#diagram-canvas, svg", "change");
   await type(box(row, "property"), "--primary-color", "change");
   await type(box(row, "value"), "#ff00ff", "change");
-  check("a user row overwrites what the DOT derived", token() === "#ff00ff", `${derived} → ${token()}`);
+  check("a user row overwrites the theme token", token() === "#ff00ff", `${derived} → ${token()}`);
 
   await resync();
   const mine = rows().filter((one) => box(one, "property").value === "--primary-color");
@@ -664,6 +666,14 @@ async function sourceFilter(): Promise<void> {
   const userBox = $("#user-styles-selected") as HTMLInputElement;
   check("the styles tab has one checkbox per source", themeBox !== null && dotBox !== null && userBox !== null, "three boxes");
 
+  // Starter DOT is pure markup, so there are no source-1 rows. A user scratch
+  // rule has to exist first, or hiding the theme leaves only the waiting blank
+  // and `probe()` throws.
+  const scratch = blankRow();
+  await type(box(scratch, "selector"), ".scratch-filter", "change");
+  await type(box(scratch, "property"), "opacity", "change");
+  await type(box(scratch, "value"), "0.9", "change");
+
   const all = rows().length;
   const themeRows = rows().filter((row) => row.dataset.source === "0").length;
   const painted = cssTexts().length;
@@ -676,7 +686,7 @@ async function sourceFilter(): Promise<void> {
   // into the list, so typing into one must land on that rule and no other. The
   // last *rule* row, not the last row — the last row is the waiting blank, and
   // typing into that would add a rule rather than edit one. Not `--primary-color`
-  // either: the guard stage below needs that one to still be the DOT's.
+  // either: the guard stage below needs that one to still be the theme's.
   // A row the filter excludes is not rendered at all, so `ruleRows()` is already
   // "the rules on screen"; only a dropped row needs filtering out here.
   const visibleRules = () => ruleRows().filter((row) => !row.hasAttribute("hidden"));
@@ -701,6 +711,10 @@ async function sourceFilter(): Promise<void> {
   await type(box(probe(), "value"), original, "change");
   await flip(themeBox);
   check("re-checking a source brings its rows back", rows().length === all, `${rows().length} of ${all}`);
+
+  dropRow(scratch);
+  await tick();
+  await resync();
 }
 
 await mounted();

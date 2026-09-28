@@ -5,25 +5,21 @@
 // rather than producing markup the browser will silently repair.
 
 import { expect, test } from "bun:test";
-import { DiagramBagger } from "../src/diagram/diagram-bagger.ts";
 import { shapeHtml } from "../src/diagram/node-shaper.ts";
-import { Vizer } from "../src/diagram/vizer.ts";
-import type { Node } from "../src/types.ts";
+import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
+import type { DiagramNode } from "../src/types.ts";
 
-async function node(label: string): Promise<Node> {
+function node(label: string): DiagramNode {
   const dot = `digraph { n [shape=record label="${label}"] }`;
-  const model = new DiagramBagger().bag(await new Vizer().render(dot));
-  return model.nodes[0]!;
+  return new GraphvizAst(dot).model().nodes.get("n")!;
 }
 
-async function html(label: string): Promise<string> {
-  return shapeHtml(await node(label));
+function html(label: string): string {
+  return shapeHtml(node(label));
 }
 
-test("a cell's class is its path, not a running count", async () => {
-  // `._2_1` is the first field inside the second top-level item. Inserting a
-  // sibling at one level leaves every other level's selectors alone.
-  expect(await html("a | b | c")).toBe(
+test("a cell's class is its path, not a running count", () => {
+  expect(html("a | b | c")).toBe(
     '<div id="n" class="record">' +
       '<span class="cell _1">a</span>' +
       '<span class="cell _2">b</span>' +
@@ -32,10 +28,8 @@ test("a cell's class is its path, not a running count", async () => {
   );
 });
 
-test("a leading { is the node's own axis, and costs no level of path", async () => {
-  // Records are written `{Head | {A | B}}`. Honouring that brace as a container
-  // would push everything to `._1_1` and `._1_2_1` — a level that says nothing.
-  expect(await html("{Head | {A | B} | Foot}")).toBe(
+test("a leading { is the node's own axis, and costs no level of path", () => {
+  expect(html("{Head | {A | B} | Foot}")).toBe(
     '<div id="n" class="record">' +
       '<span class="cell _1">Head</span>' +
       "<div>" +
@@ -47,86 +41,72 @@ test("a leading { is the node's own axis, and costs no level of path", async () 
   );
 });
 
-test("a group takes an index, so the field after it does not reuse one", async () => {
-  const markup = await html("1st | {2nd | 3rd} | 4th");
+test("a group takes an index, so the field after it does not reuse one", () => {
+  const markup = html("1st | {2nd | 3rd} | 4th");
   expect(markup).toContain('<span class="cell _1">1st</span>');
   expect(markup).toContain('<span class="cell _2_1">2nd</span>');
   expect(markup).toContain('<span class="cell _2_2">3rd</span>');
-  // The group is item 2 — so the field after it is item 3, not item 4. Its
-  // children live under it, and do not spend indices at this level.
   expect(markup).toContain('<span class="cell _3">4th</span>');
 });
 
-test("every { flips the axis, however deep", async () => {
-  const markup = await html("{Head | {A | {a1 | a2} | B}}");
+test("every { flips the axis, however deep", () => {
+  const markup = html("{Head | {A | {a1 | a2} | B}}");
   expect(markup).toContain('class="record"');
   expect(markup).toContain("<div>");
   expect(markup).toContain('<span class="cell _2_2_1">a1</span>');
   expect(markup).toContain('<span class="cell _2_2_2">a2</span>');
 });
 
-test("an empty slot counts, and grows the field before it", async () => {
-  // `{me || you}` is three fields, not two: the empty one spends an index and
-  // grows `me` via --span. The class stays the first path so the cell still
-  // has one type class plus one path class.
-  const markup = await html("{me || you}");
+test("an empty slot counts, and grows the field before it", () => {
+  const markup = html("{me || you}");
   expect(markup).toContain('<span class="cell _1" style="--span:2">me</span>');
   expect(markup).toContain('<span class="cell _3">you</span>');
 });
 
-test("blank beside a brace is notation, and counts for nothing", async () => {
-  // The space in `1st | {2nd` is how people write DOT, not an empty field.
-  const markup = await html("1st | {2nd | 3rd}");
+test("blank beside a brace is notation, and counts for nothing", () => {
+  const markup = html("1st | {2nd | 3rd}");
   expect(markup).toContain('<span class="cell _1">1st</span>');
   expect(markup).toContain('<span class="cell _2_1">2nd</span>');
   expect(markup).not.toContain("></span>");
 });
 
-test("an escaped separator is text, not a split", async () => {
-  const markup = await html("esc \\| pipe | plain");
+test("an escaped separator is text, not a split", () => {
+  const markup = html("esc \\| pipe | plain");
   expect(markup).toContain('<span class="cell _1">esc | pipe</span>');
   expect(markup).toContain('<span class="cell _2">plain</span>');
 });
 
-test("a port is stripped from the label, not classed", async () => {
-  // Connectors come from measured boxes (§3.4), so a port is not an attachment
-  // point and is not a second class on the cell.
-  expect(await html("<p6> 6th")).toContain('<span class="cell _1">6th</span>');
-  expect(await html("<p6> 6th")).not.toContain("p6");
+test("a port is stripped from the label, not classed", () => {
+  expect(html("<p6> 6th")).toContain('<span class="cell _1">6th</span>');
+  expect(html("<p6> 6th")).not.toContain("p6");
 });
 
-test("inline markdown reaches both shapes, and so does the author's HTML", async () => {
-  expect(await html("**bold** | *thin* | `mono`")).toContain("<strong>bold</strong>");
-  expect(await html("**bold** | *thin* | `mono`")).toContain("<em>thin</em>");
-  expect(await html("**bold** | *thin* | `mono`")).toContain("<code>mono</code>");
+test("inline markdown reaches both shapes, and so does the author's HTML", () => {
+  expect(html("**bold** | *thin* | `mono`")).toContain("<strong>bold</strong>");
+  expect(html("**bold** | *thin* | `mono`")).toContain("<em>thin</em>");
+  expect(html("**bold** | *thin* | `mono`")).toContain("<code>mono</code>");
 
-  // `html: true` (§7) is a deliberate widening: the app already injects trusted
-  // HTML into its sinks and runs arbitrary action.js, so a tag in a label is no
-  // new capability. `\n` stays the documented way to break a line.
-  const plain = await new Vizer().render('digraph { n [label="**b** and <b>bare</b>"] }');
-  const box = shapeHtml(new DiagramBagger().bag(plain).nodes[0]!);
+  const box = shapeHtml(
+    new GraphvizAst('digraph { n [label="**b** and <b>bare</b>"] }').model().nodes.get("n")!,
+  );
   expect(box).toContain("<strong>b</strong>");
   expect(box).toContain("<b>bare</b>");
 });
 
-test("inline image markdown renders as an icon and newlines become break tags", async () => {
-  const markup = await html("![cloud](cloud.svg) Line 1\\nLine 2");
+test("inline image markdown renders as an icon and newlines become break tags", () => {
+  const markup = html("![cloud](cloud.svg) Line 1\\nLine 2");
   expect(markup).toContain('<img class="icon" src="data:image/svg+xml,');
   expect(markup).toContain('alt="cloud" />');
   expect(markup).toContain("Line 1<br />Line 2");
 });
 
-test("the library brings the rest of CommonMark, and the break stays escapable", async () => {
-  // markdown-it spells strikethrough `<s>`, where our old regex said `<del>`.
-  expect(await html("~~gone~~")).toContain("<s>gone</s>");
-  expect(await html("[docs](https://graphviz.org)")).toContain('href="https://graphviz.org"');
-  // linkify: true — a bare URL is a link without the brackets.
-  expect(await html("see https://graphviz.org")).toContain("<a href=");
-  // `\\n` is markdown's own escape, so a literal backslash-n costs us nothing.
-  expect(await html("A\\\\nB")).not.toContain("<br />");
+test("the library brings the rest of CommonMark, and the break stays escapable", () => {
+  expect(html("~~gone~~")).toContain("<s>gone</s>");
+  expect(html("[docs](https://graphviz.org)")).toContain('href="https://graphviz.org"');
+  expect(html("see https://graphviz.org")).toContain("<a href=");
+  expect(html("A\\\\nB")).not.toContain("<br />");
 });
 
-test("an unbalanced label throws instead of emitting repairable markup", async () => {
-  const unbalanced = await node("{a | b");
-  expect(() => shapeHtml(unbalanced)).toThrow("unbalanced");
+test("an unbalanced label throws instead of emitting repairable markup", () => {
+  expect(() => shapeHtml(node("{a | b"))).toThrow("unbalanced");
 });

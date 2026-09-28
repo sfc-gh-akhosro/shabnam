@@ -1470,3 +1470,47 @@ a `graph [bgcolor=…]` are asserted to produce the same rule.
 and neither should a theme", while the shipped theme references five such
 selectors and has to. What it means is that a rule about diagram *content* never
 reaches through a sink id; the sinks themselves are styled directly, on purpose.
+
+---
+
+## Session 7 — redraw changes hands
+
+Session 2 of the viz-replacement plan. Session 6 left both walls unwired; this
+one deletes the old pipeline and lets `Workbench.redraw` walk them.
+
+**What shipped.** `GraphvizAst` + `DagreLayout` are the live path.
+`vizer.ts`, `diagram-bagger.ts` and `css-bagger.ts` are gone, and with them
+`VizJson`, `Node`, `Edge`, `Cluster`, `VizModel`, `VizLayout` and the `Vizer` /
+`Diagram` verbs that carried them. `@viz-js/viz` is off the tree.
+`@ts-graphviz/ast` and `@dagrejs/dagre` are runtime. `layout-framer.ts` is a
+group-and-emit on integer `rank` / `order` — `AXES`, the 2-point tolerance and
+`bucket()` left with it. `node-shaper.ts` reads `DiagramNode`'s named fields.
+
+**Verified.** 128 pure, 82 browser, stage `done`. Both example files inspected
+in a live page. Ranks on example-2 held without adding `weight` / `minlen` /
+`constraint` / `concentrate` to `Arrow`. Source-1 rows appear only when the DOT
+actually said something; example-1 is still empty at that layer.
+
+**`shell` and `style` are markup.** They decide which SVG template a node uses
+and which extra classes it carries (`invis`, `filled`), so they belong on
+`DiagramNode` / `DiagramEdge`, resolved the same way as `shape`. They are not
+`DotStyles`. The story and §2 now name all six.
+
+**What the swap actually deleted.** Statistical default recovery, coordinate
+bucketing, and the WASM payload. That was the prize, not the library names.
+
+**Two harness findings, both already in Risks and both real this session.**
+`bun add` left the new packages in `devDependencies` until they were moved by
+hand. `sourceFilter` hid the theme and, with a starter that derives nothing,
+left only the waiting blank — `probe()` threw and the suite stopped at stage
+`blank`. Seeding a scratch user row, asserting the filter, then dropping it, is
+the check now.
+
+**Not this session.** `research-lab/ast/` still has its code. `dist/` and Export
+HTML are still unmeasured. The one sanctioned `try/catch` around parse is still
+unwired — malformed DOT throws. `user-story.md` still says a colliding id
+throws. `README.md` still describes `Vizer` / `renderJSON`. Session 3 harvests;
+Session 4 makes the files agree.
+
+**V6 and M4** stay in this archive until Session 3 records the real sizes and
+writes their obituaries. Do not invent the numbers here.
