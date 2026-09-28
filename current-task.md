@@ -6,29 +6,11 @@ Always read these files in each session:
 
 # Current task
 
-Sessions 1–3 of the viz-replacement plan are done and in
-[`docs/archive.md`](docs/archive.md) (archive Sessions 6–8). The walls are
-live, viz.js is gone, harvest recorded the sizes, V6 and M4 are closed. Next
-is the files agree.
+Sessions 1–4 of the viz-replacement plan are done and in
+[`docs/archive.md`](docs/archive.md) (archive Sessions 6–9). The walls are
+live, viz.js is gone, the harvest is recorded, and the files agree.
 
----
-
-## Session 4 — the files agree
-
-- Re-read `app-architecture.md` against the code that now exists and fix every
-  claim that drifted, including the stale ones this task already found (below).
-- **`user-story.md` has one known drift**: it still says a sanitized id colliding
-  with another **throws**, which §3.1 deliberately dropped in favour of the bare
-  space→underscore. A second was suspected and checked: the rank passage is
-  already correctly in the past tense, so there is nothing to fix there. It gets
-  the brief version, no duplication of the readme.
-- **The one sanctioned `try/catch` is still unwired.** The story and §5 say
-  malformed DOT shows the message and leaves the last picture standing;
-  `Engine.redraw` currently lets parse throw.
-- **`README.md` still describes `Vizer` / `renderJSON` / `@viz-js/viz`.** Sync it
-  to the live pipeline, or delete the stale how-it-works block.
-- `coding-rules.md` already carries the story → types → architecture → code loop.
-- Closing ceremony: archive, clean desk, canary, commit.
+Pick up from **For Later**. Nothing is scheduled.
 
 ---
 

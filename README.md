@@ -2,23 +2,22 @@
 
 **CSS on DOT diagrams.** Write Graphviz DOT for the structure, then style the result with plain CSS. The output is real HTML — divs, spans, an SVG layer — not an image.
 
-The idea is that a diagram's *shape* and its *looks* are different jobs. DOT is good at shape and bad at looks; CSS is the opposite. So Graphviz is asked only for layout, and everything visual is a stylesheet you can read, edit and reuse.
+The idea is that a diagram's *shape* and its *looks* are different jobs. DOT is good at shape and bad at looks; CSS is the opposite. A library reads the DOT and a library ranks it; everything visual after that is a stylesheet you can read, edit and reuse.
 
 ```dot
 digraph starter {
   rankdir=LR
-  node [shape=box style=filled fillcolor="#BBDEFB" color="#1565C0"]
 
   subgraph cluster_source {
     label = "Source"
-    blobs [label="Blobs" icon="bucket.svg" caption="Object Store"]
+    blobs [label="![bucket](bucket.svg) Blobs" caption="Object Store"]
   }
 
-  core [label="Platform Core" icon="star.svg"]
+  core [label="![star](star.svg) Platform Core"]
   app  [label="App"]
 
   blobs -> core
-  core -> app [penwidth=3 color="#C62828"]
+  core -> app
 }
 ```
 
@@ -48,40 +47,45 @@ bun run test:browser   # the CSSOM half, in real headless Chrome
 
 ## How it works
 
-Four tabs — `diagram.dot` · `styles` · `annotation.html` · `action.js`. Three of them are text, in one plain `<textarea>`. The styles tab is not: it is a table of rows. Press Redraw:
+Four tabs — `diagram.dot` · `styles` · `annotations` · `action.js`. Two of them are text, in one plain `<textarea>`. The other two are rows tables. Press Redraw:
 
 ```
-DOT → Vizer → VizJson → Diagram.bag → DiagramModel
-        ├→ Diagram.derived → Stylist.addRule(…, source 1) → feed → CSSOM
-        └→ Diagram.frame   → measure → clusters / shells / connectors
+dot ──parse──▶ Ast ──┬──▶ DiagramModel     who exists, who connects, who belongs
+                     ├──▶ DotStyles        appearance, at the branch it was written
+                     └──▶ PointGraph ──layout──▶ Positions
+
+        then, after the browser paints: measure → clusters / shells / connectors → svg
 ```
 
-**Style is data.** A rule is `selector → property → value`, and that is the same shape on disk, in the tab, and in memory. The `Stylist` holds **one book** of them, and every entry records who wrote it — `0` the shipped `theme/basic-theme.json`, `1` the rules *derived* from your DOT attributes, `2` you. A repeated key is an overwrite, not a second rule, and `addRule` refuses a write whose source is lower than the entry already there. There is no merge step and no CSS text on the path: no string is built to paint with and no sheet is ever parsed back.
+`@ts-graphviz/ast` is the only DOT reader; `@dagrejs/dagre` is the only geometry. We never write a parser of our own.
 
-So a row edit is one `setProperty` on a live sheet. **The picture changes as you type, with no Redraw.** Editing any row writes at source `2`, in place, keeping the row's identity — and because a redraw feeds at `1`, it cannot take a row back off you. Nothing shadows anything, so the tab shows one row per rule and a rule cannot appear twice. `@apply` stays a property and is expanded at feed time, against the book.
+**Style is data.** A rule is `selector → property → value`, and that is the same shape on disk, in the tab, and in memory. The `Stylist` holds **one book** of them, and every entry records who wrote it — `0` the shipped `theme/basic-theme.json`, `1` the rules read from your DOT attributes, `2` you. A repeated key is an overwrite, not a second rule, and `addRule` refuses a write whose source is lower than the entry already there. There is no merge step and no CSS text on the path: no string is built to paint with and no sheet is ever parsed back.
 
-Everything is client-side: no server, no build step at runtime, no telemetry. Graphviz runs in the page via [`@viz-js/viz`](https://github.com/mdaines/viz-js). There is no DOT parser in this codebase and there is not meant to be one — `renderJSON` is the only DOT consumer.
+A row edit is one `setProperty` on a live sheet, committed on `change`, never on a keystroke. A text tab writes the store and does nothing else; the picture is as stale as the last Redraw. Editing a row writes at source `2`, and because a redraw feeds at `1`, it cannot take a row back off you. `@apply` stays a property and is expanded at feed time, against the book.
+
+Everything is client-side: no server, no build step at runtime, no telemetry. Chromium only.
 
 ## Features
 
 | | |
 |---|---|
-| File verbs | Load/save DOT, save styles, export standalone HTML, export PNG |
-| Shortcuts | `↵` redraw · `o`/`s` DOT · `p` PNG · `e` HTML · `1`–`4` tabs |
-| Drawing | SVG shells behind the HTML, connectors with arrowheads, per-node icons and captions |
-| Theming | one shipped theme; rows grouped by origin; live repaint on every keystroke |
+| File verbs | Load/save DOT, save styles, export standalone HTML, export picture (SVG or PNG) |
+| Shortcuts | `↵` redraw · `o`/`s` DOT · `p` picture · `e` HTML · `1`–`4` tabs |
+| Drawing | SVG shells around the HTML, connectors with arrowheads, per-node icons and captions |
+| Theming | one shipped theme; rows grouped by origin; a colour row paints at once, a size row waits for Redraw |
 
 ## Reading the code
 
 | File | What it is |
 |---|---|
-| `app-architecture.md` | The product contract. Start here. |
-| `coding-rules.md` | House style, and the closing-ceremony routine. |
-| `current-task.md` | Orientation for a new contributor, what is next, and what is For Later. |
+| `user-story.md` | What the app is, told as a story. Start here. |
+| `app-architecture.md` | The product contract. |
+| `coding-rules.md` | House style, and the opening/closing ceremonies. |
+| `current-task.md` | What is next, and what is For Later. |
 | `docs/archive.md` | How it was built, and why closed decisions were closed. |
 
 ## Status
 
-Early but working. Fixture: `research-lab/example-1.dot`. What is early rather than broken: `shape=record` renders as a box with its label braces intact, the `icon/` files are placeholder glyphs, and nothing in the theme styles annotations, labels or edges yet — all three are stated positions in `app-architecture.md` rather than oversights. Wanted next is in `current-task.md`.
+Working. Fixture: `research-lab/example-1.dot`. `shape=record` is a split on `|` / `{}`. Icons in `icon/` are real SVGs, inlined as data URIs. Nothing in the theme styles annotations, labels or edges yet — a stated position in `app-architecture.md`, not an oversight. Wanted next is in `current-task.md`.
 
 The name is Persian for *dew* — the thin layer that makes a shape visible.

@@ -15,7 +15,7 @@ This file should be the most revealing thing here: "Oh! I got it, this app does 
 
 # The story
 
-This is a single page app. On the left, `<main>` has a top bar of action buttons (open, save, export, etc.) and then the canvas, `#diagram-canvas`, where we draw the diagram in HTML and SVG. On the right, `<aside>` has the tabs the user selects: DOT, styles, annotations, and JS for scripting. Tabs behave like radio buttons but are drawn tight together and `.raised-shadow`; selecting one makes it `.flat-shadow`, which gives that old pushed-in look.
+This is a single page app. On the left, `<main>` has a top bar of action buttons (open, save, export, etc.) and then the canvas, `#diagram-canvas`, where we draw the diagram in HTML and SVG. On the right, `<aside>` has the tabs the user selects: DOT, styles, annotations, and JS for scripting. Tabs behave like radio buttons packed tight; the selected one looks pushed in (`.active`, the `--flat-shadow` token).
 
 We have a handful of basic components we build once and reuse — radio strips, check boxes, `.glass`, `.paper`, `.row`, `.col`.
 
@@ -25,7 +25,7 @@ Then you export to SVG or PNG. The SVG is a `<foreignObject>` wrapper: arrange t
 
 Shabnam does not compete with Graphviz. We borrow a DOT parser to read the language, and a layout algorithm to decide what sits where — and we own everything after that.
 
-Because DOT defines the semantics, we religiously use DOT's own naming. A `subgraph <name>` becomes a `.name` class on every member node. A `cluster_…` subgraph additionally gets its box drawn in SVG around those nodes. Nodes get `.node`, or `.record` instead when `shape=record`, and every other shape names itself in `data-shape`. Ids are DOT names: node `bq` is `#bq` in HTML and in CSS, and the edge from `bq` to `catalog` is `#bq_catalog`. Sanitizing an id that collides with another throws — a malformed page is much harder to debug than a stack trace.
+Because DOT defines the semantics, we religiously use DOT's own naming. A `subgraph <name>` becomes a `.name` class on every member node. A `cluster_…` subgraph additionally gets its box drawn in SVG around those nodes. Nodes get `.node`, or `.record` instead when `shape=record`, and every other shape names itself in `data-shape`. Ids are DOT names: node `bq` is `#bq` in HTML and in CSS, and the edge from `bq` to `catalog` is `#bq_catalog`. A space in a name becomes an underscore and that is the whole sanitizer — a user who gave a node no real name was never going to select it later.
 
 Identity in CSS is identity in DOT. Nothing less, nothing more. Somebody who can read the DOT can write the CSS without learning a second vocabulary, and can grep one for the other.
 
@@ -47,7 +47,7 @@ Which gives the line every attribute falls on one side of: **it is either markup
 
 Two libraries, two walls. The parser is visible inside one class and the layout inside another, each named after the thing it hides, so nothing else in the app could tell you what either is called. `diagram/*` is pure, data in and data out, no DOM, which is why it tests as plain functions.
 
-The app has exactly one `try/catch` and it wraps the parse, because DOT is syntactically broken on most keystrokes. It shows the message and leaves the last good picture standing. Everywhere else we fail loud.
+The app has exactly one `try/catch` and it wraps the parse, because a Redraw mid-edit is how DOT is usually malformed. It `alert`s the parser's message and leaves the last good picture standing. Everywhere else we fail loud.
 
 The canvas is a skeleton of named sinks, one per worker, and the order of the children is load-bearing:
 
@@ -74,7 +74,7 @@ Coordinates still come back, deliberately rough, and we barely use them: they te
 
 Everything else about the picture is CSS, and we once broke that rule on purpose to see what happened: we derived per-node spacing from the coordinates, and deleted it again, because it was the only number in the pipeline that was computed instead of passed through.
 
-Which brings the important half. Layout's pixel sizes are thrown away entirely. The HTML goes out with no inline styles, the browser lays it out under whatever CSS is live at that moment, and only then does `measure` read the real boxes back with `getBoundingClientRect`. Every number the SVG layer uses is that measurement. Put `font-size: 24px` on `.node` and the div grows; shells and edge endpoints computed from layout's old numbers would detach, and every style change would need a Redraw to look right. Measured after paint, they simply stay glued.
+Which brings the important half. Layout's pixel sizes are thrown away entirely. The HTML goes out with no appearance inline styles, the browser lays it out under whatever CSS is live at that moment, and only then does `measure` read the real boxes back — `offsetLeft` / `offsetTop` / `offsetWidth` / `offsetHeight` on the node, `getBoundingClientRect` only for annotation anchors. Every number the SVG layer uses is that measurement. Put `font-size: 24px` on `.node` and the div grows; shells and edge endpoints computed from layout's old numbers would detach, and every style change would need a Redraw to look right. Measured after paint, they simply stay glued.
 
 ## Connectors
 

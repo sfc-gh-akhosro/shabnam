@@ -1561,3 +1561,38 @@ document Session 5 wrote, which is why the lab existed. `package.json` no longer
 has `ast-layout`.
 
 **Not this session.** Session 4 of the plan — the files agree.
+
+---
+
+## Session 9 — the files agree
+
+Session 4 of the viz-replacement plan. Sessions 6–8 put the walls in, rewired
+redraw, and harvested. This one made the law describe the tree that now exists,
+and wired the one catch the story already promised.
+
+**What shipped.**
+
+- `Engine.redraw` wraps `new GraphvizAst(dot)` in the one sanctioned `try/catch`.
+  Malformed DOT `alert`s the parser's message and returns; the sinks keep the
+  last picture. Everything past a successful parse still throws.
+- `user-story.md`: colliding ids do not throw; a space is `_`. Tabs use
+  `.active` and the `--flat-shadow` token. Measure is offset geometry for nodes,
+  `getBoundingClientRect` for marks.
+- `app-architecture.md` caught up with the live chrome and the live pipeline:
+  `ast.styles()` + `absorb`, not `Diagram.derived` / `Stylist.feed`; Export
+  Picture and `Cmd+P` / `Cmd+E`, not three picture verbs; record is a split on
+  `|` / `{}`; `--span` is the one data `style=`; `#freeze` and `#hover-zone` are
+  named as the two-word-id exceptions; §4 no longer says a failed parse throws
+  (that was the leftover that contradicted §5).
+- `README.md` no longer describes `Vizer` / `renderJSON` / `@viz-js/viz`.
+- Browser suite: `parseKeepsThePicture` stubs `alert` and asserts the picture
+  survives `digraph { a ->`.
+
+**§4 and §5 disagreed, and §5 won.** §4 said "no status line: a redraw that
+cannot parse throws." §5 said "the catch shows the parser's message and leaves
+the last picture standing." A status line is still refused. `alert` is the
+message the story already named, and it is not a corner of the chrome.
+
+**Left alone, as the plan asked.** Edge weights, anonymous subgraph rename
+(`%1` → `subgraph_N`), ports. The For Later refactor of `app.css` annotations,
+SolidJS, and string HTML.

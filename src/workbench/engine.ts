@@ -42,7 +42,16 @@ export class Engine implements T.Workbench {
   ) {}
 
   async redraw(): Promise<void> {
-    const ast = new GraphvizAst(this.text.dot);
+    let ast: GraphvizAst;
+    try {
+      ast = new GraphvizAst(this.text.dot);
+    } catch (error) {
+      // The one sanctioned catch (§5): malformed DOT is what you have after
+      // most edits. `alert` is the message; the last picture is whatever is
+      // still in the sinks. Nothing else here is allowed a catch.
+      alert(error instanceof Error ? error.message : String(error));
+      return;
+    }
     const model = ast.model();
     // The book is kept, not flushed (§1). The DOT's rules arrive at source 1 and
     // are refused wherever the user has written at 2, so a redraw cannot take a

@@ -634,6 +634,33 @@ async function textTabsWaitForRedraw(): Promise<void> {
   check("and Redraw is what draws it", drawn() === 4, `${drawn()} nodes`);
 }
 
+/**
+ * The one sanctioned catch (§5): malformed DOT shows the parser's message and
+ * leaves the last picture standing. `alert` is that message; a real dialog
+ * would hang this page, so the harness records the call.
+ */
+async function parseKeepsThePicture(): Promise<void> {
+  const shown: string[] = [];
+  window.alert = (message?: string) => {
+    shown.push(String(message));
+  };
+
+  const area = $("body > aside textarea") as HTMLTextAreaElement;
+  const drawn = () => $$("#diagram-html .node").length;
+  const before = drawn();
+
+  await type(area, "digraph { a ->", "input");
+  redrawButton().click();
+  await tick();
+
+  check("malformed DOT does not wipe the picture", drawn() === before, `${before} → ${drawn()} nodes`);
+  check(
+    "and the parser's message is shown",
+    shown.length === 1 && shown[0]!.length > 0,
+    JSON.stringify(shown),
+  );
+}
+
 // The app's own `onMount` kicks the first redraw, so wait for the picture rather
 // than for a timer.
 async function mounted(): Promise<void> {
@@ -743,5 +770,7 @@ publish("export");
 await redrawStillWorks();
 publish("redraw");
 await textTabsWaitForRedraw();
+publish("stale");
+await parseKeepsThePicture();
 check("no console or uncaught errors", errors.length === 0, JSON.stringify(errors));
 publish("done");

@@ -44,7 +44,7 @@ Named sinks, one per worker. Child order is load-bearing (§3.4).
 </article>
 ```
 
-**Every id the app owns is two hyphenated words**, because node ids are bare DOT names (§3.1) and the two namespaces share one space: `#diagram-canvas`, never `#canvas`. The chrome's own boxes take it further and carry no id at all — `body > main` and `body > aside` reach them, and the workbench renders straight into `body` with no `#root`. **A rule about diagram *content* never reaches through a sink id** — a node, an edge or a cluster is selected by its DOT name and its type class, never as `#diagram-html .node`. The sinks themselves are a different matter: the theme styles `#diagram-canvas`, `#diagram-svg` and `#annotation-html` directly, because the canvas is where tokens have to sit to resolve in both places (§4.3) and the annotation scaffolding has to travel with the picture (§4.2). A root graph attribute lands there too (§3.2).
+**Every id the app owns is two hyphenated words**, because node ids are bare DOT names (§3.1) and the two namespaces share one space: `#diagram-canvas`, never `#canvas`. The chrome's own boxes take it further and carry no id at all — `body > main` and `body > aside` reach them, and the workbench renders straight into `body` with no `#root`. The two exceptions that CSS has to position by name are `#freeze` and `#hover-zone`. **A rule about diagram *content* never reaches through a sink id** — a node, an edge or a cluster is selected by its DOT name and its type class, never as `#diagram-html .node`. The sinks themselves are a different matter: the theme styles `#diagram-canvas`, `#diagram-svg` and `#annotation-html` directly, because the canvas is where tokens have to sit to resolve in both places (§4.3) and the annotation scaffolding has to travel with the picture (§4.2). A root graph attribute lands there too (§3.2).
 
 **`#connector-paths` is last, and an edge can therefore cross a caption.** `paint-order: stroke` masks only siblings drawn earlier, which is why `NodeSheller` emits all shell groups and *then* all captions — that fixes shell-over-caption, and edge-over-caption is not fixable inside a two-group skeleton. Closing it means a third `<g>` here, i.e. changing this section. Living with it is the position.
 
@@ -57,7 +57,7 @@ source:     0 theme · 1 dot · 2 user
 
 No layers, no merge step, no `plus` / `minus`, no `lastDerived`, no merge buffer. `Stylist.addRule` is the one door in and it **refuses a write whose source is lower than the entry already there** — equal or higher wins. That single guard is what three layers used to be for: a redraw feeds derived rules at `1` and cannot take a row back off the user at `2`.
 
-1. **Load DOT** starts blank, absorbs `theme/basic-theme.json` at `0`, draws, then absorbs `Diagram.derived(model)` at `1`.
+1. **Load DOT** starts blank, absorbs `theme/basic-theme.json` at `0`, draws, then absorbs `ast.styles()` at `1`.
 2. **Redraw** keeps the book and re-absorbs the derived bag at `1`.
 3. **A row edit** writes at `2`.
 
@@ -116,8 +116,8 @@ dot text
   ├─ DagreLayout.place ───► Positions        rank, order, rough x/y
   │
   ├─ Diagram.frame ───────► mainHtml         ranks + node HTML
-  ├─ Stylist.addRule ×n ──► the book, at source 1 (refused where the user wrote)
-  ├─ Stylist.feed ────────► #style-css .sheet   (CSSOM, @apply expanded here)
+  ├─ Stylist.absorb ×n ───► the book, at source 1 (refused where the user wrote)
+                            then one feed → #style-css .sheet
   │
   │      ── inject, let the browser paint ──
   │
@@ -181,7 +181,7 @@ That is stricter than it used to be, and deliberately. The old reader built a to
 
 **Ranks arrive as integers, so there is nothing to recover.** `Positions` gives each node a `rank` and an `order` within it, and framing is group-and-emit. The old bucketing — a four-entry `rankdir` axis map, a 2-point tolerance, and a pass over coordinate-sorted nodes opening a new rank on each gap — is gone, along with the reason it existed: the old reader's node objects carried no rank, so one had to be inferred from a coordinate. Never write a test that chases the last decimal of a coordinate; there is no longer one in the path.
 
-**Zero inline styles.** The generated markup has no `style="…"` and no JavaScript: structure is elements, appearance is stylesheets.
+**No appearance inline styles.** The generated markup has no `style="…"` for look, and no JavaScript: structure is elements, appearance is stylesheets. The one `style=` the HTML layer writes is `--span` on a spanned record cell — data the theme spends, not a colour.
 
 ```html
 <div class="diagram">
@@ -191,7 +191,7 @@ That is stricter than it used to be, and deliberately. The old reader built a to
 
 Each node is the DOT name sanitized as `id`, **one** type class, and one class per subgraph it belongs to. The subgraph class is the styling surface that matters; `#id` is left over for one-off overrides.
 
-Markup comes from the shape registry — `SHAPE_HTML.get(node.shape) ?? SHAPE_HTML.get("box")`. **`record` is the one shape with a renderer and a class of its own**; every other shape is a `.node` that names itself in `data-shape`, verbatim, `box` included. A class per shape would put a bare DOT word into the class space where a subgraph of the same name already lives (§3.1). A record's label currently keeps its DOT source verbatim — `{Data \n Lake | {Batch | Columnar}}` — because nothing splits on `|` and `{}` yet: a missing map entry, not a bug. Reading the parsed `label` field is not writing a parser; reading the DOT text would be.
+Markup comes from the shape registry — `SHAPE_HTML.get(node.shape) ?? SHAPE_HTML.get("box")`. **`record` is the one shape with a renderer and a class of its own**; every other shape is a `.node` that names itself in `data-shape`, verbatim, `box` included. A class per shape would put a bare DOT word into the class space where a subgraph of the same name already lives (§3.1). The record label is the one grammar we own, and it is a split, not a parser: `|` separates cells, `{}` flips the flex axis, a cell's class is its path (`._2_1`). Reading the parsed `label` field is not writing a parser; reading the DOT text would be.
 
 The shell registry makes the same promise one level down — a new shell is a file in `svg/`, one `SHELL_SVG` entry, and its import — and that promise is **untested**, because `svg/box.svg` is still the only shell and the token vocabulary (`{{x}} {{y}} {{width}} {{height}}`) has never had to serve a second shape.
 
@@ -203,7 +203,7 @@ The shell registry makes the same promise one level down — a new shell is a fi
 
 ### 3.4 `Measurer` + `NodeSheller` + `EdgeDrawer` — the SVG layer
 
-Once the browser has painted `#diagram-html`, `Measurer` reads the real geometry into `Box[]`. **Measured geometry is the single source of truth for size and position**, and neither the model nor `Positions` carries a width or a height: two sources of size would guarantee someone eventually uses the wrong one.
+Once the browser has painted `#diagram-html`, `Measurer` reads the real geometry into `Box[]` — `offsetLeft` / `offsetTop` / `offsetWidth` / `offsetHeight` on each node, relative to the rank. **Measured geometry is the single source of truth for size and position**, and neither the model nor `Positions` carries a width or a height: two sources of size would guarantee someone eventually uses the wrong one. Annotation marks use `getBoundingClientRect` against the layer, because they are absolutely positioned and that is the origin `left` / `top` are relative to.
 
 - **`NodeSheller`** draws cluster boxes under `#cluster-shells` around measured members of `cluster_*` subgraphs with their labels, then shells around each node box. `SHELL_SVG` maps `shell=` to a file in `svg/`, defaulting to `box.svg`; `icon=` comes from `icon/`. Invisible clusters (`style=invis`) are not drawn, but still contribute their class.
 - **`EdgeDrawer`** draws from measured coordinates, never `_draw_` paths, so edges keep following our boxes after CSS changes a gap, a font or a width. It attaches and renders; it does not decide the route.
@@ -245,13 +245,13 @@ Two of them are text and two are not. `SetTab` writes a **text tab**; `inject` w
 
 The coding window is **one `<textarea>`**, written inline in `workbench.tsx`, serving both text tabs — a component that wraps one element and forwards two props is a file for nothing. `tabs.tsx` is a radio strip of four equal buttons that knows nothing about contents. No highlighting, no completion, no caret of ours. **Autocomplete is not part of the fiddle**; do not put `suggestions` on `Workbench`.
 
-**One toolbar, and it is `main`'s `nav`.** Every action lives there — Redraw, Load / Save DOT, Save SVG, Save PNG, Export HTML, Save Styles. No panel carries buttons of its own and there is no status line: a redraw that cannot parse its DOT throws rather than writing a message into a corner.
+**One toolbar, and it is `main`'s `nav`.** Every action lives there — Redraw, Load / Save DOT, Export Picture, Export HTML, Save Styles. Freeze sits on `main`, not in the nav: it pins the aside so a canvas click cannot hide it. No panel carries buttons of its own and there is no status line. A redraw that cannot parse its DOT is the one sanctioned catch (§5): `alert` shows the parser's message and the last good picture stays in the sinks.
 
 | Keys (`Cmd` on macOS, `Ctrl` elsewhere) | Verb |
 |---|---|
 | `Cmd+Enter` | Redraw |
 | `Cmd+O` / `Cmd+S` | Load / Save DOT |
-| `Cmd+P` · `Cmd+Shift+E` · `Cmd+E` | Save PNG · Save SVG · Export HTML |
+| `Cmd+P` / `Cmd+E` | Export Picture / Export HTML |
 | `Cmd+1` … `Cmd+4` | the four tabs |
 
 Bindings are a `Map` registry in `workbench/keys.ts`, not a switch. The four the browser claims are `preventDefault`ed.
@@ -333,18 +333,18 @@ Exactly one shipped theme, `theme/basic-theme.json`, decomposed once from a `bas
 
 Everything runs in the browser. `index.ts` mounts the SolidJS workbench into `body`; the canvas skeleton is part of the component tree, not a generated string.
 
-`Workbench.redraw` is the conductor:
+`Workbench.redraw` is the conductor (`Engine` implements it):
 
 ```
 dot text
-  → new GraphvizAst(dot)                      → ast
+  → new GraphvizAst(dot)                      → ast   (the one try/catch)
   → ast.styles()                              → DotStyles
-  → Stylist.addRule(…, source 1) ×n           → into the book, refused at source 2
-  → Stylist.feed()                            → CSSOM on #style-css
+  → Stylist.absorb(…, source 1)               → into the book, refused at source 2
+                                                then one feed → CSSOM on #style-css
   → DagreLayout.place(ast.points())           → positions
   → Diagram.frame(ast.model(), positions)     → #diagram-html
   → [ browser paints ]
-  → Workbench.measure()                       → boxes
+  → Workbench.measure()                       → boxes (offset geometry)
   → Diagram.clusters / shells / connectors    → SVG sinks
   → Workbench.annotate()                      → #annotation-html, then place()
   → action.js last
@@ -363,7 +363,7 @@ dot text
 
 **Waiting for layout:** `painted()` races `requestAnimationFrame` against `setTimeout(0)`. The frame is what the Measurer wants, but `rAF` does not fire in a background tab or under a virtual clock, and waiting on it alone leaves a redraw unfinished.
 
-**The one sanctioned catch** is around the parse, and nowhere else. Malformed DOT is the normal between-keystroke state; the catch shows the parser's message and leaves the last good picture standing. Everything downstream of a successful parse still follows: **throw or let it throw.**
+**The one sanctioned catch** is around the parse, and nowhere else. A Redraw mid-edit is how DOT is usually malformed; the catch `alert`s the parser's message and leaves the last good picture standing. Everything downstream of a successful parse still follows: **throw or let it throw.**
 
 A redraw must complete in well under a second on a normal diagram.
 
