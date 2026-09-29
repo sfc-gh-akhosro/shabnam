@@ -1,109 +1,108 @@
-// Layout answers with integers (§3.3). That is the point of the swap: ranks
-// arrive as `0…n` and `order` is already correct, so `LayoutFramer` becomes a
-// group-and-emit and the old bucketing — a `rankdir` axis map and a 2-point
-// tolerance over coordinates — has nothing left to recover.
+// Layout is Graphviz on the reader's points (§2). These are the claims the swap
+// from dagre rests on: the trimmed tree ranks and orders exactly like the DOT
+// as written, `rank=` in every form is held, and nothing layout reads is lost.
 //
-// Nothing here asserts a coordinate. `x` / `y` are rough on purpose and CSS owns
-// real size, so a test that chased them would be testing dagre, not us.
+// Nothing here asserts a coordinate. 0×0 points have no meaningful x/y beyond
+// which rank they share, and CSS owns the real size.
 
 import { expect, test } from "bun:test";
 import { DotReader } from "../src/read/dot-reader.ts";
-import { DagreLayout } from "../src/layout/dagre-layout.ts";
-import type { PointGraph, Positions } from "../src/types.ts";
+import { GraphvizLayout } from "../src/layout/graphviz-layout.ts";
+import type { DiagramModel, Ranks } from "../src/types.ts";
 
-const graphOf = async (name: string): Promise<PointGraph> =>
-  new DotReader(
-    await Bun.file(new URL(`../research-lab/${name}.dot`, import.meta.url)).text(),
-  ).graph();
+const layout = await GraphvizLayout.load();
 
-const layout = new DagreLayout();
-const one = layout.place(await graphOf("example-1"));
-const two = layout.place(await graphOf("example-2"));
+const dotOf = (name: string): Promise<string> =>
+  Bun.file(new URL(`../research-lab/${name}.dot`, import.meta.url)).text();
 
-const ranksOf = (placed: Positions): number[] =>
-  [...new Set([...placed.values()].map((one) => one.rank))].sort((a, b) => a - b);
+const ranksOf = (dot: string): Ranks => layout.layout(new DotReader(dot).points());
 
-const rows = (placed: Positions): Map<number, number[]> => {
-  const grouped = new Map<number, number[]>();
-  for (const one of placed.values()) {
-    grouped.set(one.rank, [...(grouped.get(one.rank) ?? []), one.order].sort((a, b) => a - b));
-  }
-  return grouped;
-};
+const rankOf = (ranks: Ranks, id: string): number => ranks.findIndex((rank) => rank.includes(id));
 
-test("every node is placed, and placement is keyed by id", () => {
-  expect(one.size).toBe(13);
-  expect(two.size).toBe(17);
-  expect(one.get("lake")).toBeDefined();
-});
-
-test("ranks are compacted to `0…n`, contiguous, with no gap to bridge", () => {
-  for (const placed of [one, two]) {
-    const ranks = ranksOf(placed);
-    expect(ranks[0]).toBe(0);
-    expect(ranks).toEqual(ranks.map((_, at) => at));
-  }
-});
-
-test("`order` is consecutive inside a rank, so framing never sorts", () => {
-  for (const placed of [one, two]) {
-    for (const orders of rows(placed).values()) {
-      expect(orders).toEqual(orders.map((_, at) => at));
+/** Pairs of edges between the same two ranks whose ends swap order. */
+function crossings(ranks: Ranks, model: DiagramModel): number {
+  const at = (id: string) => ({ rank: rankOf(ranks, id), order: ranks[rankOf(ranks, id)]!.indexOf(id) });
+  const spans = model.edges
+    .map(({ from, to }) => [at(from), at(to)] as const)
+    .filter(([a, b]) => a.rank !== b.rank)
+    .map(([a, b]) => (a.rank < b.rank ? [a, b] : [b, a]));
+  let count = 0;
+  for (const [i, [a, b]] of spans.entries()) {
+    for (const [c, d] of spans.slice(i + 1)) {
+      if (a!.rank === c!.rank && b!.rank === d!.rank && (a!.order - c!.order) * (b!.order - d!.order) < 0) count++;
     }
   }
+  return count;
+}
+
+for (const name of ["example-1", "example-2"]) {
+  test(`${name}: the points rank and order exactly like the DOT as written`, async () => {
+    const dot = await dotOf(name);
+    // `layout` takes any DOT; given the author's own, it is Graphviz's answer
+    // with real sizes — the reference the trimmed points must match.
+    expect(ranksOf(dot)).toEqual(layout.layout(dot));
+  });
+
+  test(`${name}: every node is placed once, with no crossing`, async () => {
+    const reader = new DotReader(await dotOf(name));
+    const ranks = layout.layout(reader.points());
+    expect(ranks.flat().sort()).toEqual([...reader.model().nodes.keys()].sort());
+    expect(crossings(ranks, reader.model())).toBe(0);
+  });
+}
+
+test("example-2: `agents` and `ge` are neighbours in one rank", async () => {
+  const ranks = ranksOf(await dotOf("example-2"));
+  const rank = ranks[rankOf(ranks, "agents")]!;
+  expect(Math.abs(rank.indexOf("agents") - rank.indexOf("ge"))).toBe(1);
 });
 
-test("a rank is an integer, not a coordinate we bucketed", () => {
-  for (const one of two.values()) {
-    expect(Number.isInteger(one.rank)).toBe(true);
-    expect(Number.isInteger(one.order)).toBe(true);
+test("`rank=same` beats the edge that would separate the group", () => {
+  const ranks = ranksOf("digraph { a -> b ; subgraph { rank=same ; a ; b } }");
+  expect(rankOf(ranks, "a")).toBe(rankOf(ranks, "b"));
+});
+
+test("`rank=max` and `rank=sink` land on the last rank", () => {
+  for (const say of ["max", "sink"]) {
+    const ranks = ranksOf(`digraph { a -> b -> c ; a -> d ; { rank=${say} ; d } }`);
+    expect(rankOf(ranks, "d")).toBe(ranks.length - 1);
   }
 });
 
-test("`rank=same` is held: every member of a group lands on one rank", async () => {
-  // The thing dagre cannot express, served by contracting each group into a
-  // stand-in and expanding it again (§2).
-  const graph = await graphOf("example-2");
-  for (const group of graph.sameRank) {
-    const ranks = new Set(group.map((id) => two.get(id)!.rank));
-    expect(ranks.size).toBe(1);
-  }
+test("`rank=source` lands alone on the first rank", () => {
+  const ranks = ranksOf("digraph { a -> b ; c -> b ; { rank=source ; c } }");
+  expect(ranks[0]).toEqual(["c"]);
 });
 
-test("a contracted group still spreads, so its members do not sit on one point", async () => {
-  const graph = await graphOf("example-2");
-  const group = graph.sameRank[0]!;
-  const spread = new Set(group.map((id) => two.get(id)!.y));
-  expect(spread.size).toBe(group.length);
+test("`minlen` survives the trim", () => {
+  // Ranks with nobody on them are not kept, so `c` is what shows the gap.
+  expect(ranksOf("digraph { a -> b ; a -> c }")).toEqual([["a"], ["b", "c"]]);
+  expect(ranksOf("digraph { a -> b [minlen=2] ; a -> c }")).toEqual([["a"], ["c"], ["b"]]);
 });
 
-test("`rank=same` beats the edges that would otherwise separate the group", () => {
-  // `a -> b` normally puts `b` a rank later; asking for one rank wins.
-  const placed = layout.place(
-    new DotReader("digraph { a -> b ; subgraph { rank=same ; a ; b } }").graph(),
-  );
-  expect(placed.get("a")!.rank).toBe(placed.get("b")!.rank);
+test("an invisible edge still holds ranks apart", () => {
+  const ranks = ranksOf("digraph { a ; b ; a -> b [style=invis] }");
+  expect(rankOf(ranks, "b")).toBe(rankOf(ranks, "a") + 1);
 });
 
-test("an arrow still separates two nodes that did not ask to share a rank", () => {
-  const placed = layout.place(new DotReader("digraph { a -> b -> c }").graph());
-  expect([placed.get("a")!.rank, placed.get("b")!.rank, placed.get("c")!.rank]).toEqual([0, 1, 2]);
+test("an arrow separates two nodes that did not ask to share a rank", () => {
+  expect(ranksOf("digraph { a -> b -> c }")).toEqual([["a"], ["b"], ["c"]]);
 });
 
 test("a lone node with no edge at all is still placed", () => {
-  const placed = layout.place(new DotReader("digraph { only }").graph());
-  expect(placed.get("only")).toEqual({ rank: 0, order: 0, x: 0, y: 0 });
+  expect(ranksOf("digraph { only }")).toEqual([["only"]]);
 });
 
-test("`rankdir` decides which axis orders a rank", () => {
-  // LR ranks run down a column, TB across a row — so `order` is read off the
-  // cross axis, and which axis that is comes from the DOT.
-  const across = layout.place(
-    new DotReader("digraph { rankdir=LR ; a -> c ; b -> c }").graph(),
-  );
-  const down = layout.place(new DotReader("digraph { rankdir=TB ; a -> c ; b -> c }").graph());
-  expect(new Set([across.get("a")!.rank, across.get("b")!.rank]).size).toBe(1);
-  expect(new Set([down.get("a")!.rank, down.get("b")!.rank]).size).toBe(1);
-  expect([across.get("a")!.order, across.get("b")!.order].sort()).toEqual([0, 1]);
-  expect([down.get("a")!.order, down.get("b")!.order].sort()).toEqual([0, 1]);
+test("`rankdir` turns the axis, and rank 0 is always where arrows start", () => {
+  for (const rankdir of ["TB", "BT", "LR", "RL"]) {
+    const ranks = ranksOf(`digraph { rankdir=${rankdir} ; a -> c ; b -> c }`);
+    expect(ranks.length).toBe(2);
+    expect([...ranks[0]!].sort()).toEqual(["a", "b"]);
+    expect(ranks[1]).toEqual(["c"]);
+  }
+});
+
+test("`positions` answers a point for every node, keyed by id", () => {
+  const positions = layout.positions(new DotReader('digraph { "a b" -> c }').points());
+  expect([...positions.keys()].sort()).toEqual(["a_b", "c"]);
 });

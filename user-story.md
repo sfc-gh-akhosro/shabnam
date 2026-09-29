@@ -48,17 +48,19 @@ Drawing is a short relay, each runner owning one leg:
 
 - The **DotReader** reads the DOT once and gives three answers: the *model*
   (who exists, who connects, who belongs), the *styles* the author wrote in DOT,
-  and a *bare graph* — nodes as sizeless points, and arrows.
-- The **DagreLayout** places the bare graph: each node gets a rank and an order
-  inside it. That is all we ask of layout.
-- The **DiagramPainter** turns model and positions into HTML — ranks of real
+  and the *points* — your own graph with everything that gives a node size cut
+  away, so every node is a point and every layout hint you wrote survives.
+- The **GraphvizLayout** hands the points to Graphviz and reads back where
+  they landed: each node gets a rank and an order inside it. That is all we
+  ask of layout.
+- The **DiagramPainter** turns model and ranks into HTML — ranks of real
   divs. The browser paints them under whatever CSS is live, we **measure** the
   real boxes, and the painter draws the SVG around them: cluster boxes, node
   shells, connectors.
 - The notes are placed on what they point at, and the script runs last.
 
 Two libraries, two walls: only `DotReader` knows the DOT parser exists, only
-`DagreLayout` knows dagre does. Replacing either is one file.
+`GraphvizLayout` knows Graphviz does. Replacing either is one file.
 
 Measuring after paint is the trick that makes CSS the boss. Put
 `font-size: 24px` on `.node` and the divs grow; the shells and connectors are

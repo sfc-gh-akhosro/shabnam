@@ -12,9 +12,20 @@ the code disagree, this file wins until we change it together.
 
 ## 0. Stack
 
-Bun (bundling and tests) · TypeScript · `@ts-graphviz/ast` · `@dagrejs/dagre` ·
-`markdown-it` · HTML · CSS. **No UI framework**: the page is vanilla DOM and
+Bun (bundling and tests) · TypeScript · `@ts-graphviz/ast` ·
+`@hpcc-js/wasm-graphviz` · `markdown-it` · HTML · CSS. **No UI framework**: the page is vanilla DOM and
 `<template>`s.
+
+**Layout is Graphviz `dot`, compiled to WebAssembly.** It replaced dagre, which
+was purged because it **does not support `rank=same`**: a numeric `rank` is
+ignored, `rank: "same"` crashes it, and a zero `minlen` throws. The workaround,
+contracting each group to one stand-in, hid the members from crossing
+minimisation, so they came out in first-mention order. example-2 had 6
+crossings under dagre and 0 under `dot`; `test/dot-layout.test.ts` holds the 0.
+What `dot` reads from 0×0 points is probed in `research-lab/layout-probe/`.
+`ts-graphviz` could not replace it: its AST package only parses and prints, and
+its adapter shells out to a `dot` binary, which a browser cannot run. The price
+is about 630 KB gzipped, loaded once at boot.
 
 Target is **Chromium**, and that is a ban on compatibility code, not a support
 matrix: no polyfills, no fallbacks, no feature detection.
@@ -32,8 +43,8 @@ first.
 |---|---|---|
 | `Diagram` | the living state: dot, style book, notes, script; `draw()`, `place()` | writes the canvas sinks |
 | `DotReader` | the only reader of DOT (walls `@ts-graphviz/ast`) | no |
-| `DagreLayout` | the only source of geometry (walls dagre) | no |
-| `DiagramPainter` | model + positions → HTML; measured boxes → SVG | no — returns strings |
+| `GraphvizLayout` | the only source of geometry (walls `@hpcc-js/wasm-graphviz`) | no |
+| `DiagramPainter` | model + ranks → HTML; measured boxes → SVG | no — returns strings |
 | `StyleBook` | the style rules and the one live CSSOM sheet | owns `#style-css` |
 | `Workbench` | the page: pieces, bindings, verbs | owns the chrome |
 
@@ -53,15 +64,15 @@ record label split (`|` cells, `{}` flips the axis), and it reads the parsed
 ```
 dot ─DotReader──┬─▶ model          who exists, connects, belongs — markup resolved
                 ├─▶ styles         appearance, at the branch written — source 1
-                └─▶ bare graph     sizeless points and arrows
+                └─▶ points         the parsed DOT, trimmed of size, printed
 styles ─▶ styleBook.add(each)
-bare graph ─DagreLayout─▶ positions: integer rank, integer order, rough x/y
-model + positions ─DiagramPainter─▶ #diagram-html
+points ─GraphvizLayout─▶ positions (x,y of 0×0 points) ─▶ ranks: NodeId[][]
+model + ranks ─DiagramPainter─▶ #diagram-html
   [browser paints] ─▶ measure boxes ─DiagramPainter─▶ cluster, shell, connector SVG
 notes ─▶ #annotation-html, placed;  script runs last
 ```
 
-- **One walk, three answers.** The parse tree never leaves `DotReader`.
+- **One parse, three answers.** The parse tree never leaves `DotReader`.
 - **An attribute is markup or appearance.** `label`, `shape`, `icon`, `caption`,
   `shell`, `style` decide what we build and are resolved down onto nodes.
   Anything in the `ATTR_CSS` registry is appearance and stays at the branch it
@@ -70,8 +81,17 @@ notes ─▶ #annotation-html, placed;  script runs last
 - **Derived styles never invent a value.** Every value traces to an attribute
   the author wrote; a bare DOT derives nothing and the theme speaks. The one
   correction: a bare number gains `px`.
-- **`rank=same`** is the one thing dagre cannot say: `DagreLayout` contracts each
-  group to one stand-in node, lays out, and expands.
+- **Layout is given the author's own graph, trimmed to points.** After the walk,
+  `DotReader` deletes every attribute in `SIZE` (labels, shape, width, height,
+  font, margin, image…) wherever it sits, puts
+  `node [shape=point width=0 height=0 label=""]` first, and prints the tree.
+  `SIZE` is a deny-list on purpose: whatever `dot` reads — `rank=max`,
+  `weight`, `minlen`, clusters, invisible edges, declaration order — reaches it
+  untouched because we never took it out. Setting points without trimming is
+  not enough: a node's own `shape=record` beats the default.
+- **Ranks come from coordinates, exactly.** 0×0 points of one rank share one
+  coordinate on the rank axis; order is the sort along the other. The x/y are
+  never painted.
 - **Measured geometry is the only size.** Neither model nor positions carry a
   width. Measuring is once per draw, not live: a reflow without a draw leaves the
   SVG where it was measured.
@@ -255,7 +275,8 @@ skeleton, the book and the document as data; the skeleton is `body`'s
 non-script children as `index.html` wrote them, captured before any piece
 filled them, so the exported page boots the same app over the same frame.
 Everything a file needs travels inside it: icons as data URIs, no remote
-references.
+references. The layout's wasm is inlined in the app bundle, so an exported
+page lays out offline; the price is about 1.6 MB per exported HTML.
 
 ---
 
@@ -266,8 +287,8 @@ src/
   index.html   skeleton + templates        index.ts   new Workbench(document.body)
   app.css      chrome only                 types.ts   the story's types
   diagram/     Diagram, files (export), notes (the marks)
-  read/        DotReader, model, styles, graph
-  layout/      DagreLayout
+  read/        DotReader, model, styles, points
+  layout/      GraphvizLayout
   paint/       DiagramPainter, framer, shaper, sheller, router, drawer, markdown
   style/       StyleBook, sheet
   ui/          topic, radios, checks, row-list, dialog-ask

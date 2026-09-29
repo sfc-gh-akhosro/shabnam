@@ -83,29 +83,14 @@ export type DotStyles = Map<Selector, Map<Property, CssValue>>;
 // answer 3 — what layout is given, and what it answers
 // ---------------------------------------------------------------------------
 
-/** No styles, no sizes, no weights — plus the two facts that are layout's. */
-export type PointGraph = {
-  rankdir: Rankdir;
-  nodes: NodeId[];
-  arrows: Arrow[];
-  /** Each group must land on one rank. */
-  sameRank: NodeId[][];
-  boxes: Map<SubgraphName, NodeId[]>;
-};
+/**
+ * The author's DOT, parsed, trimmed of everything that gives a node size, every
+ * node a 0×0 point, printed. Whatever else `dot` reads passes through (§2).
+ */
+export type PointDot = string;
 
-export type Arrow = { from: NodeId; to: NodeId };
-
-export type Placement = {
-  /** Integer, straight from layout — not bucketed from a coordinate. */
-  rank: number;
-  /** Integer, within the rank. */
-  order: number;
-  x: Px;
-  y: Px;
-};
-
-/** Keyed by id, because every caller asks "where is this one?" */
-export type Positions = Map<NodeId, Placement>;
+/** rank → order → node. `ranks[r][o]` is the o-th node of rank r. */
+export type Ranks = NodeId[][];
 
 // ---------------------------------------------------------------------------
 // the walk's record — what was written, and where (§2)
@@ -237,26 +222,30 @@ export interface Topic<T> {
 // ---------------------------------------------------------------------------
 
 /**
- * The DOT reader. One walk, three answers, and the parsed tree escapes nowhere.
+ * The DOT reader. One parse, three answers, and the parsed tree escapes nowhere.
  * One implementation: the `DotReader` class, which is the only thing that reads DOT.
  */
 export interface DotReader {
   model(): DiagramModel;
   /** The DOT's appearance, each stamped source 1. */
   styles(): Style[];
-  graph(): PointGraph;
+  /** What layout is given. */
+  points(): PointDot;
 }
 
 /**
- * The only source of geometry. One implementation: `DagreLayout`. `rank=same`
- * is served by contraction inside it, which no type above it knows about.
+ * The only source of geometry. One implementation: `GraphvizLayout`, which
+ * walls `@hpcc-js/wasm-graphviz`.
  */
-export interface DagreLayout {
-  place(graph: PointGraph): Positions;
+export interface GraphvizLayout {
+  /** `dot` on the points, as it answers: where each 0×0 point landed. */
+  positions(points: PointDot): Map<NodeId, Point>;
+  /** `positions`, grouped by the rank axis and sorted along the other. */
+  layout(points: PointDot): Ranks;
 }
 
 export interface DiagramPainter {
-  frame(model: DiagramModel, positions: Positions): string;
+  frame(model: DiagramModel, ranks: Ranks): string;
   svg(boxes: Box[], model: DiagramModel, metrics: ConnectorMetrics): SvgLayers;
 }
 

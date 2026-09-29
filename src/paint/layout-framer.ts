@@ -1,23 +1,14 @@
-// Model + positions → `#diagram-html` (§3.3). Ranks arrive as integers, so
-// framing is a group-and-emit. Size and position are the Measurer's (§3.4).
+// Model + ranks → `#diagram-html` (§2). Ranks arrive already ordered, so
+// framing is an emit. Size and position are the browser's, then measured.
 
 import type * as T from "../types.ts";
 import { shapeHtml } from "./node-shaper.ts";
 
 export class LayoutFramer {
-  frame(model: T.DiagramModel, positions: T.Positions): string {
-    const ranks = this.ranks(model, positions).map(
-      (rank) => `<div class="rank">${rank.map((node) => shapeHtml(node)).join("")}</div>`,
+  frame(model: T.DiagramModel, ranks: T.Ranks): string {
+    const html = ranks.map(
+      (rank) => `<div class="rank">${rank.map((id) => shapeHtml(model.nodes.get(id)!)).join("")}</div>`,
     );
-    return `<div class="diagram">${ranks.join("")}</div>`;
-  }
-
-  private ranks(model: T.DiagramModel, positions: T.Positions): T.DiagramNode[][] {
-    const rows: T.DiagramNode[][] = [];
-    for (const node of model.nodes.values()) {
-      const at = positions.get(node.id)!;
-      (rows[at.rank] ??= [])[at.order] = node;
-    }
-    return rows;
+    return `<div class="diagram">${html.join("")}</div>`;
   }
 }

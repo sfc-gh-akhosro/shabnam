@@ -93,7 +93,7 @@ function cluster(name: T.SubgraphName, written: T.Written): T.DiagramCluster {
   };
 }
 
-export const membersOf = (name: T.SubgraphName, written: T.Written): T.NodeId[] =>
+const membersOf = (name: T.SubgraphName, written: T.Written): T.NodeId[] =>
   [...written.members].filter(([, scopes]) => scopes.has(name)).map(([id]) => id);
 
 // Graphviz's label escapes, substituted on one already-parsed field rather than

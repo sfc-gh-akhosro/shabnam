@@ -1,7 +1,7 @@
 import { readdirSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { LayoutFramer } from "../src/paint/layout-framer.ts";
-import { DagreLayout } from "../src/layout/dagre-layout.ts";
+import { GraphvizLayout } from "../src/layout/graphviz-layout.ts";
 import { DotReader } from "../src/read/dot-reader.ts";
 import { bag } from "./bag.ts";
 import type { Note, Style } from "../src/types.ts";
@@ -34,12 +34,12 @@ const RECORD_DOT = `digraph records {
 /** A note with every field but the ones a test cares about left blank. */
 const note = (fields: Partial<Note> = {}): Note => ({ selector: "", dx: "", dy: "", class: "", text: "", ...fields });
 
-const layout = new DagreLayout();
+const layout = await GraphvizLayout.load();
 const framer = new LayoutFramer();
 
 function drawn(dot: string): string {
   const reader = new DotReader(dot);
-  return framer.frame(reader.model(), layout.place(reader.graph()));
+  return framer.frame(reader.model(), layout.layout(reader.points()));
 }
 
 describe("UI & Workbench Integration Suite", () => {

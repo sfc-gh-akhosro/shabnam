@@ -18,7 +18,7 @@
     "typescript"
   ],
   "dependencies": {
-    "@dagrejs/dagre": "^3.1.1",
+    "@hpcc-js/wasm-graphviz": "^1.29.2",
     "@ts-graphviz/ast": "^3.0.6",
     "markdown-it": "^15.0.2"
   },

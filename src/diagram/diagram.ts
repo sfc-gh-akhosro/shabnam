@@ -6,7 +6,6 @@
 // would wipe every rule the book inserted, so the sink is not in the map.
 
 import { DiagramPainter } from "../paint/diagram-painter.ts";
-import { DagreLayout } from "../layout/dagre-layout.ts";
 import { DotReader } from "../read/dot-reader.ts";
 import { StyleBook } from "../style/style-book.ts";
 import * as T from "../types.ts";
@@ -39,10 +38,10 @@ export class Diagram implements T.Diagram {
   readonly script: Topic<string>;
   /** New with the diagram and seeded from the theme: that is the reset (§5). */
   readonly styleBook = new StyleBook();
-  private layout = new DagreLayout();
   private painter = new DiagramPainter();
 
-  constructor(dot: string, script: string, notes: T.Note[], styles: T.Style[]) {
+  /** Loaded once at boot and shared by every diagram the page adopts. */
+  constructor(private readonly layout: T.GraphvizLayout, dot: string, script: string, notes: T.Note[], styles: T.Style[]) {
     this.dot = new Topic(dot);
     this.script = new Topic(script);
     this.notes = new Topic(notes);
@@ -68,7 +67,7 @@ export class Diagram implements T.Diagram {
     // typed row back off them.
     for (const style of reader.styles()) this.styleBook.add(style);
 
-    this.inject("diagram-html", this.painter.frame(model, this.layout.place(reader.graph())));
+    this.inject("diagram-html", this.painter.frame(model, this.layout.layout(reader.points())));
 
     await painted();
     const boxes = this.measure();

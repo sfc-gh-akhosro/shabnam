@@ -5,7 +5,7 @@
     "": {
       "name": "yad",
       "dependencies": {
-        "@dagrejs/dagre": "^3.1.1",
+        "@hpcc-js/wasm-graphviz": "^1.29.2",
         "@ts-graphviz/ast": "^3.0.6",
         "markdown-it": "^15.0.2",
       },
@@ -17,9 +17,7 @@
     },
   },
   "packages": {
-    "@dagrejs/dagre": ["@dagrejs/dagre@3.1.1", "", { "dependencies": { "@dagrejs/graphlib": "4.0.5" } }, "sha512-zroZB1dFOFiGgv4Xcrn1DckB1o4aOikPqD2NDQPV0WM//CXGcS6xiD0rNkqHmw6FEg4tabt4nxPLwgCWT+Vb2A=="],
-
-    "@dagrejs/graphlib": ["@dagrejs/graphlib@4.0.5", "", {}, "sha512-7xrBTqIts3o+PMUZX97wSc+7TUbW+/rULzGNCTP6yooNVDXbzw4Wutg/H/xOutTB/c/k0YqOAavgPh4/Zk9PFA=="],
+    "@hpcc-js/wasm-graphviz": ["@hpcc-js/wasm-graphviz@1.29.2", "", {}, "sha512-AkArBAZERT5OxH52/+kvCHB07cZ6ZNd9GnOvjw+S880bR88D6i27XfK6xj4dBhUDxNA2QPPMdgEcky3x4TJ3KA=="],
 
     "@ts-graphviz/ast": ["@ts-graphviz/ast@3.0.6", "", { "dependencies": { "@ts-graphviz/common": "^3.0.5" } }, "sha512-9QOBQFanq0n7Ju9opTURHSvqXOqzHkplls3kkD6veWXNuJwaH8lzZUIEksU4i2gjAjRi+RafQWSWATZDKCCt8g=="],
 

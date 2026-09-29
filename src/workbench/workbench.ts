@@ -79,8 +79,10 @@ export class Workbench {
   #noteTab: NoteTab;
   #dot: HTMLTextAreaElement;
   #script: HTMLTextAreaElement;
+  #layout: T.GraphvizLayout;
 
-  constructor(body: HTMLElement) {
+  constructor(body: HTMLElement, layout: T.GraphvizLayout) {
+    this.#layout = layout;
     this.skeleton = [...body.children].filter((el) => el.tagName !== "SCRIPT").map((el) => el.outerHTML).join("\n");
     const $ = <E extends Element>(selector: string) => body.querySelector<E>(selector)!;
     this.picker = $("main > nav > input[type=file]");
@@ -102,7 +104,7 @@ export class Workbench {
     document.head.append(Object.assign(document.createElement("link"), { rel: "icon", href: LOGO_URI }));
 
     const seed = seeded();
-    this.#adopt(new Diagram(seed.dot, seed.script, seed.notes, documentStyles(seed.styles)));
+    this.#adopt(new Diagram(this.#layout, seed.dot, seed.script, seed.notes, documentStyles(seed.styles)));
     this.draw();
   }
 
@@ -122,7 +124,7 @@ export class Workbench {
 
   async #open(): Promise<void> {
     const old = this.diagram;
-    this.#adopt(new Diagram(await this.picker.files![0]!.text(), old.script.value, old.notes.value, []));
+    this.#adopt(new Diagram(this.#layout, await this.picker.files![0]!.text(), old.script.value, old.notes.value, []));
     this.picker.value = "";
     this.draw();
   }

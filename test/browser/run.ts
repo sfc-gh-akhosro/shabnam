@@ -53,7 +53,10 @@ const server = Bun.serve({
       return script({ entrypoints: [`${ROOT}test/browser/checks.ts`], target: "browser", format: "esm" });
     }
     const path = pathname === "/app.css" ? "/src/app.css" : pathname;
-    return new Response(Bun.file(`${ROOT}${path.slice(1)}`));
+    // Chrome asks for `/favicon.ico` while the page waits on the layout's
+    // wasm, before the workbench sets its own icon. A missing file is a 404.
+    const file = Bun.file(`${ROOT}${path.slice(1)}`);
+    return file.exists().then((here) => new Response(here ? file : null, { status: here ? 200 : 404 }));
   },
 });
 

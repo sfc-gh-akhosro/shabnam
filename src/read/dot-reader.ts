@@ -1,20 +1,35 @@
 // The only DOT reader (§2).
 //
 // `@ts-graphviz/ast` is visible here and nowhere else. One walk records what was
-// written and where (`Written`); the three answers are pure readings of that
-// record, which is why they can disagree about resolution.
+// written and where (`Written`); the model and styles are pure readings of that
+// record, which is why they can disagree about resolution. The points are the
+// same tree afterwards, trimmed and printed (§2).
 
-import { parse } from "@ts-graphviz/ast";
+import { parse, stringify } from "@ts-graphviz/ast";
 import * as T from "../types.ts";
 import { buildModel } from "./model.ts";
 import { buildStyles } from "./styles.ts";
-import { buildGraph } from "./graph.ts";
 
 /** A DOT name, made safe to use as an id. Nothing more is owed to a typo (§3.1). */
-const idOf = (name: string): T.NodeId => name.replace(/ /g, "_");
+export const idOf = (name: string): T.NodeId => name.replace(/ /g, "_");
+
+/**
+ * Attributes that only give a node, a label or a cluster title a size. A
+ * deny-list on purpose: whatever `dot` reads to rank and order survives because
+ * nobody took it out.
+ */
+const SIZE = new Set([
+  "label", "xlabel", "headlabel", "taillabel",
+  "shape", "width", "height", "fixedsize", "margin", "peripheries", "sides", "regular",
+  "fontsize", "fontname", "image",
+]);
+
+/** First in the root: every node a point, since the trim removed anything that said otherwise. */
+const POINTS = `node [shape=point width=0 height=0 label=""]`;
 
 export class DotReader implements T.DotReader {
   private readonly written: T.Written;
+  private readonly pointDot: T.PointDot;
   private anonymous = 0;
   /** `tail_head`, then `_2`, `_3` … so parallel edges keep separate ids (§3.1). */
   private readonly drawn = new Map<string, number>();
@@ -29,9 +44,11 @@ export class DotReader implements T.DotReader {
       nodes: [],
       edges: [],
     };
-    const root = (parse(dot) as any).children.find((child: any) => child.type === "Graph");
+    const tree = parse(dot) as any;
+    const root = tree.children.find((child: any) => child.type === "Graph");
     this.walk(root, []);
     this.written.rankdir = (this.written.scopes.get("")?.get("rankdir") ?? "TB") as T.Rankdir;
+    this.pointDot = pointsOf(tree, root);
   }
 
   model(): T.DiagramModel {
@@ -44,8 +61,8 @@ export class DotReader implements T.DotReader {
     );
   }
 
-  graph(): T.PointGraph {
-    return buildGraph(this.written);
+  points(): T.PointDot {
+    return this.pointDot;
   }
 
   // --- the walk -----------------------------------------------------------
@@ -113,6 +130,23 @@ export class DotReader implements T.DotReader {
     if (!this.written.members.has(id)) this.written.members.set(id, new Set());
     for (const name of at) this.written.members.get(id)!.add(name);
   }
+}
+
+// --- the points: the walked tree, trimmed and printed -----------------------
+
+// The walk is done and kept only strings, so the tree is free to cut.
+function pointsOf(tree: any, root: any): T.PointDot {
+  trim(root);
+  const points = (parse(`digraph { ${POINTS} }`) as any).children[0].children[0];
+  root.children.unshift(points);
+  return stringify(tree);
+}
+
+function trim(branch: any): void {
+  branch.children = branch.children.filter(
+    (child: any) => !(child.type === "Attribute" && SIZE.has(child.key.value)),
+  );
+  for (const child of branch.children) trim(child);
 }
 
 // --- reading the library's shapes, in one place ----------------------------

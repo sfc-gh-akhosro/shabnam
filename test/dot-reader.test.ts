@@ -186,32 +186,29 @@ test("a diagram of pure markup derives no appearance at all", () => {
   expect([...bag(one.styles()).keys()]).toEqual([]);
 });
 
-// --- the point graph: everything layout does not need is gone --------------
+// --- the points: the author's graph, trimmed of size ------------------------
 
-test("layout is given ids and arrows, and no attribute of any kind", () => {
-  const graph = one.graph();
-  expect(graph.rankdir).toBe("LR");
-  expect(graph.nodes).toContain("lake");
-  expect(graph.arrows.every((arrow) => Object.keys(arrow).sort().join() === "from,to")).toBe(true);
+test("the points keep no attribute that gives a node size", () => {
+  const points = two.points();
+  // The one `label` left is the point default's own `label = ""`.
+  for (const cut of ["Google Cloud Storage", "record", "fontsize", "xlabel", "bidirectional"]) {
+    expect(points).not.toContain(cut);
+  }
+  expect(points.match(/label/g)).toHaveLength(1);
 });
 
-test("`rank=same` arrives as member lists, and a group of one is not a group", () => {
-  expect(two.graph().sameRank).toEqual([
-    ["bq", "geap", "gcs"],
-    ["runtime", "horizon"],
-    ["engine", "connectors", "analyst"],
-    ["ge", "gcp", "spcs", "agents", "ml"],
-  ]);
-  expect(new DotReader("digraph { subgraph { rank=same ; a } }").graph().sameRank).toEqual([]);
+test("the points open with every node a 0×0 point", () => {
+  expect(two.points()).toMatch(/^digraph[^{]*\{\s*node \[\s*shape = point/);
 });
 
-test("a cluster is boxed, unless contraction is already holding its members", () => {
-  expect([...one.graph().boxes.keys()]).toEqual([
-    "cluster_sources",
-    "cluster_platform",
-    "cluster_consumer",
-  ]);
-  // Both of example-2's clusters ask for `rank=same`, so boxing them as well
-  // would constrain the same nodes twice.
-  expect([...two.graph().boxes.keys()]).toEqual([]);
+test("the points keep what layout reads: rank, weight, constraint, style, subgraphs", () => {
+  const points = two.points();
+  for (const kept of ["rank = same", "weight = 100", "constraint = false", "style = invis", "cluster_a", "rankdir = LR"]) {
+    expect(points).toContain(kept);
+  }
+});
+
+test("the trim leaves the model and styles whole", () => {
+  expect(two.model().nodes.get("gcs")!.shape).toBe("record");
+  expect(two.model().nodes.get("gcs")!.label).toContain("Google Cloud Storage");
 });
