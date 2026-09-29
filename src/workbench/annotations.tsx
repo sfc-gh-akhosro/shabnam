@@ -24,7 +24,7 @@
 // never reach `querySelectorAll`, which throws on one it cannot parse.
 
 import { Index } from "solid-js";
-import { renderAnnotation } from "../paint/markdown.ts";
+import { placed } from "../diagram/notes.ts";
 import type * as T from "../types.ts";
 
 /** Minted so a row can be pointed at. Live-DOM only, like a rule's id. */
@@ -57,17 +57,6 @@ export function loadAnnotations(saved: unknown): T.Annotation[] {
   return ready((saved as Partial<T.Annotation>[]).map((one) => annotation(one)));
 }
 
-/**
- * A row reaches the sink only when **selector and text both say something**.
- *
- * The same gate a style row gets, and for a sharper reason: `querySelectorAll("")`
- * throws `SyntaxError`, so a half-filled row would take the app down on the next
- * `place()`. A mark with no text is invisible anyway.
- */
-function placed(one: T.Annotation): boolean {
-  return one.selector !== "" && one.text !== "";
-}
-
 /** The list always ends with an untouched blank, so a mark is added by typing.
  *  Seeding goes through it too — the blank is how the tab invites the first row,
  *  and a list that only grew one after its first edit would not. */
@@ -75,33 +64,6 @@ function ready(list: T.Annotation[]): T.Annotation[] {
   const last = list[list.length - 1];
   if (last !== undefined && !placed(last)) return list;
   return [...list, annotation()];
-}
-
-/** The list → `#annotation-html`. The one direction there is. */
-export function annotationHtml(list: T.Annotation[]): string {
-  return list.filter(placed).map(mark).join("\n");
-}
-
-// `--dx` / `--dy` are omitted when blank, so the theme's `var(--dx, 0px)` default
-// applies rather than an empty declaration CSS would drop anyway. A `div`, not a
-// `span`: `position: absolute` makes display moot and the theme already says div.
-function mark(one: T.Annotation): string {
-  const offset = [["--dx", one.dx], ["--dy", one.dy]]
-    .filter(([, value]) => value !== "")
-    .map(([name, value]) => `${name}: ${value}`)
-    .join("; ");
-  return (
-    `<div data-selector="${attr(one.selector)}"` +
-    (one.class === "" ? "" : ` class="${attr(one.class)}"`) +
-    (offset === "" ? "" : ` style="${attr(offset)}"`) +
-    `>${renderAnnotation(one.text)}</div>`
-  );
-}
-
-// How text enters an attribute, not a guard: a selector holds quotes as a matter
-// of course — `[data-kind="x"]` — and `&` is an entity opener wherever it lands.
-function attr(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
 type Field = "selector" | "dx" | "dy" | "class" | "text";
@@ -120,19 +82,14 @@ const FIELD: Array<[field: Field, hook: string, placeholder: string]> = [
 
 type AnnotationsProps = {
   list: T.Annotation[];
-  /** Replaces the list. The store is the model, so this is the only writer. */
+  /** Publishes the list. The diagram re-places its marks on that, with no draw. */
   setList: (list: T.Annotation[]) => void;
-  /** Re-derive the sink and re-anchor. The short path — no redraw (§5). */
-  annotate: () => void;
 };
 
 export function Annotations(props: AnnotationsProps) {
   // `ready` on the way out of every edit: filling the waiting blank is what puts
   // the next one there, so the end of the list is never occupied for long.
-  const commit = (list: T.Annotation[]) => {
-    props.setList(ready(list));
-    props.annotate();
-  };
+  const commit = (list: T.Annotation[]) => props.setList(ready(list));
 
   const write = (at: number, field: Field, value: string) =>
     commit(props.list.map((one, i) => (i === at ? { ...one, [field]: value } : one)));

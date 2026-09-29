@@ -183,8 +183,6 @@ export type TabId = "dot" | "styles" | "annotation" | "action";
 /** The two text tabs. The two rows tabs are absent on purpose (§4). */
 export type TabText = Record<"dot" | "action", string>;
 
-export type SetTab = (tab: keyof TabText, text: string) => void;
-
 /**
  * One annotation, as its row holds it — and the row is the model (§4.2). An
  * **ordered list**, not a map keyed by selector: two marks may point at the
@@ -268,14 +266,15 @@ export interface StyleBook {
   readonly changed: Topic<number>;
 }
 
-export interface Workbench {
-  redraw(): Promise<void>;
-  inject(sink: string, text: string): void;
-  measure(): Box[];
-  /** Rows → sink → `place()`. A short path: no parse, no frame, and no
-   *  waiting for a paint, so it cannot interleave with the conductor (§5). */
-  annotate(): void;
-  /** Publish `--anchor-x` / `--anchor-y` onto every mark. CSS spends them. */
+/** The living state: what you wrote, and how it draws itself. */
+export interface Diagram {
+  readonly dot: Topic<string>;
+  readonly styleBook: StyleBook;
+  readonly notes: Topic<Annotation[]>;
+  readonly script: Topic<string>;
+  draw(): Promise<void>;
+  /** Notes → sink → anchors. A short path: no parse, no frame, and no
+   *  waiting for a paint, so it cannot interleave with a draw. */
   place(): void;
 }
 
@@ -288,14 +287,6 @@ export type PictureOptions = {
   /** PNG only — an SVG carries no resolution to scale. */
   scale: number;
 };
-
-export interface Files {
-  loadDot(text: string): void;
-  saveDot(): string;
-  exportHtml(): Promise<string>;
-  /** The painted canvas as a standalone picture (§4.3), as the options ask. */
-  exportPicture(options: PictureOptions): Promise<Blob>;
-}
 
 // ---------------------------------------------------------------------------
 // registry shapes — live with the workers that consult them

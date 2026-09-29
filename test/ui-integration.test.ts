@@ -7,7 +7,8 @@ import { bag } from "./bag.ts";
 import type { Annotation, Style, TabText } from "../src/types.ts";
 import { SOURCE } from "../src/types.ts";
 import { asFile } from "../src/style/book.ts";
-import { annotation, annotationHtml } from "../src/workbench/annotations.tsx";
+import { annotationHtml } from "../src/diagram/notes.ts";
+import { annotation } from "../src/workbench/annotations.tsx";
 import basicTheme from "../theme/basic-theme.json";
 
 const BARE_BONE_DOT = `digraph barebone {

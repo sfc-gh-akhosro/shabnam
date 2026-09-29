@@ -3,12 +3,12 @@
 // view onto its own model, so they render `Rows` and `Annotations` instead.
 //
 // The textarea is the whole coding window: no highlighting, no completion, no
-// caret of ours. Only the ids the engine's sinks and the export need survive
+// caret of ours. Only the ids the diagram's sinks and the export need survive
 // here; everything the CSS wants, it reaches by element and position.
 //
 // The shell is `main` (toolbar + diagram) beside `aside` (the tabs), both direct
 // children of `body`, so neither needs a hook of its own. The ids that remain are
-// the sinks the engine writes and the one positioned ancestor the coordinate
+// the sinks the diagram writes and the one positioned ancestor the coordinate
 // contract names (§3.4) — and every one of them is two hyphenated words, because
 // a bare word is a name a DOT node can also have (§3.1).
 //
@@ -19,14 +19,12 @@
 // DOM and a strip at main's right edge brings it back, unless Freeze is checked.
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
-import { createStore } from "solid-js/store";
+import { Diagram } from "../diagram/diagram.ts";
+import { download, exportHtml, exportPicture } from "../diagram/files.ts";
 import { asDocument, documentStyles } from "../style/book.ts";
-import { StyleBook } from "../style/style-book.ts";
 import type { Annotation, StyleDocument, StyleFile, TabId, TabText } from "../types.ts";
 import { Annotations, loadAnnotations, starterAnnotations } from "./annotations.tsx";
-import { Engine } from "./engine.ts";
 import { Rows } from "./rows.tsx";
-import { download, Files } from "./files.ts";
 import { ExportDialog, showExportDialog } from "./export-dialog.tsx";
 import { type Command, commandOf } from "./keys.ts";
 import { TAB_IDS, Tabs } from "./tabs.tsx";
@@ -72,36 +70,44 @@ function seeded(): { text: TabText; styles: StyleFile | StyleDocument; annotatio
 
 export function Workbench() {
   const seed = seeded();
-  const [text, setText] = createStore<TabText>(seed.text);
-  // The list is the model (§4), and a store so the engine can read it at the
-  // moment it derives the sink — the same arrangement `text` has.
-  const [annotations, setAnnotations] = createStore<Annotation[]>(seed.annotations);
+  // The panes mirror the diagram's topics until the vanilla workbench binds
+  // them directly. Made on mount, when `#style-css` exists, and made again by
+  // Open DOT: a new diagram, with a new book seeded from the theme, is the reset.
+  const [diagram, setDiagram] = createSignal<Diagram>();
+  const [text, setText] = createSignal<TabText>(seed.text);
+  const [notes, setNotes] = createSignal<Annotation[]>(seed.annotations);
   const [active, setActive] = createSignal<TabId>("dot");
   const [stamp, setStamp] = createSignal(0);
   const [frozen, setFrozen] = createSignal(true);
   const [isAsideHidden, setAsideHidden] = createSignal(false);
-  // Made on mount, when `#style-css` exists, and made again by Load DOT: a new
-  // book seeded from the theme is the reset.
-  const [styleBook, setStyleBook] = createSignal<StyleBook>();
-  const engine = new Engine(text, () => styleBook()!, annotations);
-  const files = new Files(text, (tab, value) => setText(tab, value), () => styleBook()!, annotations);
   let dotPicker!: HTMLInputElement;
+
+  const adopt = (next: Diagram) => {
+    next.dot.sub((dot) => setText({ ...text(), dot }));
+    next.script.sub((action) => setText({ ...text(), action }));
+    next.notes.sub(setNotes);
+    setText({ dot: next.dot.value, action: next.script.value });
+    setNotes(next.notes.value);
+    setDiagram(next);
+  };
+
+  const topic = (tab: keyof TabText) => (tab === "dot" ? diagram()!.dot : diagram()!.script);
 
   // The stamp tells the styles tab that the book has taken the DOT's rules.
   const redraw = async () => {
-    await engine.redraw();
+    await diagram()!.draw();
     setStamp(stamp() + 1);
   };
 
   const loadDot = async (input: HTMLInputElement) => {
-    files.loadDot(await input.files![0]!.text());
-    setStyleBook(new StyleBook());
+    const old = diagram()!;
+    adopt(new Diagram(await input.files![0]!.text(), old.script.value, old.notes.value, []));
     input.value = "";
     redraw();
   };
 
   const saveStyles = () =>
-    download("style-rules.json", JSON.stringify(asDocument(styleBook()!.styles()), null, 2), "application/json");
+    download("style-rules.json", JSON.stringify(asDocument(diagram()!.styleBook.styles()), null, 2), "application/json");
 
   // The Freeze checkbox pins the aside: while it is checked, neither the click
   // on the canvas nor the hover on the strip may change it.
@@ -111,9 +117,9 @@ export function Workbench() {
   const commands: Record<Command, () => void> = {
     redraw,
     "load-dot": () => dotPicker.click(),
-    "save-dot": () => download("diagram.dot", files.saveDot(), "text/vnd.graphviz"),
+    "save-dot": () => download("diagram.dot", diagram()!.dot.value, "text/vnd.graphviz"),
     "export-picture": () => showExportDialog(),
-    "export-html": async () => download("diagram.html", await files.exportHtml(), "text/html"),
+    "export-html": async () => download("diagram.html", await exportHtml(diagram()!), "text/html"),
     "tab-1": () => setActive(TAB_IDS[0]!),
     "tab-2": () => setActive(TAB_IDS[1]!),
     "tab-3": () => setActive(TAB_IDS[2]!),
@@ -124,9 +130,7 @@ export function Workbench() {
     favicon();
     // The theme is the floor of the book; a saved document or an export seed
     // then lays its own entries over it, each at the source it was saved with.
-    const book = new StyleBook();
-    for (const style of documentStyles(seed.styles)) book.add(style);
-    setStyleBook(book);
+    adopt(new Diagram(seed.text.dot, seed.text.action, seed.annotations, documentStyles(seed.styles)));
     redraw();
     const onKey = (event: KeyboardEvent) => {
       const command = commandOf(event);
@@ -149,7 +153,7 @@ export function Workbench() {
           <button title="Cmd/Ctrl+S" onClick={commands["save-dot"]}>Save DOT</button>
           <ExportDialog
             onExport={async (options, type, name) =>
-              download(name, await files.exportPicture(options), type)
+              download(name, await exportPicture(options), type)
             }
           />
           <button title="Cmd/Ctrl+E" onClick={commands["export-html"]}>Export HTML</button>
@@ -186,24 +190,20 @@ export function Workbench() {
         </Show>
       </main>
 
-      <Show when={!isAsideHidden()}>
+      <Show when={!isAsideHidden() && diagram()}>
         <aside>
           <Tabs active={active()} setActive={setActive} />
           <Show when={active() === "styles"}>
-            <Rows styleBook={styleBook()!} stamp={stamp()} />
+            <Rows styleBook={diagram()!.styleBook} stamp={stamp()} />
           </Show>
           <Show when={active() === "annotation"}>
-            <Annotations
-              list={annotations}
-              setList={(list) => setAnnotations(list)}
-              annotate={() => engine.annotate()}
-            />
+            <Annotations list={notes()} setList={(list) => diagram()!.notes.pub(list)} />
           </Show>
           <Show when={textTab(active())} keyed>
             {(tab) => (
               <textarea
-                value={text[tab]}
-                onInput={(event) => setText(tab, event.currentTarget.value)}
+                value={text()[tab]}
+                onInput={(event) => topic(tab).pub(event.currentTarget.value)}
               />
             )}
           </Show>

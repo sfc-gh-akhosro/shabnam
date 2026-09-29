@@ -24,7 +24,7 @@ type Report = { results: { name: string; ok: boolean; detail: string }[]; errors
 
 // Console and uncaught errors are collected before the app loads, so a check can
 // assert on them. The two modules are ordered: the app mounts, the checks wait.
-// The two ids `Files` reaches for are real ids in `src/index.html` — the picture
+// The two ids the file verbs reach for are real ids in `src/index.html` — the picture
 // export inlines the stylesheet and Export HTML inlines the bundle — so the
 // harness page has to carry them too, or the export verbs find nothing.
 const PAGE = `<!doctype html>
@@ -74,7 +74,7 @@ const chrome = Bun.spawn(
     "--disable-gpu",
     "--no-first-run",
     "--window-size=1440,900",
-    // The engine waits one `requestAnimationFrame` before it measures (§3.4), and
+    // The diagram waits one `requestAnimationFrame` before it measures (§3.4), and
     // under a virtual clock a frame is not guaranteed to happen at all — so that
     // await could hang, the SVG layer would never be injected, and the run died
     // in `mounted()` with no report. This is the flag that makes Chrome finish a

@@ -24,16 +24,13 @@ and a commit. The app works at the end of every session.
   Session 6.
 - Session 4: `read/` (`DotReader`, `model`, `styles`, `graph`), `layout/`
   (`DagreLayout`), `paint/` (`DiagramPainter` + workers). The engine holds a
-  `painter`; `diagram/` is free for Session 5's `Diagram`.
-
-## Session 5 — Diagram: the living state that draws itself
-
-- `src/diagram/diagram.ts`: `Diagram` holds `dot`, `notes` and `script` as
-  topics, plus a `styleBook`. `draw()` absorbs `Engine.redraw`, and `place()`
-  re-anchors the notes. `files.ts` moves here. Open DOT makes a new `Diagram`.
-- `engine.ts` is deleted. The Solid workbench calls `diagram.draw()` so the
-  app keeps running.
-- Done when: draw, open, save and all exports work, and tests are green.
+  `painter`.
+- Session 5: `diagram/` — `Diagram` (topics `dot`, `notes`, `script`, plus
+  `styleBook`; `draw()`, `place()`), `files.ts` as plain functions over a
+  diagram, `notes.ts` for the marks. The diagram subscribes to its own
+  `notes`, so a note edit is just `diagram.notes.pub(list)`. Open keeps the
+  script and notes and makes a new `Diagram`. The Solid workbench mirrors the
+  topics into signals (`adopt`); that goes with Solid in Session 6.
 
 ## Session 6 — Workbench, vanilla
 

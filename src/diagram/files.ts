@@ -1,36 +1,21 @@
-// File verbs: DOT load/save, export HTML, and the picture snapshot (§4.1).
+// File verbs over a diagram: export HTML and the picture snapshot (§7). Opening
+// a DOT is not here — it makes a new `Diagram`, and files never touch a pane.
 
 import { asFile } from "../style/book.ts";
 import { serialize } from "../style/sheet.ts";
-import type { StyleBook } from "../style/style-book.ts";
 import type * as T from "../types.ts";
+import type { Diagram } from "./diagram.ts";
 
-export class Files implements T.Files {
-  constructor(
-    private text: T.TabText,
-    private setTab: T.SetTab,
-    private styleBook: () => StyleBook,
-    private annotations: T.Annotation[],
-  ) {}
+export async function exportHtml(diagram: Diagram): Promise<string> {
+  const [css, app] = await Promise.all([asset("app-css"), asset("app-js")]);
+  return page(css, app, seed(diagram));
+}
 
-  loadDot(dot: string): void {
-    this.setTab("dot", dot);
-  }
-
-  saveDot(): string {
-    return this.text.dot;
-  }
-
-  async exportHtml(): Promise<string> {
-    const [css, app] = await Promise.all([asset("app-css"), asset("app-js")]);
-    return page(css, app, seed(this.text, asFile(this.styleBook().styles()), this.annotations));
-  }
-
-  async exportPicture(options: T.PictureOptions): Promise<Blob> {
-    const svg = snapshot(options.transparent);
-    if (options.format === "svg") return new Blob([svg], { type: "image/svg+xml" });
-    return raster(svg, options.scale);
-  }
+/** The painted canvas as a standalone picture, as the options ask. */
+export async function exportPicture(options: T.PictureOptions): Promise<Blob> {
+  const svg = snapshot(options.transparent);
+  if (options.format === "svg") return new Blob([svg], { type: "image/svg+xml" });
+  return raster(svg, options.scale);
 }
 
 /**
@@ -112,8 +97,10 @@ function decode(base64: string): string {
 /** The seed the exported page boots from: both text tabs, the whole book, and the
  *  annotation list. The list travels, not the marks — the rows are the model, and
  *  the exported page derives its own HTML from them exactly as this one does. */
-function seed(text: T.TabText, styles: T.StyleFile, annotations: T.Annotation[]): string {
-  return JSON.stringify({ ...text, styles, annotations }).replace(/</g, "\\u003c");
+function seed(diagram: Diagram): string {
+  const text: T.TabText = { dot: diagram.dot.value, action: diagram.script.value };
+  const styles = asFile(diagram.styleBook.styles());
+  return JSON.stringify({ ...text, styles, annotations: diagram.notes.value }).replace(/</g, "\\u003c");
 }
 
 function page(css: string, app: string, json: string): string {

@@ -8,9 +8,9 @@ the code disagree, this file wins until we change it together.
 > **Migration in progress.** This describes the redesign approved in
 > `research-lab/ui-redesign/design-story.md`. The code reaches it through the
 > sessions in `current-task.md`. Landed: `style/` (`StyleBook`), `ui/topic.ts`,
-> and the `read/`, `layout/`, `paint/` packages. Still old: `DiagramPainter`
-> lives in `paint/` with no `diagram/` package yet, the workbench is SolidJS,
-> and `workbench/engine.ts` does what `Diagram.draw()` will.
+> the `read/`, `layout/`, `paint/` packages, and `diagram/` (`Diagram`, files,
+> and `notes.ts`, the notes → marks renderer). Still old: the workbench is
+> SolidJS and mirrors the diagram's topics into signals.
 
 ---
 
@@ -254,7 +254,7 @@ URIs, no remote references.
 src/
   index.html   skeleton + templates        index.ts   new Workbench(document.body)
   app.css      chrome only                 types.ts   the story's types
-  diagram/     Diagram, files (open, save, export)
+  diagram/     Diagram, files (export), notes (the marks)
   read/        DotReader, model, styles, graph
   layout/      DagreLayout
   paint/       DiagramPainter, framer, shaper, sheller, router, drawer, markdown

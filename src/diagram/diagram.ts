@@ -1,4 +1,5 @@
-// Workbench runtime: redraw, sinks, measure, annotate, place.
+// The diagram: the living state of the page. It holds the DOT, the style book,
+// the notes and the script, and draws itself into `#diagram-canvas`.
 //
 // The style sink is not here. `#style-css` belongs to the `StyleBook`,
 // which drives it through CSSOM — writing its `textContent` from `inject`
@@ -7,9 +8,10 @@
 import { DiagramPainter } from "../paint/diagram-painter.ts";
 import { DagreLayout } from "../layout/dagre-layout.ts";
 import { DotReader } from "../read/dot-reader.ts";
-import type { StyleBook } from "../style/style-book.ts";
+import { StyleBook } from "../style/style-book.ts";
 import * as T from "../types.ts";
-import { annotationHtml } from "./annotations.tsx";
+import { Topic } from "../ui/topic.ts";
+import { annotationHtml } from "./notes.ts";
 
 const asHtml = (element: Element, text: string) => {
   element.innerHTML = text;
@@ -31,22 +33,30 @@ const SINK_WRITE = new Map<string, (element: Element, text: string) => void>([
   ["action-js", asScript],
 ]);
 
-export class Engine implements T.Workbench {
+export class Diagram implements T.Diagram {
+  readonly dot: Topic<string>;
+  readonly notes: Topic<T.Annotation[]>;
+  readonly script: Topic<string>;
+  /** New with the diagram and seeded from the theme: that is the reset (§5). */
+  readonly styleBook = new StyleBook();
   private layout = new DagreLayout();
   private painter = new DiagramPainter();
 
-  constructor(
-    private text: T.TabText,
-    private styleBook: () => StyleBook,
-    private annotations: T.Annotation[],
-  ) {}
+  constructor(dot: string, script: string, notes: T.Annotation[], styles: T.Style[]) {
+    this.dot = new Topic(dot);
+    this.script = new Topic(script);
+    this.notes = new Topic(notes);
+    for (const style of styles) this.styleBook.add(style);
+    // A note edit re-places the marks; it never draws.
+    this.notes.sub(() => this.place());
+  }
 
-  async redraw(): Promise<void> {
+  async draw(): Promise<void> {
     let reader: DotReader;
     try {
-      reader = new DotReader(this.text.dot);
+      reader = new DotReader(this.dot.value);
     } catch (error) {
-      // The one sanctioned catch (§5): malformed DOT is what you have after
+      // The one sanctioned catch (§2): malformed DOT is what you have after
       // most edits. `alert` is the message; the last picture is whatever is
       // still in the sinks. Nothing else here is allowed a catch.
       alert(error instanceof Error ? error.message : String(error));
@@ -54,9 +64,9 @@ export class Engine implements T.Workbench {
     }
     const model = reader.model();
     // The book is kept, not flushed. The DOT's styles arrive at source 1 and are
-    // refused wherever the user has written at 2, so a redraw cannot take a
+    // refused wherever the user has written at 2, so a draw cannot take a
     // typed row back off them.
-    for (const style of reader.styles()) this.styleBook().add(style);
+    for (const style of reader.styles()) this.styleBook.add(style);
 
     this.inject("diagram-html", this.painter.frame(model, this.layout.place(reader.graph())));
 
@@ -65,37 +75,16 @@ export class Engine implements T.Workbench {
     this.inject("cluster-shells", this.painter.clusters(boxes, model));
     this.inject("node-shells", this.painter.shells(boxes, model));
     this.inject("connector-paths", this.painter.connectors(boxes, model, this.metrics()));
-    this.annotate();
-    this.inject("action-js", this.text.action);
-  }
-
-  // The short path, and the same shape as a style row's (§5): the rows are the
-  // model, so re-deriving the sink and re-anchoring is all an edit needs. No
-  // parse, no frame, and no `await` — `place()` measures with
-  // `getBoundingClientRect`, which lays out synchronously, so nothing here can
-  // interleave with the conductor.
-  annotate(): void {
-    this.inject("annotation-html", annotationHtml(this.annotations));
     this.place();
+    this.inject("action-js", this.script.value);
   }
 
-  inject(sink: string, text: string): void {
-    const write = SINK_WRITE.get(sink)!;
-    write(document.getElementById(sink)!, text);
-  }
-
-  measure(): T.Box[] {
-    const nodes = document.querySelectorAll<HTMLElement>("#diagram-html .rank > [id]");
-    return [...nodes].map((node) => ({
-      id: node.id,
-      left: node.offsetLeft,
-      top: node.offsetTop,
-      width: node.offsetWidth,
-      height: node.offsetHeight,
-    }));
-  }
-
+  // The short path: the notes are the model, so re-deriving the sink and
+  // re-anchoring is all an edit needs. No parse, no frame, and no `await` —
+  // `getBoundingClientRect` lays out synchronously, so nothing here can
+  // interleave with a draw.
   place(): void {
+    this.inject("annotation-html", annotationHtml(this.notes.value));
     const layer = document.getElementById("annotation-html")!;
     const origin = layer.getBoundingClientRect();
     for (const mark of layer.querySelectorAll<HTMLElement>("[data-selector]")) {
@@ -109,6 +98,22 @@ export class Engine implements T.Workbench {
       mark.style.setProperty("--anchor-x", `${at.x - origin.left}px`);
       mark.style.setProperty("--anchor-y", `${at.y - origin.top}px`);
     }
+  }
+
+  private inject(sink: string, text: string): void {
+    const write = SINK_WRITE.get(sink)!;
+    write(document.getElementById(sink)!, text);
+  }
+
+  private measure(): T.Box[] {
+    const nodes = document.querySelectorAll<HTMLElement>("#diagram-html .rank > [id]");
+    return [...nodes].map((node) => ({
+      id: node.id,
+      left: node.offsetLeft,
+      top: node.offsetTop,
+      width: node.offsetWidth,
+      height: node.offsetHeight,
+    }));
   }
 
   // The other half of measuring: the two numbers the router needs are CSS, and a
