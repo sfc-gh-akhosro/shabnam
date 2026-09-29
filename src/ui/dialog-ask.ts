@@ -3,9 +3,9 @@
 // anything else (Cancel, Escape) is undefined. The browser owns focus,
 // backdrop and Escape.
 
-import type * as UI from "./types.ts";
+import type * as T from "../types.ts";
 
-export class DialogAsk<A> implements UI.DialogAsk<A> {
+export class DialogAsk<A> implements T.DialogAsk<A> {
   constructor(readonly el: HTMLDialogElement, private readonly read: (form: HTMLFormElement) => A) {}
 
   ask(): Promise<A | undefined> {

@@ -1,17 +1,17 @@
-/* Workbench chrome only. The diagram's own styling is derived Base CSS plus the
-   user's My Style, which land in the canvas sinks — never here.
+/* Workbench chrome only. The diagram's own styling is the StyleBook's, and lands
+   in `#style-css` — never here.
 
-   Tokens, then the skeleton. Everything is reached by element and position, so
-   the markup carries almost no hooks: the ids below are the sinks the diagram
-   writes and the coordinate contract, and the only classes are `.rows`/`.row`
-   and the three box names from the styles-tab prototype. `@apply` is a StyleBook feature, not real CSS, so a rule that wants a core
-   class copies its properties.
+   Tokens, then the skeleton by element and position, then the four surfaces,
+   then one block per piece. A hook exists for layout, a sink the diagram
+   writes, or a state a test drives — never decoration. Every id is two
+   hyphenated words: a DOT node keeps its own name as its id, so a bare `#app`
+   is a collision waiting for a node called `app`.
 
-   Every id here is two hyphenated words, and that is not a style preference: a
-   DOT node keeps its own name as its id (§3.1), so a bare `#app` or `#canvas`
-   is a live collision waiting for a node called `app`. The two structural boxes
-   carry no id at all — `body > main` and `body > aside` reach them; the small
-   chrome that CSS has to position by name (`#freeze`, `#hover-zone`) does. */
+   `.row .col .paper .glass` are also the theme's mixins. The style book never
+   feeds a mixin to the sheet on its own, so restyling the diagram's `.row`
+   cannot move the chrome's. */
+
+/* --- tokens ---------------------------------------------------------------- */
 
 body {
   --theme-color: white;
@@ -38,6 +38,8 @@ body {
   --glass-background: color-mix(in srgb, var(--theme-color) 30%, transparent);
 }
 
+/* --- skeleton -------------------------------------------------------------- */
+
 * {
   box-sizing: border-box;
 }
@@ -46,18 +48,13 @@ body {
   margin: 0;
   font-family: var(--main-font);
   font-size: var(--base-font-size);
-
   background-color: var(--theme-color);
-
   display: flex;
-  justify-content: stretch;
   height: 100vh;
 }
 
-
 button,
-input,
-.checkbox label {
+input {
   font: inherit;
   border: 0;
   border-radius: 3px;
@@ -65,22 +62,52 @@ input,
   box-shadow: var(--raised-shadow);
 }
 
-
-body>aside {
-  width: 40em;
-}
-
 main {
   position: relative;
-
-  display: flex;
-  flex-direction: column;
   align-items: start;
-
   flex: 1;
   min-width: 0;
+}
 
-  gap: var(--vertical-gap) var(--horizontal-gap);
+main > nav {
+  align-items: center;
+  height: 2.5em;
+  line-height: 2em;
+}
+
+main > nav > img {
+  height: 100%;
+}
+
+body > aside {
+  width: 40em;
+  position: relative;
+}
+
+/* A tab, the aside and the hover strip show by flipping `hidden`; each says
+   its own display, which would beat the UA rule, so the hiding is said here. */
+body > aside[hidden],
+aside > section[hidden] {
+  display: none;
+}
+
+aside > section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vertical-gap);
+  flex: 1;
+  min-height: 0;
+}
+
+aside > section > textarea {
+  flex: 1;
+}
+
+textarea {
+  border: 0;
+  font-family: var(--code-font);
+  tab-size: 2;
+  padding: 1em;
 }
 
 #hover-zone {
@@ -91,86 +118,7 @@ main {
   width: 3em;
 }
 
-#freeze {
-  position: absolute;
-  top: 0em;
-  right: 0em;
-
-  width: 2em;
-  height: 2em;
-
-  background: url(/icon/unpin.svg);
-  background-size: cover;
-  background-color: var(--paper-background);
-
-  appearance: none;
-
-}
-
-#freeze:checked {
-  background: url(/icon/pin.svg);
-  background-size: cover;
-
-  box-shadow: inset var(--raised-shadow);
-}
-
-nav,
-.checkbox {
-  display: flex;
-  gap: var(--horizontal-pad);
-  align-items: center;
-  height: 2.5em;
-  line-height: 2em;
-}
-
-nav>img {
-  height: 100%;
-}
-
-
-aside {
-  display: flex;
-  flex-direction: column;
-  justify-content: stretch;
-
-  gap: var(--vertical-gap);
-
-  background-color: var(--glass-background);
-
-  position: relative;
-}
-
-
-/* radio buttons push effect: tight buttons with inset when active */
-aside nav {
-  gap: 0
-}
-
-aside nav button,
-.checkbox label {
-  flex: 1;
-  border-radius: 0;
-  text-align: center;
-}
-
-
-.checkbox input[type="checkbox"] {
-  display: none;
-}
-
-aside .checkbox {
-  background-color: var(--theme-color);
-  position: absolute;
-  top: 0em;
-  left: 10em;
-  width: 10em;
-  gap: 0;
-}
-
-.active,
-.checkbox label:has(input:checked) {
-  box-shadow: inset var(--flat-shadow);
-}
+/* --- the canvas ------------------------------------------------------------ */
 
 article {
   display: flex;
@@ -184,139 +132,13 @@ article {
   max-height: 100%;
 }
 
-#diagram-html {
-  flex: none;
-}
-
-
-textarea {
-  border: 0;
-  font-family: var(--code-font);
-  tab-size: 2;
-
-  height: fit-content;
-  padding: 1em;
-}
-
-aside> :last-child {
-  flex: 1;
-}
-
-.row {
-  display: flex;
-  gap: var(--horizontal-pad);
-}
-
-
-/* The two rows tabs share one shape. `.rows` is the styles book; `.annotations`
-   is the annotation list, and differs only below. */
-.rows,
-.annotations {
-  display: flex;
-  flex-direction: column-reverse;
-  justify-content: stretch;
-
-  gap: var(--horizontal-pad);
-
-
-
-  overflow: auto;
-  padding: 10em var(--horizontal-pad);
-
-
-  .row {
-    flex: 1;
-    min-width: 0;
-
-    height: 1.5em;
-    box-shadow: var(--raised-shadow);
-
-    button {
-      width: 3em;
-      background-color: var(--paper-background);
-    }
-
-    ;
-
-    input {
-      width: 10em;
-      background-color: var(--paper-background);
-      height: auto;
-    }
-
-    ;
-  }
-
-  ;
-
-}
-
-
-
-
-
-/* A dropped row is out of the book and out of CSSOM; the element stays until the
-   next sync rebuilds the list (§4). `.row` sets `display: flex`, which beats the
-   UA sheet's `[hidden]`, so the hiding has to be said here. */
-.rows>.row[hidden] {
-  display: none;
-}
-
-/* Source is the only thing distinguishing one row from another (§1): 0 theme,
-   1 dot, 2 user. Theme is the floor and says nothing. */
-.rows>.row[data-source="1"] {
-
-  background-color: color-mix(in srgb, var(--accent-color), var(--theme-color));
-}
-
-.rows>.row[data-source="0"] {
-  background-color: var(--accent-color);
-}
-
-
-
-/* An annotation row reads top-down (§4) and wraps into two lines: the text box
-   takes the whole width, so everything before it is line one. The ten-em top
-   padding is the styles tab's, and it is there to keep the reversed list off the
-   top of the pane — a top-down list needs nothing of the kind. */
-.annotations {
-  flex-direction: column;
-  padding: var(--horizontal-pad);
-
-  >.row {
-    flex-wrap: wrap;
-    height: auto;
-
-    >button {
-      width: 2em;
-    }
-
-    >.sel,
-    >.cls {
-      width: 7em;
-    }
-
-    >.dx,
-    >.dy {
-      width: 5em;
-    }
-
-    >.text {
-      flex: 1 0 100%;
-      width: auto;
-    }
-  }
-}
-
-aside>section {
-  display: contents;
-}
-
-
 #diagram-canvas {
   position: relative;
 }
 
+#diagram-html {
+  flex: none;
+}
 
 #annotation-html,
 #diagram-svg {
@@ -348,4 +170,152 @@ aside>section {
 .diagram {
   padding: var(--vertical-gap) var(--horizontal-gap);
   flex: 1;
+}
+
+/* --- surfaces -------------------------------------------------------------- */
+
+.row {
+  display: flex;
+  gap: var(--horizontal-pad);
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vertical-gap);
+}
+
+.paper {
+  background-color: var(--paper-background);
+  box-shadow: var(--raised-shadow);
+  border: 0;
+}
+
+.glass {
+  background-color: var(--glass-background);
+}
+
+/* --- radios and checks: a tight strip. A chosen radio sinks in; a checked
+       check rises and glows. `:has(:checked)` is the state. ----------------- */
+
+.radios,
+.checks {
+  display: flex;
+  gap: 0;
+  height: 2.5em;
+  line-height: 2em;
+  align-items: stretch;
+}
+
+.radios input,
+.checks input {
+  appearance: none;
+  margin: 0;
+}
+
+.radios label,
+.checks label {
+  flex: 1;
+  text-align: center;
+  cursor: pointer;
+  background-color: var(--glass-background);
+  box-shadow: var(--flat-shadow);
+}
+
+.radios label:has(:checked) {
+  box-shadow: inset var(--flat-shadow);
+}
+
+.checks label:has(:checked) {
+  box-shadow: var(--raised-shadow), 0 0 6px var(--accent-color);
+}
+
+/* The pin is a one-label Checks; only its face is special. */
+.checks.pin {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 2em;
+}
+
+.checks.pin label {
+  width: 2em;
+  background: url(/icon/unpin.svg) center / cover, var(--paper-background);
+}
+
+.checks.pin label:has(:checked) {
+  background-image: url(/icon/pin.svg);
+}
+
+/* --- rows: the styles list, reversed so its waiting blank is on top -------- */
+
+.rows {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--horizontal-pad);
+  overflow: auto;
+  padding: 10em var(--horizontal-pad);
+}
+
+.rows > .row {
+  min-width: 0;
+  height: 1.5em;
+  box-shadow: var(--raised-shadow);
+}
+
+.rows > .row > button {
+  width: 3em;
+  background-color: var(--paper-background);
+}
+
+.rows > .row > input {
+  width: 10em;
+  background-color: var(--paper-background);
+}
+
+/* Source is the only thing distinguishing one style row from another: 0 theme,
+   1 dot, 2 user. The user's rows say nothing. */
+.rows > .row[data-source="0"] {
+  background-color: var(--accent-color);
+}
+
+.rows > .row[data-source="1"] {
+  background-color: color-mix(in srgb, var(--accent-color), var(--theme-color));
+}
+
+/* Notes read top-down, and a row wraps: the text box takes the whole of line
+   two. The styles list's ten-em padding keeps a reversed list off the top of
+   the pane; a top-down list needs nothing of the kind. */
+.rows.notes {
+  flex-direction: column;
+  padding: var(--horizontal-pad);
+}
+
+.rows.notes > .row {
+  flex-wrap: wrap;
+  height: auto;
+}
+
+.rows.notes > .row > button {
+  width: 2em;
+}
+
+.rows.notes input[name="selector"],
+.rows.notes input[name="class"] {
+  width: 7em;
+}
+
+.rows.notes input[name="dx"],
+.rows.notes input[name="dy"] {
+  width: 5em;
+}
+
+.rows.notes input[name="text"] {
+  flex: 1 0 100%;
+  order: 1;
+}
+
+/* A value the book refused. */
+.invalid {
+  outline: 2px solid crimson;
 }

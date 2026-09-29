@@ -6,9 +6,11 @@ import { serialize } from "../style/sheet.ts";
 import type * as T from "../types.ts";
 import type { Diagram } from "./diagram.ts";
 
-export async function exportHtml(diagram: Diagram): Promise<string> {
+/** `skeleton` is the page's frame as `index.html` wrote it, before any piece
+ *  filled it: the exported page boots the same app over the same frame. */
+export async function exportHtml(diagram: Diagram, skeleton: string): Promise<string> {
   const [css, app] = await Promise.all([asset("app-css"), asset("app-js")]);
-  return page(css, app, seed(diagram));
+  return page(css, app, skeleton, seed(diagram));
 }
 
 /** The painted canvas as a standalone picture, as the options ask. */
@@ -94,16 +96,16 @@ function decode(base64: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-/** The seed the exported page boots from: both text tabs, the whole book, and the
- *  annotation list. The list travels, not the marks — the rows are the model, and
+/** The seed the exported page boots from: the DOT, the script, the whole book,
+ *  and the notes. The notes travel, not the marks — the rows are the model, and
  *  the exported page derives its own HTML from them exactly as this one does. */
 function seed(diagram: Diagram): string {
-  const text: T.TabText = { dot: diagram.dot.value, action: diagram.script.value };
   const styles = asFile(diagram.styleBook.styles());
-  return JSON.stringify({ ...text, styles, annotations: diagram.notes.value }).replace(/</g, "\\u003c");
+  const json = { dot: diagram.dot.value, script: diagram.script.value, styles, notes: diagram.notes.value };
+  return JSON.stringify(json).replace(/</g, "\\u003c");
 }
 
-function page(css: string, app: string, json: string): string {
+function page(css: string, app: string, skeleton: string, json: string): string {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -113,6 +115,7 @@ function page(css: string, app: string, json: string): string {
     <style id="app-css">${css}</style>
   </head>
   <body>
+    ${skeleton}
     <script type="application/json" id="app-seed">${json}</script>
     <script type="text/plain" id="app-js" data-encoding="base64">${encode(app)}</script>
     <script type="module">

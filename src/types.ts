@@ -177,22 +177,21 @@ export type ConnectorMetrics = {
   radius: number;
 };
 
-/** Four tabs, in order. `styles` and `annotation` are rows views, not text. */
-export type TabId = "dot" | "styles" | "annotation" | "action";
+/** Four tabs, in order. `styles` and `notes` are rows views, not text. */
+export type TabId = "dot" | "styles" | "notes" | "script";
 
-/** The two text tabs. The two rows tabs are absent on purpose (§4). */
-export type TabText = Record<"dot" | "action", string>;
+/** Every verb. The toolbar and the chords share one map of them. */
+export type Command = "draw" | "open" | "save" | "export-picture" | "export-html" | "save-styles";
 
 /**
- * One annotation, as its row holds it — and the row is the model (§4.2). An
- * **ordered list**, not a map keyed by selector: two marks may point at the
- * same node, and the second is not an overwrite.
+ * One note, as its row holds it — and the row is the model (§4). An **ordered
+ * list**, not a map keyed by selector: two marks may point at the same node,
+ * and the second is not an overwrite.
  *
  * `selector` goes to `querySelectorAll`. `dx` / `dy` are any CSS length, spent
  * by the theme inside `calc()` and never parsed here. `text` is markdown.
  */
-export type Annotation = {
-  id: number;
+export type Note = {
   selector: string;
   dx: string;
   dy: string;
@@ -270,7 +269,7 @@ export interface StyleBook {
 export interface Diagram {
   readonly dot: Topic<string>;
   readonly styleBook: StyleBook;
-  readonly notes: Topic<Annotation[]>;
+  readonly notes: Topic<Note[]>;
   readonly script: Topic<string>;
   draw(): Promise<void>;
   /** Notes → sink → anchors. A short path: no parse, no frame, and no
@@ -287,6 +286,26 @@ export type PictureOptions = {
   /** PNG only — an SVG carries no resolution to scale. */
   scale: number;
 };
+
+// ---------------------------------------------------------------------------
+// the pieces — native controls with a CSS face. None of them knows DOT exists.
+// ---------------------------------------------------------------------------
+
+/** The host already exists in the skeleton; the piece fills it and binds. */
+export interface Piece {
+  readonly el: HTMLElement;
+}
+
+export interface RowList<R> extends Piece {
+  render(rows: R[]): void;
+  mark(i: number, invalid: boolean): void;
+}
+
+export interface DialogAsk<A> extends Piece {
+  /** `undefined` is cancelled. */
+  ask(): Promise<A | undefined>;
+}
+// Radios and Checks add no methods: they read and write their Topic.
 
 // ---------------------------------------------------------------------------
 // registry shapes — live with the workers that consult them

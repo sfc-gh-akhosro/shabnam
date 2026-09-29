@@ -1,7 +1,8 @@
 // Radios and Checks are one strip of `label > input`, cloned from
 // `#choice-template`; only the input type and what `change` publishes differ.
 
-import type { Choices } from "./types.ts";
+/** A closed set of choices, key → label, in the order shown. */
+export type Choices<K extends string> = Map<K, string>;
 
 const CHOICE = document.querySelector<HTMLTemplateElement>("#choice-template")!;
 

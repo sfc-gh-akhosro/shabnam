@@ -22,31 +22,21 @@ const BUDGET = 600_000;
 
 type Report = { results: { name: string; ok: boolean; detail: string }[]; errors: string[] };
 
-// Console and uncaught errors are collected before the app loads, so a check can
-// assert on them. The two modules are ordered: the app mounts, the checks wait.
-// The two ids the file verbs reach for are real ids in `src/index.html` — the picture
-// export inlines the stylesheet and Export HTML inlines the bundle — so the
-// harness page has to carry them too, or the export verbs find nothing.
-const PAGE = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Shabnam — browser checks</title>
-    <link id="app-css" rel="stylesheet" href="./app.css" />
-  </head>
-  <body>
-        <script>
+// The page is the real `src/index.html` — the skeleton the workbench fills —
+// with two scripts spliced in around the app's own: the error collector before
+// it, so a check can assert on errors, and the checks after it. Modules run in
+// order: the app mounts, the checks wait.
+const ERRORS = `<script>
       window.TEST_ERRORS = [];
       const real = console.error.bind(console);
       console.error = (...args) => { window.TEST_ERRORS.push(args.join(" ")); real(...args); };
       addEventListener("error", (e) => window.TEST_ERRORS.push(String(e.message)));
       addEventListener("unhandledrejection", (e) => window.TEST_ERRORS.push(String(e.reason)));
     </script>
-    <script type="module" id="app-js" src="./index.js"></script>
-    <script type="module" src="./checks.js"></script>
-  </body>
-</html>
-`;
+    `;
+const APP = '<script id="app-js" type="module" src="./index.js"></script>';
+const PAGE = (await Bun.file(`${ROOT}src/index.html`).text())
+  .replace(APP, `${ERRORS}${APP}\n    <script type="module" src="./checks.js"></script>`);
 
 async function script(config: Parameters<typeof Bun.build>[0]): Promise<Response> {
   const built = await Bun.build(config);

@@ -5,12 +5,11 @@ what and why (`user-story.md`); the types say the shapes (`src/types.ts`, and a
 package's own `types.ts`); the craft is `coding-rules.md`. When this file and
 the code disagree, this file wins until we change it together.
 
-> **Migration in progress.** This describes the redesign approved in
-> `research-lab/ui-redesign/design-story.md`. The code reaches it through the
-> sessions in `current-task.md`. Landed: `style/` (`StyleBook`), `ui/topic.ts`,
-> the `read/`, `layout/`, `paint/` packages, and `diagram/` (`Diagram`, files,
-> and `notes.ts`, the notes → marks renderer). Still old: the workbench is
-> SolidJS and mirrors the diagram's topics into signals.
+> **Migration nearly done.** This describes the redesign approved in
+> `research-lab/ui-redesign/design-story.md`, and the code now implements it:
+> the workbench is vanilla DOM over an `index.html` skeleton, and SolidJS is
+> gone. Left for `current-task.md`: the final `types.ts` pass and trimming the
+> design story.
 
 ---
 
@@ -222,6 +221,19 @@ Rules:
 - A style row commits with `styleBook.add`; `false` marks the row `.invalid`.
   The styles list is `column-reverse` with one blank row on top; the notes list
   reads top-down.
+- **`RowList.render` patches in place.** Rows are reused by position and only
+  added or trimmed at the end, so committing one box never takes the caret out
+  of the next. A row wears its key as `data-selector` / `data-property`; there
+  is no row id.
+- **The styles list is the tab's own between re-reads.** It re-reads the book
+  when the tab is shown, after a draw, and on Open. Until then a refused row
+  keeps its text and its `.invalid` while the book keeps the last good value.
+  ❌ removes the style from the book and the row from the list at once.
+- The notes list is the model and is published whole, a half-typed row and the
+  waiting blank included; `placed` (selector and text both set) is what gates a
+  mark.
+- Open makes a new `Diagram` and the workbench *adopts* it: the textareas are
+  set once, the note tab follows its `notes`, the style tab reads its book.
 - Keys: `Cmd+Enter` draw · `Cmd+O` / `Cmd+S` open / save DOT · `Cmd+P` / `Cmd+E`
   export picture / HTML · `Cmd+1…4` tabs. The browser-claimed ones are
   `preventDefault`ed.
@@ -242,9 +254,12 @@ A wrapper, not a translation. **SVG** is the canvas cloned into a
 `serialize()` inlined inside `<![CDATA[…]]>`. `app.css` is never inlined.
 **PNG** is that SVG through `Image` → `<canvas>` → `toBlob` at 3×.
 **Transparency** is one appended rule, `#diagram-canvas { background:
-transparent }`. **Export HTML** writes a standalone page carrying the book and
-the document as data. Everything a file needs travels inside it: icons as data
-URIs, no remote references.
+transparent }`. **Export HTML** writes a standalone page carrying the
+skeleton, the book and the document as data; the skeleton is `body`'s
+non-script children as `index.html` wrote them, captured before any piece
+filled them, so the exported page boots the same app over the same frame.
+Everything a file needs travels inside it: icons as data URIs, no remote
+references.
 
 ---
 
@@ -270,7 +285,9 @@ Registries (`SHAPE_HTML`, `SHELL_SVG`, `ATTR_CSS`, `ROW_KINDS`, `COMMANDS`) live
 with the code that consults them.
 
 Tests are two halves: pure under `bun test`, CSSOM and DOM under
-`bun run test:browser` in headless Chrome.
+`bun run test:browser` in headless Chrome. The browser harness serves the real
+`src/index.html` with its error collector and the checks spliced in around the
+app's script, so the checks drive the skeleton the user gets.
 
 ---
 

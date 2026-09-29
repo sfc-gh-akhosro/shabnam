@@ -7,11 +7,6 @@ declare module "*.svg" {
   export default markup;
 }
 
-declare module "*.css" {
-  const text: string;
-  export default text;
-}
-
 // The shipped theme is `theme/basic-theme.json`. Bun's json loader gives it a
 // default export; the shape is asserted at the one import, not here.
 declare module "*.json" {

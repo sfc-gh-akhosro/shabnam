@@ -1,10 +1,10 @@
 // One of a few. The chosen one sinks in; CSS reads `:has(:checked)`.
 
-import { fill } from "./choices.ts";
-import type { Choices, Piece, Topic } from "./types.ts";
+import type * as T from "../types.ts";
+import { type Choices, fill } from "./choices.ts";
 
-export class Radios<K extends string> implements Piece {
-  constructor(readonly el: HTMLElement, name: string, choices: Choices<K>, topic: Topic<K>) {
+export class Radios<K extends string> implements T.Piece {
+  constructor(readonly el: HTMLElement, name: string, choices: Choices<K>, topic: T.Topic<K>) {
     const inputs = fill(el, "radio", name, choices);
     const show = (key: K) => {
       for (const input of inputs) input.checked = input.value === key;

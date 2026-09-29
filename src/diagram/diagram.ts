@@ -35,14 +35,14 @@ const SINK_WRITE = new Map<string, (element: Element, text: string) => void>([
 
 export class Diagram implements T.Diagram {
   readonly dot: Topic<string>;
-  readonly notes: Topic<T.Annotation[]>;
+  readonly notes: Topic<T.Note[]>;
   readonly script: Topic<string>;
   /** New with the diagram and seeded from the theme: that is the reset (§5). */
   readonly styleBook = new StyleBook();
   private layout = new DagreLayout();
   private painter = new DiagramPainter();
 
-  constructor(dot: string, script: string, notes: T.Annotation[], styles: T.Style[]) {
+  constructor(dot: string, script: string, notes: T.Note[], styles: T.Style[]) {
     this.dot = new Topic(dot);
     this.script = new Topic(script);
     this.notes = new Topic(notes);

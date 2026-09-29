@@ -77,14 +77,10 @@ function flip(box: HTMLInputElement): Promise<unknown> {
 
 type Field = "selector" | "property" | "value";
 
-/** The prototype's box names (`index.html`): selector, property, value. */
-const FIELD = new Map<Field, string>([
-  ["selector", ".sel"],
-  ["property", ".prop"],
-  ["value", ".val"],
-]);
+/** The row's three boxes, by the field each one edits. */
+const box = (row: HTMLElement, field: Field) => row.querySelector(`input[name="${field}"]`) as HTMLInputElement;
 
-const rows = () => $$(".rows > .row");
+const rows = () => $$("[data-tab=styles] .rows > .row");
 // The annotation layer's marks, in document order.
 const marks = () => $$("#annotation-html [data-selector]");
 /** A box's centre in viewport coordinates, rounded the way the DOM reports it. */
@@ -92,30 +88,25 @@ const centre = (element: HTMLElement) => {
   const at = element.getBoundingClientRect();
   return { x: Math.round(at.left + at.width / 2), y: Math.round(at.top + at.height / 2) };
 };
-// A dropped row is hidden, not removed (§4), so "what the user can see" and "what
-// is in the list" are now two different questions.
-const live = () => rows().filter((row) => !row.hasAttribute("hidden"));
-// Only a row that reached the book carries an id, so this is "the rules".
-const ruleRows = () => rows().filter((row) => row.id !== "");
+// A row is a rule when all three boxes say something and the book took it.
+const ruleRows = () => rows().filter((row) => keyedRow(row) && !row.classList.contains("invalid"));
+const blanks = () => rows().filter((row) => !keyedRow(row));
 // The list always ends with an untouched blank row, and `.rows` is
 // `column-reverse`, so the end of the list is the top of the screen. This is the
 // row a person types into without asking for one first.
 const blankRow = () => rows()[rows().length - 1]!;
 
-// The shell carries no hook of its own now: the tabs are the aside's nav, and
-// Redraw is the first button in the main toolbar.
-const tabs = () => $$("body > aside > nav button");
-const redrawButton = () => $("body > main > nav button");
+// The tabs are a strip of radios; a label click is how a person picks one.
+const tabs = () => $$("body > aside > .radios label");
+const redrawButton = () => $('button[data-command="draw"]');
 // The tab has no toolbar of its own: ➕ on a row opens another blank after it,
 // and it is that row's last button.
 const addRow = () => ([...blankRow().querySelectorAll("button")].pop() as HTMLElement).click();
 // ❌ is the row's first button.
 const dropRow = (row: HTMLElement) => (row.querySelector("button") as HTMLElement).click();
 
-// Re-reads the book, synchronously. `Rows` is behind a `Show`, so leaving the tab
-// unmounts it and coming back runs its effect again — which is the book, not the
-// list's own optimistic copy of it. This replaces what Cleanup used to give the
-// harness: a sync path that needs no frame (debt S9).
+// Re-reads the book: showing the styles tab reads it again, which drops the
+// list's own refused text and any extra blank.
 async function resync(): Promise<void> {
   tabs()[0]!.click();
   await tick();
@@ -123,27 +114,23 @@ async function resync(): Promise<void> {
   await tick();
 }
 
-const box = (row: HTMLElement, field: Field) =>
-  row.querySelector(FIELD.get(field)!) as HTMLInputElement;
-
-// The annotation tab is the same rows shape with its own columns (§4). Its list
-// reads top-down, so the waiting blank is the last row here as it is there — it
-// is simply at the bottom of the pane rather than the top.
-const markRows = () => $$(".annotations > .row");
+// The notes tab is the same rows piece with its own columns. Its list reads
+// top-down, so the waiting blank is the last row here as it is there — it is
+// simply at the bottom of the pane rather than the top.
+const markRows = () => $$(".rows.notes > .row");
 const blankMarkRow = () => markRows()[markRows().length - 1]!;
-const markBox = (row: HTMLElement, hook: string) => row.querySelector(`.${hook}`) as HTMLInputElement;
-/** Fill a whole annotation row, the way a person tabs through it. Addressed by
- *  position and re-read each time: filling the last row appends the next blank,
- *  and a held element would be a stale opinion about where the row is. */
-async function fillMark(at: number, fields: Array<[hook: string, value: string]>): Promise<void> {
-  for (const [hook, value] of fields) await type(markBox(markRows()[at]!, hook), value, "change");
+const markBox = (row: HTMLElement, name: string) => row.querySelector(`input[name="${name}"]`) as HTMLInputElement;
+/** Fill a whole note row, the way a person tabs through it. Addressed by
+ *  position and re-read each time: filling the last row appends the next blank. */
+async function fillMark(at: number, fields: Array<[name: string, value: string]>): Promise<void> {
+  for (const [name, value] of fields) await type(markBox(markRows()[at]!, name), value, "change");
 }
 
 function smoke(): void {
   check("the workbench mounts", document.querySelector("body > main") !== null, tabs().length + " tabs");
   check(
-    "four tabs, named as the spec names them",
-    tabs().map((tab) => tab.textContent).join(" ") === "diagram.dot styles annotations action.js",
+    "four tabs, named as the design names them",
+    tabs().map((tab) => tab.textContent).join(" ") === "DOT styles notes JS",
     tabs().map((tab) => tab.textContent).join(" "),
   );
 
@@ -187,16 +174,15 @@ async function rowsTab(): Promise<void> {
   const tokens = rows().filter((row) => box(row, "selector").value === "#diagram-canvas, svg");
   check("the token block is one run of rows", tokens.length > 0, `${tokens.length} token rows`);
 
-  // Every row the book produced points at its entry. The waiting blank is not in
-  // the book and carries no id — that is how it says so.
-  const identified = ruleRows().every((row) => /^\d+$/.test(row.id));
-  check("every rule row carries its rule id", identified, ruleRows().map((row) => row.id).slice(0, 3).join(" ") + " …");
+  // Every row wears its key as `data-` hooks, the pair CSSOM finds a style by.
+  // The waiting blank is not in the book, and its hooks are empty.
+  const hooked = ruleRows().every((row) => row.dataset.selector === box(row, "selector").value && row.dataset.property === box(row, "property").value);
+  check("every rule row carries its selector and property", hooked, ruleRows().slice(0, 2).map((row) => `${row.dataset.selector} ${row.dataset.property}`).join(" · ") + " …");
 
-  const blanks = rows().filter((row) => row.id === "");
   check(
     "one blank row waits at the end of the list, which is the top of the screen",
-    blanks.length === 1 && blanks[0] === blankRow() && !keyedRow(blankRow()),
-    `${blanks.length} blank, last row id=${blankRow().id || "(none)"}`,
+    blanks().length === 1 && blanks()[0] === blankRow(),
+    `${blanks().length} blank`,
   );
 
   // Every row is editable now: there is no layer beneath one for it to shadow.
@@ -210,15 +196,14 @@ function keyedRow(row: HTMLElement): boolean {
 }
 
 /**
- * The waiting blank, and what ❌ means now.
+ * The waiting blank, and what ❌ means.
  *
  * Typing into the blank is how a rule is added — there is no "add row" step — and
  * filling it in must put the next blank there, or the top of the list would be
- * occupied and the next rule would need a click first.
+ * occupied and the next rule would need a click first. The typed row stays the
+ * same element: the list is patched in place, so tabbing on keeps the caret.
  *
- * ❌ takes the rule out of the book and out of CSSOM and then only hides the
- * element: the book is the source of truth, and the list is rebuilt from it on
- * the next sync. So the element survives this stage and disappears at the resync.
+ * ❌ takes the rule out of the book, out of CSSOM, and out of the list at once.
  */
 async function blankRowFlow(): Promise<void> {
   tabs()[1]!.click();
@@ -230,36 +215,31 @@ async function blankRowFlow(): Promise<void> {
   await type(box(typed, "property"), "opacity", "change");
   await type(box(typed, "value"), "0.5", "change");
 
-  check("filling the blank row adds the rule", typed.id !== "" && /^\d+$/.test(typed.id), `id=${typed.id || "(none)"}`);
+  check("filling the blank row adds the rule", declaration(".scratch-flow", "opacity") === "0.5", `opacity: ${declaration(".scratch-flow", "opacity")}`);
   check(
-    "and puts a fresh blank after it",
-    rows().length === before + 1 && blankRow() !== typed && !keyedRow(blankRow()),
+    "and puts a fresh blank after it, in the same element it was typed in",
+    rows().length === before + 1 && blankRow() !== typed && rows()[before - 1] === typed && !keyedRow(blankRow()),
     `${before} → ${rows().length}, last is ${blankRow() === typed ? "the typed row" : "blank"}`,
   );
-
-  const painted = cssTexts().join("");
-  check("the new rule reached the sheet", painted.includes("scratch-flow"), `${sheet().cssRules.length} rules`);
-  check("and the row's id is the one the book minted", declaration(".scratch-flow", "opacity") === "0.5", `#${typed.id} → opacity: ${declaration(".scratch-flow", "opacity")}`);
+  check("the row wears its key", typed.dataset.selector === ".scratch-flow" && typed.dataset.property === "opacity", `${typed.dataset.selector} ${typed.dataset.property}`);
 
   dropRow(typed);
   await tick();
-  check("❌ hides the row rather than removing it", rows().length === before + 1 && typed.hasAttribute("hidden"), `${rows().length} rows, hidden=${typed.hasAttribute("hidden")}`);
-  check("❌ is not in the live list", !live().includes(typed), `${live().length} of ${rows().length} live`);
-  // The declaration goes; the selector's own rule block stays behind, empty, until
-  // a `cleanup` drops it. So the question is whether the property is still painted,
-  // not whether the selector is still mentioned.
+  check("❌ takes the row out of the list", rows().length === before && !rows().some((row) => box(row, "selector").value === ".scratch-flow"), `${rows().length} rows`);
+  // The declaration goes; the selector's own rule block stays behind, empty. So
+  // the question is whether the property is still painted, not whether the
+  // selector is still mentioned.
   check("❌ took the declaration out of the sheet", declaration(".scratch-flow", "opacity") === "", `opacity="${declaration(".scratch-flow", "opacity")}"`);
 
   await resync();
-  check("the re-read drops the hidden row", rows().length === before && !rows().includes(typed), `${rows().length} rows, none hidden: ${rows().every((row) => !row.hasAttribute("hidden"))}`);
-  check("and still leaves exactly one blank waiting", rows().filter((row) => row.id === "").length === 1, `${rows().filter((row) => row.id === "").length} blank`);
+  check("a re-read agrees, and leaves exactly one blank waiting", rows().length === before && blanks().length === 1, `${rows().length} rows, ${blanks().length} blank`);
 
   // ➕ is the only way to get a second blank, and a re-read takes it back.
   addRow();
   await tick();
-  const two = rows().filter((row) => row.id === "").length;
+  const two = blanks().length;
   await resync();
-  check("➕ opens another blank, and a re-read settles back to one", two === 2 && rows().filter((row) => row.id === "").length === 1, `${two} → ${rows().filter((row) => row.id === "").length}`);
+  check("➕ opens another blank, and a re-read settles back to one", two === 2 && blanks().length === 1, `${two} → ${blanks().length}`);
 }
 
 /**
@@ -286,10 +266,11 @@ async function annotations(): Promise<void> {
   );
   check(
     "a row is a typed selector, not markup",
-    markBox(markRows()[0]!, "sel").value === "#core" && markBox(markRows()[0]!, "dy").value === "4em",
-    `${markBox(markRows()[0]!, "sel").value} dy=${markBox(markRows()[0]!, "dy").value}`,
+    markBox(markRows()[0]!, "selector").value === "#core" && markBox(markRows()[0]!, "dy").value === "4em",
+    `${markBox(markRows()[0]!, "selector").value} dy=${markBox(markRows()[0]!, "dy").value}`,
   );
-  check("and no textarea is in sight", $$("aside textarea").length === 0, $$("aside textarea").length);
+  const shownAreas = $$("aside textarea").filter((area) => area.offsetParent !== null);
+  check("and no textarea is in sight", shownAreas.length === 0, shownAreas.length);
 
   // `4em` is the theme's, not ours, and `em` here is the mark's own font size —
   // so the expectation resolves the length off the mark rather than hard-coding
@@ -333,7 +314,7 @@ async function annotations(): Promise<void> {
   // `data-selector` is run as a selector, so it can match more than one thing,
   // and then the anchor is the box containing all of them. Typed into the waiting
   // blank, and no Redraw: a row edit is the short path (§5).
-  await fillMark(markRows().length - 1, [["sel", ".node"], ["text", "every node"]]);
+  await fillMark(markRows().length - 1, [["selector", ".node"], ["text", "every node"]]);
   const many = marks()[2]!;
   const rects = $$("#diagram-html .node").map((one) => one.getBoundingClientRect());
   const union = {
@@ -359,7 +340,7 @@ async function annotations(): Promise<void> {
   );
 
   // Markdown, in block mode, and the one line-break convention (§7).
-  await fillMark(markRows().length - 1, [["sel", "#app"], ["text", "**bold**\\nsecond"], ["cls", "note"]]);
+  await fillMark(markRows().length - 1, [["selector", "#app"], ["text", "**bold**\\nsecond"], ["class", "note"]]);
   const rich = marks()[3]!;
   check(
     "markdown and `\\n` survive into a mark",
@@ -431,9 +412,8 @@ async function survivesRedraw(): Promise<void> {
 
   await resync();
   const mine = rows().filter((one) => box(one, "property").value === "--primary-color");
-  const detail = mine.map((one) => `${one.id || "(no id)"}:${one.dataset.source}:${box(one, "value").value}`).join(" ");
+  const detail = mine.map((one) => `${one.dataset.selector}:${one.dataset.source}:${box(one, "value").value}`).join(" ");
   check("the overwrite is one row, not two", mine.length === 1, detail);
-  check("it kept the theme entry's id", /^\d+$/.test(mine[0]!.id), detail);
   check("and it is the user's row now", mine[0]!.dataset.source === "2", detail);
 
   // A redraw adds the DOT's tokens at source 1 *before* the pipeline ever
@@ -457,7 +437,7 @@ async function applyAndResync(): Promise<void> {
   dropRow(row);
   await tick();
   await resync();
-  check("the dropped @apply row is gone from the list", !rows().includes(row), `${rows().length} rows`);
+  check("the dropped @apply row is gone from the list", !rows().some((one) => box(one, "selector").value === ".scratch"), `${rows().length} rows`);
 
   // `@apply` only names what the book already has, so a typo is refused like
   // an invalid value: the row is marked and nothing is written.
@@ -466,7 +446,7 @@ async function applyAndResync(): Promise<void> {
   await type(box(unknown, "selector"), ".scratch-apply", "change");
   await type(box(unknown, "property"), "@apply", "change");
   await type(box(unknown, "value"), ".nowhere", "change");
-  check("an @apply of an unknown selector is refused and marks the row", unknown.classList.contains("invalid") && unknown.id === "" && !cssTexts().join("").includes("scratch-apply"), `${unknown.className} id=${unknown.id || "(none)"}`);
+  check("an @apply of an unknown selector is refused and marks the row", unknown.classList.contains("invalid") && !cssTexts().join("").includes("scratch-apply"), unknown.className);
   dropRow(unknown);
   errors.splice(before, errors.length - before);
   await tick();
@@ -530,10 +510,10 @@ async function importantAndInvalid(): Promise<void> {
   await type(box(bad, "selector"), ".scratch-bad", "change");
   await type(box(bad, "property"), "margin", "change");
   await type(box(bad, "value"), "0px0", "change");
-  check("an invalid new row enters neither the book nor the sheet", bad.id === "" && !cssTexts().join("").includes("scratch-bad"), `id=${bad.id || "(none)"}`);
+  check("an invalid new row enters neither the book nor the sheet", bad.classList.contains("invalid") && !cssTexts().join("").includes("scratch-bad"), bad.className);
 
   await type(box(bad, "value"), "0px", "change");
-  check("fixing the value clears the mark and adds the rule", !bad.classList.contains("invalid") && /^\d+$/.test(bad.id), `${bad.className} id=${bad.id || "(none)"}`);
+  check("fixing the value clears the mark and adds the rule", !bad.classList.contains("invalid") && declaration(".scratch-bad", "margin") === "0px", `${bad.className} margin: "${declaration(".scratch-bad", "margin")}"`);
 
   // The premise the DOT reader's one correction rests on (§3.1): a Graphviz
   // length is a bare number, and a bare non-zero number is not a CSS `<length>`.
@@ -553,6 +533,9 @@ async function importantAndInvalid(): Promise<void> {
   // still means "nothing went wrong that we did not ask for".
   errors.splice(before, errors.length - before);
 
+  // Last first: ❌ patches the list in place, so the rows below a dropped one
+  // move up, and a held element is only still that row if nothing above it went.
+  dropRow(unitless);
   dropRow(bad);
   dropRow(shout);
   dropRow(specific);
@@ -572,14 +555,14 @@ async function importantAndInvalid(): Promise<void> {
  * one control that is conditional becomes so.
  */
 async function exportDialog(): Promise<void> {
-  const dialog = $("#export-dialog") as HTMLDialogElement;
-  const radio = (name: string) => $$(`#export-dialog input[name="${name}"]`) as HTMLInputElement[];
-  const scale = () => $('#export-dialog input[type="number"]') as HTMLInputElement;
-  const transparent = () => $('#export-dialog input[type="checkbox"]') as HTMLInputElement;
+  const dialog = $("dialog") as HTMLDialogElement;
+  const radio = (name: string) => $$(`dialog input[name="${name}"]`) as HTMLInputElement[];
+  const scale = () => $('dialog input[type="number"]') as HTMLInputElement;
+  const transparent = () => $('dialog input[type="checkbox"]') as HTMLInputElement;
 
   check("the dialog starts closed", !dialog.open, dialog.open);
 
-  $("#export-picture").click();
+  $('button[data-command="export-picture"]').click();
   await tick();
   check("the Export button opens it", dialog.open, dialog.open);
 
@@ -598,8 +581,8 @@ async function exportDialog(): Promise<void> {
   check("choosing PNG enables scale", !scale().disabled, scale().disabled);
   check("at 3x", scale().value === "3", scale().value);
 
-  // A typed value is the user's, and stays the user's — scale is one signal now,
-  // not a per-format default that reaches in and overwrites what you typed.
+  // A typed value is the user's, and stays the user's — switching format
+  // disables the box, and never reaches in to overwrite what you typed.
   await type(scale(), "1", "input");
   check("scale takes a value", scale().value === "1", scale().value);
   await flip(svg);
@@ -608,7 +591,7 @@ async function exportDialog(): Promise<void> {
 
   // Escape and the backdrop are the browser's; Cancel is ours, and it must not
   // leave a modal open over the rest of the suite.
-  ($('#export-dialog button[type="button"]') as HTMLButtonElement).click();
+  ($('dialog button[value="cancel"]') as HTMLButtonElement).click();
   await tick();
   check("Cancel closes it", !dialog.open, dialog.open);
 }
@@ -639,7 +622,7 @@ async function textTabsWaitForRedraw(): Promise<void> {
   tabs()[0]!.click();
   await tick();
 
-  const area = $("body > aside textarea") as HTMLTextAreaElement;
+  const area = $("[data-tab=dot] > textarea") as HTMLTextAreaElement;
   const drawn = () => $$("#diagram-html .node").length;
   const before = drawn();
 
@@ -662,7 +645,7 @@ async function parseKeepsThePicture(): Promise<void> {
     shown.push(String(message));
   };
 
-  const area = $("body > aside textarea") as HTMLTextAreaElement;
+  const area = $("[data-tab=dot] > textarea") as HTMLTextAreaElement;
   const drawn = () => $$("#diagram-html .node").length;
   const before = drawn();
 
@@ -678,8 +661,8 @@ async function parseKeepsThePicture(): Promise<void> {
   );
 }
 
-// The app's own `onMount` kicks the first redraw, so wait for the picture rather
-// than for a timer.
+// The workbench's first draw starts on construction, so wait for the picture
+// rather than for a timer.
 async function mounted(): Promise<void> {
   // The SVG layer is injected a frame after the HTML, so waiting on a node would
   // read the picture half-drawn. Connectors are the last thing the pipeline puts
@@ -692,22 +675,23 @@ async function mounted(): Promise<void> {
 }
 
 /**
- * The three source checkboxes. View state only: hiding a source must not touch
- * the book, and \u2014 the trap this is really here for \u2014 must not renumber the rows.
+ * The three source checks. View state only: hiding a source must not touch
+ * the book, and — the trap this is really here for — must not renumber the rows.
  * Every edit verb addresses a row by its position in the book, so if the filter
  * renumbered them, editing the first visible row would write to whatever row
  * happens to sit at index 0 of the book instead.
  *
- * Synchronous throughout: a checkbox is a signal, and the list re-renders in the
- * same turn. Nothing here waits for a frame (debt S9).
+ * Synchronous throughout: a check publishes a topic, and the list re-renders in
+ * the same turn. Nothing here waits for a frame.
  */
 async function sourceFilter(): Promise<void> {
   tabs()[1]!.click();
   await tick();
 
-  const themeBox = $("#theme-styles-selected") as HTMLInputElement;
-  const dotBox = $("#dot-styles-selected") as HTMLInputElement;
-  const userBox = $("#user-styles-selected") as HTMLInputElement;
+  const source = (name: string) => $(`[data-tab=styles] .checks input[value="${name}"]`) as HTMLInputElement;
+  const themeBox = source("theme");
+  const dotBox = source("dot");
+  const userBox = source("user");
   check("the styles tab has one checkbox per source", themeBox !== null && dotBox !== null && userBox !== null, "three boxes");
 
   // Starter DOT is pure markup, so there are no source-1 rows. A user scratch
@@ -730,12 +714,10 @@ async function sourceFilter(): Promise<void> {
   // into the list, so typing into one must land on that rule and no other. The
   // last *rule* row, not the last row — the last row is the waiting blank, and
   // typing into that would add a rule rather than edit one. Not `--primary-color`
-  // either: the guard stage below needs that one to still be the theme's.
-  // A row the filter excludes is not rendered at all, so `ruleRows()` is already
-  // "the rules on screen"; only a dropped row needs filtering out here.
-  const visibleRules = () => ruleRows().filter((row) => !row.hasAttribute("hidden"));
-  const probe = () => visibleRules()[visibleRules().length - 1]!;
-  const id = probe().id;
+  // either: the guard stage below needs that one to still be the theme's. A row
+  // the filter excludes is not rendered at all, so `ruleRows()` is already "the
+  // rules on screen".
+  const probe = () => ruleRows()[ruleRows().length - 1]!;
   const selector = box(probe(), "selector").value;
   const property = box(probe(), "property").value;
   const original = box(probe(), "value").value;
@@ -748,8 +730,8 @@ async function sourceFilter(): Promise<void> {
   await type(box(probe(), "value"), "initial", "change");
   check(
     "editing a row under a filter writes to that row",
-    probe().id === id && box(probe(), "selector").value === selector && box(probe(), "property").value === property && box(probe(), "value").value === "initial",
-    `#${id} ${selector} ${property}: ${box(probe(), "value").value}`,
+    box(probe(), "selector").value === selector && box(probe(), "property").value === property && box(probe(), "value").value === "initial",
+    `${selector} ${property}: ${box(probe(), "value").value}`,
   );
 
   await type(box(probe(), "value"), original, "change");

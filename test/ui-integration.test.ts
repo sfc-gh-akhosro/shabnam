@@ -4,11 +4,10 @@ import { LayoutFramer } from "../src/paint/layout-framer.ts";
 import { DagreLayout } from "../src/layout/dagre-layout.ts";
 import { DotReader } from "../src/read/dot-reader.ts";
 import { bag } from "./bag.ts";
-import type { Annotation, Style, TabText } from "../src/types.ts";
+import type { Note, Style } from "../src/types.ts";
 import { SOURCE } from "../src/types.ts";
 import { asFile } from "../src/style/book.ts";
 import { annotationHtml } from "../src/diagram/notes.ts";
-import { annotation } from "../src/workbench/annotations.tsx";
 import basicTheme from "../theme/basic-theme.json";
 
 const BARE_BONE_DOT = `digraph barebone {
@@ -32,6 +31,9 @@ const RECORD_DOT = `digraph records {
   rec [shape=record, label="Header | { Left | Right } | Footer"]
 }
 `;
+
+/** A note with every field but the ones a test cares about left blank. */
+const note = (fields: Partial<Note> = {}): Note => ({ selector: "", dx: "", dy: "", class: "", text: "", ...fields });
 
 const layout = new DagreLayout();
 const framer = new LayoutFramer();
@@ -88,23 +90,20 @@ describe("UI & Workbench Integration Suite", () => {
     }
   });
 
-  test("The export seed carries the two text tabs, the whole book, and the annotations", () => {
-    const text: TabText = {
-      dot: BARE_BONE_DOT,
-      action: "console.log('hello');",
-    };
+  test("The export seed carries the DOT, the script, the whole book, and the notes", () => {
+    const text = { dot: BARE_BONE_DOT, script: "console.log('hello');" };
     const styles: Style[] = [
       { selector: ".node", property: "background", value: "red", source: SOURCE.theme },
       { selector: ".node", property: "color", value: "white", source: SOURCE.dot },
       { selector: ".node", property: "@apply", value: ".glass", source: SOURCE.user },
       { selector: "#a", property: "border-width", value: "2px", source: SOURCE.user },
     ];
-    const annotations: Annotation[] = [annotation({ selector: "#a", dy: "4em", text: "note" })];
+    const notes: Note[] = [note({ selector: "#a", dy: "4em", text: "note" })];
 
-    const parsed = JSON.parse(JSON.stringify({ ...text, styles: asFile(styles), annotations }));
+    const parsed = JSON.parse(JSON.stringify({ ...text, styles: asFile(styles), notes }));
 
     expect(parsed.dot).toBe(BARE_BONE_DOT);
-    expect(parsed.action).toBe("console.log('hello');");
+    expect(parsed.script).toBe("console.log('hello');");
     // An export paints what you see, so every source travels.
     expect(parsed.styles).toEqual({
       ".node": {
@@ -115,9 +114,9 @@ describe("UI & Workbench Integration Suite", () => {
       "#a": { "border-width": { value: "2px", source: 2 } },
     });
     // The rows travel, not the marks: the exported page derives its own HTML.
-    expect(parsed.annotations).toHaveLength(1);
-    expect(parsed.annotations[0].selector).toBe("#a");
-    expect(parsed.annotations[0].text).toBe("note");
+    expect(parsed.notes).toHaveLength(1);
+    expect(parsed.notes[0].selector).toBe("#a");
+    expect(parsed.notes[0].text).toBe("note");
     expect(parsed.theme).toBeUndefined();
   });
 });
@@ -128,37 +127,37 @@ describe("an annotation row becomes a mark", () => {
   test("selector and text are the gate, and a half-filled row emits nothing", () => {
     // Not politeness: `querySelectorAll("")` throws, so a row with no selector
     // would take the next `place()` down with it.
-    expect(annotationHtml([annotation({ text: "orphan" })])).toBe("");
-    expect(annotationHtml([annotation({ selector: "#a" })])).toBe("");
-    expect(annotationHtml([annotation()])).toBe("");
-    expect(annotationHtml([annotation({ selector: "#a", text: "both" })])).toContain("both");
+    expect(annotationHtml([note({ text: "orphan" })])).toBe("");
+    expect(annotationHtml([note({ selector: "#a" })])).toBe("");
+    expect(annotationHtml([note()])).toBe("");
+    expect(annotationHtml([note({ selector: "#a", text: "both" })])).toContain("both");
   });
 
   test("an offset is a style custom property, and a blank one is left out", () => {
-    const both = annotationHtml([annotation({ selector: "#a", dx: "1em", dy: "4em", text: "x" })]);
+    const both = annotationHtml([note({ selector: "#a", dx: "1em", dy: "4em", text: "x" })]);
     expect(both).toContain('style="--dx: 1em; --dy: 4em"');
 
     // Omitted rather than emitted empty, so the theme's `var(--dy, 0px)` applies.
-    const one = annotationHtml([annotation({ selector: "#a", dy: "4em", text: "x" })]);
+    const one = annotationHtml([note({ selector: "#a", dy: "4em", text: "x" })]);
     expect(one).toContain('style="--dy: 4em"');
     expect(one).not.toContain("--dx");
 
-    const none = annotationHtml([annotation({ selector: "#a", text: "x" })]);
+    const none = annotationHtml([note({ selector: "#a", text: "x" })]);
     expect(none).not.toContain("style=");
     expect(none).not.toContain("class=");
   });
 
   test("any CSS length passes through, because nothing here parses one", () => {
-    const html = annotationHtml([annotation({ selector: "#a", dx: "calc(-50% + 1em)", text: "x" })]);
+    const html = annotationHtml([note({ selector: "#a", dx: "calc(-50% + 1em)", text: "x" })]);
     expect(html).toContain("--dx: calc(-50% + 1em)");
   });
 
   test("the class column reaches the mark, where the styles tab can select it", () => {
-    expect(annotationHtml([annotation({ selector: "#a", class: "note", text: "x" })])).toContain('class="note"');
+    expect(annotationHtml([note({ selector: "#a", class: "note", text: "x" })])).toContain('class="note"');
   });
 
   test("text is block markdown, so a list is a list", () => {
-    const html = annotationHtml([annotation({ selector: "#a", text: "**bold** and *it*" })]);
+    const html = annotationHtml([note({ selector: "#a", text: "**bold** and *it*" })]);
     expect(html).toContain("<strong>bold</strong>");
     expect(html).toContain("<em>it</em>");
     // Block mode, unlike a label: a note wants paragraphs.
@@ -166,21 +165,21 @@ describe("an annotation row becomes a mark", () => {
   });
 
   test("`\\n` breaks a line here exactly as it does in a label", () => {
-    const html = annotationHtml([annotation({ selector: "#a", text: "one\\ntwo" })]);
+    const html = annotationHtml([note({ selector: "#a", text: "one\\ntwo" })]);
     expect(html).toContain("one<br />two");
   });
 
   test("a quote in a selector survives as an attribute", () => {
     // How text enters an attribute, not a guard: `[data-kind="x"]` is an ordinary
     // selector, and an unescaped quote would end the attribute early.
-    const html = annotationHtml([annotation({ selector: '[data-kind="x"]', text: "y" })]);
+    const html = annotationHtml([note({ selector: '[data-kind="x"]', text: "y" })]);
     expect(html).toContain('data-selector="[data-kind=&quot;x&quot;]"');
   });
 
   test("the list is ordered, and two marks may share a selector", () => {
     const html = annotationHtml([
-      annotation({ selector: "#a", text: "first" }),
-      annotation({ selector: "#a", text: "second" }),
+      note({ selector: "#a", text: "first" }),
+      note({ selector: "#a", text: "second" }),
     ]);
     expect(html.indexOf("first")).toBeLessThan(html.indexOf("second"));
     expect(html.match(/data-selector/g)).toHaveLength(2);

@@ -11,18 +11,18 @@ import type * as T from "../types.ts";
  * throws `SyntaxError`, so a half-filled row would take the app down on the next
  * `place()`. A mark with no text is invisible anyway.
  */
-export function placed(one: T.Annotation): boolean {
+export function placed(one: T.Note): boolean {
   return one.selector !== "" && one.text !== "";
 }
 
-export function annotationHtml(list: T.Annotation[]): string {
+export function annotationHtml(list: T.Note[]): string {
   return list.filter(placed).map(mark).join("\n");
 }
 
 // `--dx` / `--dy` are omitted when blank, so the theme's `var(--dx, 0px)` default
 // applies rather than an empty declaration CSS would drop anyway. A `div`, not a
 // `span`: `position: absolute` makes display moot and the theme already says div.
-function mark(one: T.Annotation): string {
+function mark(one: T.Note): string {
   const offset = [["--dx", one.dx], ["--dy", one.dy]]
     .filter(([, value]) => value !== "")
     .map(([name, value]) => `${name}: ${value}`)
