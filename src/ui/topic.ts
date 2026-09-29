@@ -1,26 +1,26 @@
 // A fact two parts share without naming each other. A subscriber that throws,
 // throws; nothing unmounts, so there is no unsub.
 
-import type * as UI from "./types.ts";
+import type * as T from "../types.ts";
 
-export class Topic<T> implements UI.Topic<T> {
-  #value: T;
-  #subs: ((v: T) => void)[] = [];
+export class Topic<V> implements T.Topic<V> {
+  #value: V;
+  #subs: ((v: V) => void)[] = [];
 
-  constructor(value: T) {
+  constructor(value: V) {
     this.#value = value;
   }
 
-  get value(): T {
+  get value(): V {
     return this.#value;
   }
 
-  pub(v: T): void {
+  pub(v: V): void {
     this.#value = v;
     for (const fn of this.#subs) fn(v);
   }
 
-  sub(fn: (v: T) => void): void {
+  sub(fn: (v: V) => void): void {
     this.#subs.push(fn);
   }
 }

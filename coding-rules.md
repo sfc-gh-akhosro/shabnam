@@ -216,8 +216,10 @@ At the end of a session, on request — a stop-and-check, not a deep clean.
    and wanted-but-unscheduled work under **For Later**.
 3. **Clean the desk.** Delete dead code, unused exports, one-off scripts, and
    tests that no longer test anything.
-4. **Check the canary.** `git status`. Anything unexpected means the ignore
-   rules caught something — fix the cause, never the canary.
+4. **Check the canary.** `git status`. Untracked local files and folders are
+   normal and nobody's business: if we don't track it, we don't care. The
+   canary is what gets *staged* — commit only files the ignore rules allow, and
+   never weaken the rules to let junk in.
 5. **Commit and push** with the repo's identity, then report what shipped, what
    is open, and what the next session picks up.
 
@@ -231,3 +233,7 @@ allowed extension (`ts`, `js`, `html`, `css`, `json`, `lock`, `md`, `dot`, `sh`,
 `CLAUDE.md`, `current-task.md`, `package.json`, `tsconfig.json`, `bunfig.toml`,
 `.gitignore`. To track something new, move it or change the rule on purpose —
 never weaken the rule to sneak a file in.
+
+The guard protects what we commit, not what sits on disk. Local, untracked
+files and folders — notes, drafts, scratch output — are expected and plentiful;
+leave them alone, don't report them, and don't stage them.

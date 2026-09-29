@@ -1,13 +1,13 @@
 // Workbench runtime: redraw, sinks, measure, annotate, place.
 //
-// The style sink is not here. `#style-css` belongs to the `Stylist`,
-// which drives it through CSSOM (§3) — writing its `textContent` from `inject`
-// would wipe every rule the Stylist inserted, so the sink is not in the map.
+// The style sink is not here. `#style-css` belongs to the `StyleBook`,
+// which drives it through CSSOM — writing its `textContent` from `inject`
+// would wipe every rule the book inserted, so the sink is not in the map.
 
 import { Diagram } from "../diagram/diagram.ts";
 import { DagreLayout } from "../dot/dagre-layout.ts";
 import { GraphvizAst } from "../dot/graphviz-ast.ts";
-import { bagEntries, Stylist } from "../stylist/stylist.ts";
+import type { StyleBook } from "../style/style-book.ts";
 import * as T from "../types.ts";
 import { annotationHtml } from "./annotations.tsx";
 
@@ -37,7 +37,7 @@ export class Engine implements T.Workbench {
 
   constructor(
     private text: T.TabText,
-    private stylist: Stylist,
+    private styleBook: () => StyleBook,
     private annotations: T.Annotation[],
   ) {}
 
@@ -53,10 +53,10 @@ export class Engine implements T.Workbench {
       return;
     }
     const model = ast.model();
-    // The book is kept, not flushed (§1). The DOT's rules arrive at source 1 and
-    // are refused wherever the user has written at 2, so a redraw cannot take a
-    // typed row back off them. `absorb` paints once at the end.
-    this.stylist.absorb(bagEntries(ast.styles(), T.SOURCE.dot));
+    // The book is kept, not flushed. The DOT's styles arrive at source 1 and are
+    // refused wherever the user has written at 2, so a redraw cannot take a
+    // typed row back off them.
+    for (const style of ast.styles()) this.styleBook().add(style);
 
     this.inject("diagram-html", this.diagram.frame(model, this.layout.place(ast.points())));
 

@@ -3,10 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { LayoutFramer } from "../src/diagram/layout-framer.ts";
 import { DagreLayout } from "../src/dot/dagre-layout.ts";
 import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
-import type { Annotation, StyleRow, TabText } from "../src/types.ts";
+import { bag } from "./bag.ts";
+import type { Annotation, Style, TabText } from "../src/types.ts";
 import { SOURCE } from "../src/types.ts";
+import { asFile } from "../src/style/book.ts";
 import { annotation, annotationHtml } from "../src/workbench/annotations.tsx";
-import { bookFile } from "../src/workbench/files.ts";
 import basicTheme from "../theme/basic-theme.json";
 
 const BARE_BONE_DOT = `digraph barebone {
@@ -45,7 +46,7 @@ describe("UI & Workbench Integration Suite", () => {
   });
 
   test("Bare-bone DOT derives nothing — tokens are the theme's", () => {
-    expect([...new GraphvizAst(BARE_BONE_DOT).styles().keys()]).toEqual([]);
+    expect([...bag(new GraphvizAst(BARE_BONE_DOT).styles()).keys()]).toEqual([]);
   });
 
   test("shape=record correctly parses and builds nested flex structure", () => {
@@ -76,7 +77,7 @@ describe("UI & Workbench Integration Suite", () => {
 
   test("a derived bag never invents a margin", async () => {
     const FIXTURE = new URL("../research-lab/example-1.dot", import.meta.url).pathname;
-    const derived = new GraphvizAst(await Bun.file(FIXTURE).text()).styles();
+    const derived = bag(new GraphvizAst(await Bun.file(FIXTURE).text()).styles());
 
     expect(derived.size).toBe(0);
     for (const [, properties] of derived) {
@@ -91,20 +92,19 @@ describe("UI & Workbench Integration Suite", () => {
       dot: BARE_BONE_DOT,
       action: "console.log('hello');",
     };
-    const rows: StyleRow[] = [
-      { selector: ".node", property: "background", value: "red", id: 1, source: SOURCE.theme },
-      { selector: ".node", property: "color", value: "white", id: 2, source: SOURCE.dot },
-      { selector: ".node", property: "@apply", value: ".glass", id: 3, source: SOURCE.user },
-      { selector: "#a", property: "border-width", value: "2px", id: 4, source: SOURCE.user },
+    const styles: Style[] = [
+      { selector: ".node", property: "background", value: "red", source: SOURCE.theme },
+      { selector: ".node", property: "color", value: "white", source: SOURCE.dot },
+      { selector: ".node", property: "@apply", value: ".glass", source: SOURCE.user },
+      { selector: "#a", property: "border-width", value: "2px", source: SOURCE.user },
     ];
     const annotations: Annotation[] = [annotation({ selector: "#a", dy: "4em", text: "note" })];
 
-    const parsed = JSON.parse(JSON.stringify({ ...text, styles: bookFile(rows), annotations }));
+    const parsed = JSON.parse(JSON.stringify({ ...text, styles: asFile(styles), annotations }));
 
     expect(parsed.dot).toBe(BARE_BONE_DOT);
     expect(parsed.action).toBe("console.log('hello');");
-    // An export paints what you see, so every source travels — and the id does
-    // not, because it means nothing on the other page.
+    // An export paints what you see, so every source travels.
     expect(parsed.styles).toEqual({
       ".node": {
         background: { value: "red", source: 0 },

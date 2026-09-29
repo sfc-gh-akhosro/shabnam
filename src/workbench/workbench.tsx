@@ -20,11 +20,12 @@
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
-import { Rows } from "../stylist/rows.tsx";
-import { documentEntries, Stylist } from "../stylist/stylist.ts";
+import { asDocument, documentStyles } from "../style/book.ts";
+import { StyleBook } from "../style/style-book.ts";
 import type { Annotation, StyleDocument, StyleFile, TabId, TabText } from "../types.ts";
 import { Annotations, loadAnnotations, starterAnnotations } from "./annotations.tsx";
 import { Engine } from "./engine.ts";
+import { Rows } from "./rows.tsx";
 import { download, Files } from "./files.ts";
 import { ExportDialog, showExportDialog } from "./export-dialog.tsx";
 import { type Command, commandOf } from "./keys.ts";
@@ -79,9 +80,11 @@ export function Workbench() {
   const [stamp, setStamp] = createSignal(0);
   const [frozen, setFrozen] = createSignal(true);
   const [isAsideHidden, setAsideHidden] = createSignal(false);
-  const stylist = new Stylist();
-  const engine = new Engine(text, stylist, annotations);
-  const files = new Files(text, (tab, value) => setText(tab, value), stylist, annotations);
+  // Made on mount, when `#style-css` exists, and made again by Load DOT: a new
+  // book seeded from the theme is the reset.
+  const [styleBook, setStyleBook] = createSignal<StyleBook>();
+  const engine = new Engine(text, () => styleBook()!, annotations);
+  const files = new Files(text, (tab, value) => setText(tab, value), () => styleBook()!, annotations);
   let dotPicker!: HTMLInputElement;
 
   // The stamp tells the styles tab that the book has taken the DOT's rules.
@@ -92,9 +95,13 @@ export function Workbench() {
 
   const loadDot = async (input: HTMLInputElement) => {
     files.loadDot(await input.files![0]!.text());
+    setStyleBook(new StyleBook());
     input.value = "";
     redraw();
   };
+
+  const saveStyles = () =>
+    download("style-rules.json", JSON.stringify(asDocument(styleBook()!.styles()), null, 2), "application/json");
 
   // The Freeze checkbox pins the aside: while it is checked, neither the click
   // on the canvas nor the hover on the strip may change it.
@@ -117,8 +124,9 @@ export function Workbench() {
     favicon();
     // The theme is the floor of the book; a saved document or an export seed
     // then lays its own entries over it, each at the source it was saved with.
-    stylist.reset();
-    stylist.absorb(documentEntries(seed.styles));
+    const book = new StyleBook();
+    for (const style of documentStyles(seed.styles)) book.add(style);
+    setStyleBook(book);
     redraw();
     const onKey = (event: KeyboardEvent) => {
       const command = commandOf(event);
@@ -145,7 +153,7 @@ export function Workbench() {
             }
           />
           <button title="Cmd/Ctrl+E" onClick={commands["export-html"]}>Export HTML</button>
-          <button onClick={() => stylist.save()}>Save Styles</button>
+          <button onClick={saveStyles}>Save Styles</button>
           {/* `hidden` rather than a class: the picker is opened by `.click()`,
               never seen, and needs no CSS of its own. */}
           <input ref={dotPicker} hidden type="file" accept=".dot,.gv" onChange={(e) => loadDot(e.currentTarget)} />
@@ -182,7 +190,7 @@ export function Workbench() {
         <aside>
           <Tabs active={active()} setActive={setActive} />
           <Show when={active() === "styles"}>
-            <Rows stylist={stylist} stamp={stamp()} />
+            <Rows styleBook={styleBook()!} stamp={stamp()} />
           </Show>
           <Show when={active() === "annotation"}>
             <Annotations

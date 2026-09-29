@@ -2,7 +2,7 @@
 // but the DOM: the rows tab is driven the way a person drives it (set the box,
 // dispatch the event the component listens for), and every assertion is read back
 // off the live sheet or out of `getComputedStyle`. No app internals, so this
-// cannot pass by agreeing with the Stylist about something wrong.
+// cannot pass by agreeing with the StyleBook about something wrong.
 //
 // The picture *files* are **not** covered here — see `docs/archive.md`, V10.
 // Reading a download back out of headless Chrome needed a patched
@@ -157,6 +157,9 @@ function stylesheet(): void {
   check("the sink carries no CSS text", $("#style-css").textContent === "", JSON.stringify($("#style-css").textContent));
   check("the sheet has rules", sheet().cssRules.length > 0, `${sheet().cssRules.length} rules`);
   check("no @apply survives the feed", !cssTexts().join("").includes("@apply"), cssTexts().filter((t) => t.includes("apply")).length);
+  const painted = [...sheet().cssRules].map((rule) => (rule as CSSStyleRule).selectorText);
+  const leaked = [".paper", ".glass", ".row", ".col"].filter((name) => painted.includes(name));
+  check("the theme's mixins never reach the sheet, so its `.row` cannot reach the chrome", leaked.length === 0, leaked.join(" ") || "none");
 
   const nodeBg = background("core");
   check("the theme paints a node", nodeBg !== "rgba(0, 0, 0, 0)" && nodeBg !== "", nodeBg);
@@ -409,7 +412,7 @@ async function liveRepaint(): Promise<void> {
  *
  *  The scratch key is `--primary-color` on purpose — the theme owns it, and a
  *  silent DOT no longer invents a competing source-1 row. The user write is
- *  still refused a take-back, because absorb at source 1 cannot beat source 2.
+ *  still refused a take-back, because an add at source 1 cannot beat source 2.
  *  The row is left standing at the end: deleting it would take the theme's
  *  entry with it, which is the design (§1) and not something to do behind a
  *  later stage's back. */
@@ -433,7 +436,7 @@ async function survivesRedraw(): Promise<void> {
   check("it kept the theme entry's id", /^\d+$/.test(mine[0]!.id), detail);
   check("and it is the user's row now", mine[0]!.dataset.source === "2", detail);
 
-  // A redraw absorbs the DOT's tokens at source 1 *before* the pipeline ever
+  // A redraw adds the DOT's tokens at source 1 *before* the pipeline ever
   // waits for a frame, so the guard is observable without waiting for the whole
   // draw to land.
   redrawButton().click();
@@ -450,10 +453,24 @@ async function applyAndResync(): Promise<void> {
   await type(box(row, "value"), ".glass", "change");
 
   check("an @apply row feeds without leaking @apply", !cssTexts().join("").includes("@apply"), `${sheet().cssRules.length} rules`);
+  check("and `.glass`, now applied, stays out of the sheet", !cssTexts().some((text) => text.startsWith(".glass ")), `${sheet().cssRules.length} rules`);
   dropRow(row);
   await tick();
   await resync();
   check("the dropped @apply row is gone from the list", !rows().includes(row), `${rows().length} rows`);
+
+  // `@apply` only names what the book already has, so a typo is refused like
+  // an invalid value: the row is marked and nothing is written.
+  const unknown = blankRow();
+  const before = errors.length;
+  await type(box(unknown, "selector"), ".scratch-apply", "change");
+  await type(box(unknown, "property"), "@apply", "change");
+  await type(box(unknown, "value"), ".nowhere", "change");
+  check("an @apply of an unknown selector is refused and marks the row", unknown.classList.contains("invalid") && unknown.id === "" && !cssTexts().join("").includes("scratch-apply"), `${unknown.className} id=${unknown.id || "(none)"}`);
+  dropRow(unknown);
+  errors.splice(before, errors.length - before);
+  await tick();
+  await resync();
 }
 
 /**

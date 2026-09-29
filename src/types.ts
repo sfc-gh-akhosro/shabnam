@@ -203,27 +203,16 @@ export type Annotation = {
 };
 
 // ---------------------------------------------------------------------------
-// style — one book: selector → property → (value, id, source)
+// style — one line each: selector's property = value, and who wrote it
 // ---------------------------------------------------------------------------
 
-/** Who wrote an entry. The order *is* the access rule (§1.2). */
+/** Who wrote a style: theme · DOT · you. The order *is* the access rule. */
 export type Source = 0 | 1 | 2;
 
 export const SOURCE = { theme: 0, dot: 1, user: 2 } as const satisfies Record<string, Source>;
 
-/** `id` ties a `.row`, a book entry and a declaration together for as long as
- *  the page lives. Live-DOM only: never written to a file. */
-export type Rule = {
-  value: string;
-  id: number;
-  source: Source;
-};
-
-/** The book. The source of truth for style. Insertion order is row order. */
-export type StyleRules = Map<string, Map<string, Rule>>;
-
-/** A producer's output. No ids, no opinion about source. */
-export type StyleBag = Map<string, Map<string, string>>;
+/** One style rule. Found by selector + property, as CSSOM finds it. */
+export type Style = { selector: Selector; property: Property; value: CssValue; source: Source };
 
 /** What a style JSON holds. One shape, sourced; the theme is all `0`. */
 export type StyleFile = Record<string, Record<string, { value: string; source: Source }>>;
@@ -232,13 +221,12 @@ export type StyleFile = Record<string, Record<string, { value: string; source: S
  *  Only source `2` travels (§4.4). */
 export type StyleDocument = { theme: string; style: StyleFile };
 
-export type StyleRow = {
-  selector: string;
-  property: string;
-  value: string;
-  id: number;
-  source: Source;
-};
+/** A typed value you subscribe to. A fact, never a verb. */
+export interface Topic<T> {
+  readonly value: T;
+  pub(v: T): void;
+  sub(fn: (v: T) => void): void;
+}
 
 // ---------------------------------------------------------------------------
 // interfaces — methods only. Packages implement these, not every file.
@@ -250,7 +238,8 @@ export type StyleRow = {
  */
 export interface Ast {
   model(): DiagramModel;
-  styles(): DotStyles;
+  /** The DOT's appearance, each stamped source 1. */
+  styles(): Style[];
   points(): PointGraph;
 }
 
@@ -269,19 +258,14 @@ export interface Diagram {
   connectors(boxes: Box[], model: DiagramModel, metrics: ConnectorMetrics): string;
 }
 
-export interface Stylist {
-  /** The one door into the book. Refused when `source` is lower than the entry
-   *  already there. Returns that entry's id — minted on first sight, kept on an
-   *  accepted overwrite — or `REFUSED`, so a caller can label its row at once. */
-  addRule(selector: string, property: string, value: string, source: Source): number;
-  removeRule(selector: string, property: string): void;
-  /** Back to a blank book holding the theme. Load DOT, not Redraw. */
-  reset(): void;
-  /** Drop emptied selectors, re-feed. */
-  cleanup(): void;
-  /** The tab: the book, in order. */
-  rows(): StyleRow[];
-  save(): void;
+export interface StyleBook {
+  /** The only way in. False: a higher source owns it, an `@apply` names a
+   *  selector not in the book, or CSSOM refuses the value. */
+  add(style: Style): boolean;
+  remove(style: Style): void;
+  /** What the styles tab shows, in order. */
+  styles(): Style[];
+  readonly changed: Topic<number>;
 }
 
 export interface Workbench {

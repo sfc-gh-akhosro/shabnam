@@ -1,4 +1,52 @@
 {
+  ".paper": {
+    "background": {
+      "value": "color-mix(in srgb, var(--primary-color) 10%, white)",
+      "source": 0
+    },
+    "box-shadow": {
+      "value": "var(--flat-shadow)",
+      "source": 0
+    },
+    "border-radius": {
+      "value": "3px",
+      "source": 0
+    }
+  },
+  ".glass": {
+    "background": {
+      "value": "color-mix(in srgb, var(--secondary-color) 10%, transparent)",
+      "source": 0
+    },
+    "box-shadow": {
+      "value": "var(--raised-shadow)",
+      "source": 0
+    },
+    "fill": {
+      "value": "var(--glass-background)",
+      "source": 0
+    }
+  },
+  ".row": {
+    "display": {
+      "value": "flex",
+      "source": 0
+    },
+    "flex-flow": {
+      "value": "row",
+      "source": 0
+    }
+  },
+  ".col": {
+    "display": {
+      "value": "flex",
+      "source": 0
+    },
+    "flex-flow": {
+      "value": "column",
+      "source": 0
+    }
+  },
   "#diagram-canvas, svg": {
     "--theme-color": {
       "value": "white",
@@ -69,7 +117,7 @@
     "position": {
       "value": "relative",
       "source": 0
-    }, 
+    },
     "@apply": {
       "value": ".glass",
       "source": 0
@@ -118,54 +166,6 @@
     },
     "pointer-events": {
       "value": "none",
-      "source": 0
-    }
-  },
-  ".paper": {
-    "background": {
-      "value": "color-mix(in srgb, var(--primary-color) 10%, white)",
-      "source": 0
-    },
-    "box-shadow": {
-      "value": "var(--flat-shadow)",
-      "source": 0
-    },
-    "border-radius": {
-      "value": "3px",
-      "source": 0
-    }
-  },
-  ".glass": {
-    "background": {
-      "value": "color-mix(in srgb, var(--secondary-color) 10%, transparent)",
-      "source": 0
-    },
-    "box-shadow": {
-      "value": "var(--raised-shadow)",
-      "source": 0
-    },
-    "fill": {
-      "value": "var(--glass-background)",
-      "source": 0
-    }
-  },
-  ".row": {
-    "display": {
-      "value": "flex",
-      "source": 0
-    },
-    "flex-flow": {
-      "value": "row",
-      "source": 0
-    }
-  },
-  ".col": {
-    "display": {
-      "value": "flex",
-      "source": 0
-    },
-    "flex-flow": {
-      "value": "column",
       "source": 0
     }
   },

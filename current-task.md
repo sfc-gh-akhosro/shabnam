@@ -10,37 +10,18 @@ Every session reads it first. Each session starts fresh, ends green
 (`bun test` and `bun run test:browser`), and ends with the closing ceremony
 and a commit. The app works at the end of every session.
 
-## Lab, done in Session 2
+## Done
 
-`research-lab/ui-redesign/` holds the pieces (`ui/`), the target types
-(`types.ts`, `ui/types.ts`), the skeleton, `lab.css` (the renames over
-`app.css`) and the probe. Run it with `bun run research-lab/ui-redesign/serve.ts`
-→ `http://localhost:3100`. Two shapes the lab settled, for Session 6 to keep:
-
-- `Checks<K>` binds a `Topic<Set<K>>`, so `view.pinned` is a one-key set.
-- `DialogAsk` is a `<form method="dialog">`: the pressed button's `value` is
-  the answer, `"ok"` reads the form, anything else (Cancel, Escape) is
-  `undefined`. No submit handler.
-
-## Session 3 — StyleBook: one way in
-
-- `stylist/` → `style/`, `Stylist` → `StyleBook`: `add(style): boolean`,
-  `remove(style)`, `styles()`, `changed: Topic<number>`. Source travels on
-  the `Style`. `absorb` and `reset` are gone.
-- `DotReader.styles()` (still `GraphvizAst` until Session 4) returns
-  `Style[]` stamped `source: 1`.
-- `@apply` at minimal support (architecture §5): names only selectors already
-  in the book, and an unknown name makes `add` return `false`. Move the theme's
-  mixins (`.paper .glass .row .col`) to the top of `basic-theme.json`, and delete
-  the cycle check.
-- Mixins stop reaching CSSOM: they are expanded where they are `@apply`d and
-  never fed to the sheet on their own. Changing a mixin re-feeds the selectors
-  that apply it.
-- `topic.ts` moves from the lab to `src/ui/`.
-- The Solid rows tab keeps working through a thin adapter, which is deleted in
+- Session 2: the lab (`research-lab/ui-redesign/`). Run it with
+  `bun run research-lab/ui-redesign/serve.ts` → `http://localhost:3100`.
+  Two shapes it settled, for Session 6 to keep:
+  - `Checks<K>` binds a `Topic<Set<K>>`, so `view.pinned` is a one-key set.
+  - `DialogAsk` is a `<form method="dialog">`: the pressed button's `value`
+    is the answer, `"ok"` reads the form, anything else is `undefined`.
+- Session 3: `style/` — `StyleBook.add` is the only way in, mixins never
+  reach CSSOM, `topic.ts` is in `src/ui/`. The Solid styles tab runs through
+  `workbench/rows.tsx`, an adapter that mints its own row ids; delete it in
   Session 6.
-- Done when: tests are green, the styles tab behaves as before, and a theme
-  `.row` no longer reaches the chrome.
 
 ## Session 4 — Renames: read, layout, paint
 
@@ -77,3 +58,8 @@ and a commit. The app works at the end of every session.
   `design-story.md` to what the code did not already say.
 
 # For Later
+
+- **Decide the `@apply` cycle rule** (architecture §5, Open). Either names
+  must be written *earlier* than the applying selector (no check, but a new
+  user mixin cannot be applied to a theme selector like `.node`), or `admits`
+  gets a small cycle check and §5 allows it.

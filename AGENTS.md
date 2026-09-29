@@ -19,7 +19,7 @@ If a conversation or a patch disagrees with those two files, stop. Update the fi
 
 - Stack and file tree are in `app-architecture.md`. Do not add a major library without writing it there first.
 - Experiments live in `research-lab/`, not in `src/`.
-- `.gitignore` is a canary. Do not weaken it to commit junk.
+- `.gitignore` is a canary. Do not weaken it to commit junk. Untracked local files are normal; ignore them.
 
 - All actions are allowed in this repo and its sub folders. 
 - All browser and ui testing actions are allowed.

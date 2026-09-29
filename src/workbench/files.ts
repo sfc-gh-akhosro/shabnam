@@ -1,22 +1,20 @@
 // File verbs: DOT load/save, export HTML, and the picture snapshot (§4.1).
 
-import { serialize } from "../stylist/sheet.ts";
-import { Stylist } from "../stylist/stylist.ts";
+import { asFile } from "../style/book.ts";
+import { serialize } from "../style/sheet.ts";
+import type { StyleBook } from "../style/style-book.ts";
 import type * as T from "../types.ts";
 
 export class Files implements T.Files {
   constructor(
     private text: T.TabText,
     private setTab: T.SetTab,
-    private stylist: Stylist,
+    private styleBook: () => StyleBook,
     private annotations: T.Annotation[],
   ) {}
 
   loadDot(dot: string): void {
     this.setTab("dot", dot);
-    // A new diagram starts on a blank book holding the theme (§1). Redraw keeps
-    // the book; Load is the one verb that does not.
-    this.stylist.reset();
   }
 
   saveDot(): string {
@@ -25,7 +23,7 @@ export class Files implements T.Files {
 
   async exportHtml(): Promise<string> {
     const [css, app] = await Promise.all([asset("app-css"), asset("app-js")]);
-    return page(css, app, seed(this.text, bookFile(this.stylist.rows()), this.annotations));
+    return page(css, app, seed(this.text, asFile(this.styleBook().styles()), this.annotations));
   }
 
   async exportPicture(options: T.PictureOptions): Promise<Blob> {
@@ -74,16 +72,6 @@ export function download(name: string, body: string | Blob, type: string): void 
   const link = Object.assign(document.createElement("a"), { href: url, download: name });
   link.click();
   URL.revokeObjectURL(url);
-}
-
-/** The whole book, as the export seed carries it: an export paints what you see.
- *  Each entry keeps its source, so the exported page reproduces the same book. */
-export function bookFile(rows: T.StyleRow[]): T.StyleFile {
-  const file: T.StyleFile = {};
-  for (const row of rows) {
-    (file[row.selector] ??= {})[row.property] = { value: row.value, source: row.source };
-  }
-  return file;
 }
 
 async function raster(svg: string, scale: number): Promise<Blob> {

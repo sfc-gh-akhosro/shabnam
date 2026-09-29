@@ -5,15 +5,16 @@
 
 import { expect, test } from "bun:test";
 import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
+import { bag } from "./bag.ts";
 import type * as T from "../src/types.ts";
 
 const FIXTURE = new URL("../research-lab/example-1.dot", import.meta.url).pathname;
 
-function rules(dot: string): T.DotStyles {
-  return new GraphvizAst(dot).styles();
+function rules(dot: string): ReturnType<typeof bag> {
+  return bag(new GraphvizAst(dot).styles());
 }
 
-function shape(out: T.DotStyles): string {
+function shape(out: ReturnType<typeof bag>): string {
   return JSON.stringify(
     Object.fromEntries([...out].map(([selector, properties]) => [selector, Object.fromEntries(properties)])),
   );

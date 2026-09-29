@@ -13,35 +13,41 @@
 // is the book re-read on every sync, so there is nothing for a Cleanup button to
 // tidy that entering the tab does not.
 //
-// The list is a snapshot of `Stylist.rows()`, which is the book traversed in
-// order. One row per entry: a repeated `(selector, property)` is an overwrite in
-// the book, so it cannot be two rows here. Every row is editable and none is
-// read-only — there is no layer beneath a row for it to shadow. Editing one
-// writes at source 2, in place, keeping the entry's id.
+// A thin adapter over the `StyleBook`, deleted when the workbench goes vanilla.
 //
-// A row this tab has just invented is not in the book yet, so it has no id and
-// its element carries none; there is nothing to point at until all three boxes
-// say something. It picks one up on the next sync.
+// The list is a snapshot of `styleBook.styles()`, the book in order. One row per
+// style: a repeated `(selector, property)` is an overwrite in the book, so it
+// cannot be two rows here. Editing a row writes at source 2, in place.
+//
+// The book has no ids; a row's id is this tab's own, one per selector +
+// property for as long as the page lives. A row this tab has just invented is
+// not in the book yet, so its element carries none until the book takes it.
 //
 // All three boxes commit on `change`, never on `input`. Nothing updates while
 // you are typing: a half-typed selector must not reach `insertRule`, and a
 // half-typed value is a rule the user has not finished saying yet.
 //
-// A row whose value CSSOM will not take wears `.invalid`, which nothing styles:
-// it is a hook for the browser checks and for a reader of the DOM, and the
-// console carries the message. That row **does not reach the book** — the
-// picture keeps the last good value, and the row keeps the text as typed, so it
-// is there to fix or to ❌.
+// A row the book refuses — `styleBook.add` returned false — wears `.invalid`,
+// which nothing styles: it is a hook for the browser checks and for a reader of
+// the DOM, and the console carries the message. The picture keeps the last good value, and the row keeps the text as
+// typed, so it is there to fix or to ❌.
 
 import { createEffect, createSignal, Index } from "solid-js";
+import type { StyleBook } from "../style/style-book.ts";
 import * as T from "../types.ts";
-import { priority } from "./sheet.ts";
-import { REFUSED, type Stylist } from "./stylist.ts";
 
 type Field = "selector" | "property" | "value";
 
-// Ours, not CSS. `CSS.supports` has never heard of it.
-const APPLY = "@apply";
+/** The id of a row that is not in the book. */
+const NONE = 0;
+
+const IDS = new Map<string, number>();
+
+function idOf(style: T.Style): number {
+  const key = `${style.selector}\u0000${style.property}`;
+  if (!IDS.has(key)) IDS.set(key, IDS.size + 1);
+  return IDS.get(key)!;
+}
 
 /** The property box's catalog, and whether a swatch makes sense for it. */
 const PROPERTY = new Map<string, "color" | "text">([
@@ -68,11 +74,10 @@ const PROPERTY = new Map<string, "color" | "text">([
 // text box rather than a swatch that would show black and mean nothing.
 const HEX = /^#[0-9a-f]{6}$/i;
 
-// A book entry's id is never `REFUSED` — the Stylist's counter starts at 1 — so
-// that is how a row this tab has invented says it is not in the book yet. A fresh
-// object each time: two blanks are two rows, and sharing one would make them one.
+// A fresh object each time: two blanks are two rows, and sharing one would make
+// them one.
 function blank(): Listed {
-  return { selector: "", property: "", value: "", id: REFUSED, source: T.SOURCE.user, gone: false };
+  return { selector: "", property: "", value: "", source: T.SOURCE.user, id: NONE, refused: false, gone: false };
 }
 
 /**
@@ -84,7 +89,7 @@ function blank(): Listed {
  * the next sync, where the row simply will not be. Splicing the element out as
  * well would be the UI keeping its own second opinion about what exists.
  */
-type Listed = T.StyleRow & { gone: boolean };
+type Listed = T.Style & { id: number; refused: boolean; gone: boolean };
 
 /**
  * The list always ends with an untouched blank row, and `.rows` is
@@ -99,7 +104,7 @@ function ready(list: Listed[]): Listed[] {
 }
 
 type RowsProps = {
-  stylist: Stylist;
+  styleBook: StyleBook;
   /** Bumped by every redraw, so rules the DOT brought in show up here. */
   stamp: number;
 };
@@ -142,44 +147,36 @@ export function Rows(props: RowsProps) {
   // a blank they never filled in is simply not in the book, so it is not here.
   createEffect(() => {
     void props.stamp;
-    setRows(ready(props.stylist.rows().map((row) => ({ ...row, gone: false }))));
+    setRows(ready(props.styleBook.styles().map((style) => ({ ...style, id: idOf(style), refused: false, gone: false }))));
   });
 
   const write = (at: number, field: Field, value: string) => {
     const before = rows()[at]!;
     const after = { ...before, [field]: value, source: T.SOURCE.user };
-    // Only a changed key removes the old entry. Rewriting the value in place is
-    // what keeps the row's id, and the id is the whole reason it exists. This
-    // runs even when the new value is refused below, so a rekeyed row cannot
-    // leave a stale entry behind under its old name.
+    // Only a changed key removes the old entry. This runs even when the new
+    // value is refused below, so a rekeyed row cannot leave a stale entry
+    // behind under its old name.
     const rekeyed = before.selector !== after.selector || before.property !== after.property;
-    if (rekeyed && keyed(before)) props.stylist.removeRule(before.selector, before.property);
+    if (rekeyed && keyed(before)) props.styleBook.remove(before);
     // `ready` runs on the way out: filling in the waiting blank is what puts the
     // next one there, so the top of the list is never occupied for long.
-    setRows(ready(rows().map((row, i) => (i === at ? { ...after, id: commit(after) } : row))));
+    setRows(ready(rows().map((row, i) => (i === at ? commit(after) : row))));
   };
 
   /**
-   * The row into the book, or not at all — and the id the row then wears.
-   *
-   * A value CSSOM will not take is **not written**: the book and the sheet keep
-   * whatever they held, so the picture never flickers through a broken value on
-   * the way to a good one. The row still shows the text and still wears
-   * `.invalid`, because the class is derived from the row rather than stored.
-   *
-   * The book mints the id, and the row wears it from the moment the rule exists
-   * — waiting for the next sync would leave a live rule with no way to point at
-   * its element. A user write is source 2 and cannot be refused, but if it ever
-   * were, the row keeps whatever id it had.
+   * The row into the book, or not at all. A refused row is **not written**: the
+   * book and the sheet keep what they held, so the picture never flickers
+   * through a broken value on the way to a good one. It keeps its text and its
+   * id, and wears `.invalid`.
    */
-  const commit = (row: Listed): number => {
-    if (!supported(row)) {
-      console.error(`[styles] ${row.selector} { ${row.property}: ${row.value} } rejected by CSSOM`);
-      return row.id;
+  const commit = (row: Listed): Listed => {
+    if (!keyed(row)) return { ...row, refused: false };
+    const { selector, property, value, source } = row;
+    if (!props.styleBook.add({ selector, property, value, source })) {
+      console.error(`[styles] ${selector} { ${property}: ${value} } refused by the style book`);
+      return { ...row, refused: true };
     }
-    if (!keyed(row)) return row.id;
-    const minted = props.stylist.addRule(row.selector, row.property, row.value, T.SOURCE.user);
-    return minted === REFUSED ? row.id : minted;
+    return { ...row, id: idOf(row), refused: false };
   };
 
   const insert = (at: number) => setRows([...rows().slice(0, at + 1), blank(), ...rows().slice(at + 1)]);
@@ -188,7 +185,7 @@ export function Rows(props: RowsProps) {
   // the book's reflection, and the next sync is what removes the element.
   const drop = (at: number) => {
     const row = rows()[at]!;
-    if (keyed(row)) props.stylist.removeRule(row.selector, row.property);
+    if (keyed(row)) props.styleBook.remove(row);
     setRows(ready(rows().map((one, i) => (i === at ? { ...one, gone: true } : one))));
   };
 
@@ -230,8 +227,8 @@ export function Rows(props: RowsProps) {
           // selector or value is read by hovering rather than by clicking in.
           <div
             class="row"
-            classList={{ invalid: !supported(row()) }}
-            id={row().id === REFUSED ? undefined : String(row().id)}
+            classList={{ invalid: row().refused }}
+            id={row().id === NONE ? undefined : String(row().id)}
             data-source={row().source}
             hidden={row().gone}
           >
@@ -274,30 +271,14 @@ export function Rows(props: RowsProps) {
 // is not a rule: `@apply` with nothing after it throws at feed time, and for
 // every other property `setProperty(…, "")` paints nothing anyway. It also gives
 // clearing the value box its natural meaning — the rule is removed.
-function keyed(row: T.StyleRow): boolean {
+function keyed(row: T.Style): boolean {
   return row.selector !== "" && row.property !== "" && row.value !== "";
 }
 
-/**
- * Whether CSSOM will actually take this declaration.
- *
- * A value CSSOM cannot parse is dropped in silence — `0px0`, `margn`, and an
- * `!important` left inside the value all vanish the same way, leaving a row that
- * looks committed and paints nothing. `CSS.supports` is the same parse, asked out
- * loud, so the row can wear the answer.
- *
- * Derived, never stored: a rule the theme or the DOT brought in can be wrong too,
- * and it never passes through `write`.
- */
-function supported(row: T.StyleRow): boolean {
-  if (!keyed(row) || row.property === APPLY) return true;
-  return CSS.supports(row.property, priority(row.value)[0]);
-}
-
-function swatched(row: T.StyleRow): boolean {
+function swatched(row: T.Style): boolean {
   return PROPERTY.get(row.property) === "color" && (row.value === "" || HEX.test(row.value));
 }
 
-function selectors(rows: T.StyleRow[]): string[] {
+function selectors(rows: T.Style[]): string[] {
   return [...new Set(rows.map((row) => row.selector))].filter((name) => name !== "");
 }

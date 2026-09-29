@@ -7,7 +7,7 @@ import { Checks } from "./ui/checks.ts";
 import { DialogAsk } from "./ui/dialog-ask.ts";
 import { Radios } from "./ui/radios.ts";
 import { RowList } from "./ui/row-list.ts";
-import { Topic } from "./ui/topic.ts";
+import { Topic } from "../../src/ui/topic.ts";
 import type * as UI from "./ui/types.ts";
 import type { RowAt, RowEdit, RowKind } from "./ui/types.ts";
 

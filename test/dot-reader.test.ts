@@ -6,6 +6,7 @@
 
 import { expect, test } from "bun:test";
 import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
+import { bag } from "./bag.ts";
 
 const fixture = async (name: string) =>
   new GraphvizAst(await Bun.file(new URL(`../research-lab/${name}.dot`, import.meta.url)).text());
@@ -108,7 +109,7 @@ test("`\\G` is the cluster's own name", () => {
 
 test("a `node [...]` composes a flat selector from the branch it was written on", () => {
   // One rule naming the branch, not three `#id` rules and a guess at the default.
-  expect(two.styles().get(".subgraph_1.node, .subgraph_1.record")).toEqual(
+  expect(bag(two.styles()).get(".subgraph_1.node, .subgraph_1.record")).toEqual(
     new Map([["background-color", "#ddffdd"]]),
   );
 });
@@ -119,7 +120,7 @@ test("the root names the canvas, an edge declaration is `.edge`, a subgraph is i
     edge [color="grey"]
     subgraph cluster_a { bgcolor="azure" ; node [fillcolor="coral"] ; a }
   }`);
-  const styles = ast.styles();
+  const styles = bag(ast.styles());
   // `#diagram-canvas`, not `:root`: `:root` is `<html>` on screen and the `<svg>`
   // after export, so one rule would paint two different things.
   expect(styles.get("#diagram-canvas")).toEqual(new Map([["background-color", "white"]]));
@@ -131,8 +132,8 @@ test("the root names the canvas, an edge declaration is `.edge`, a subgraph is i
 });
 
 test("a bare graph attribute and a `graph [...]` produce the same rule", () => {
-  const bare = new GraphvizAst(`digraph { bgcolor="white" }`).styles();
-  const listed = new GraphvizAst(`digraph { graph [bgcolor="white"] }`).styles();
+  const bare = bag(new GraphvizAst(`digraph { bgcolor="white" }`).styles());
+  const listed = bag(new GraphvizAst(`digraph { graph [bgcolor="white"] }`).styles());
   expect([...listed]).toEqual([...bare]);
 });
 
@@ -140,17 +141,17 @@ test("a nested declaration composes both names, because there is no wrapper elem
   const ast = new GraphvizAst(`digraph {
     subgraph cluster_a { subgraph inner { node [fillcolor="coral"] ; a } }
   }`);
-  expect([...ast.styles().keys()]).toEqual([".cluster_a.inner.node, .cluster_a.inner.record"]);
+  expect([...bag(ast.styles()).keys()]).toEqual([".cluster_a.inner.node, .cluster_a.inner.record"]);
 });
 
 test("a node's own attributes are its `#id`", () => {
-  expect(two.styles().get("#horizon")).toEqual(new Map([["font-size", "12px"]]));
-  expect(two.styles().get("#horizon_runtime")).toEqual(new Map([["border-width", "3px"]]));
+  expect(bag(two.styles()).get("#horizon")).toEqual(new Map([["font-size", "12px"]]));
+  expect(bag(two.styles()).get("#horizon_runtime")).toEqual(new Map([["border-width", "3px"]]));
 });
 
 test("appearance is **not** resolved onto members — that is the whole asymmetry", () => {
   const ast = new GraphvizAst(`digraph { subgraph cluster_a { node [fillcolor="coral"] ; a ; b } }`);
-  const selectors = [...ast.styles().keys()];
+  const selectors = [...bag(ast.styles()).keys()];
   expect(selectors).toEqual([".cluster_a.node, .cluster_a.record"]);
   expect(selectors).not.toContain("#a");
 });
@@ -161,7 +162,7 @@ test("a bare number gains `px`, because `font-size: 12` is not valid CSS", () =>
   const ast = new GraphvizAst(`digraph {
     node [fontsize=12 penwidth=3 height=0.5 fontname="Inter" fillcolor="#ddffdd"]
   }`);
-  expect(ast.styles().get(".node, .record")).toEqual(
+  expect(bag(ast.styles()).get(".node, .record")).toEqual(
     new Map<string, string>([
       ["font-size", "12px"],
       ["border-width", "3px"],
@@ -176,13 +177,13 @@ test("an attribute the registry does not know is not appearance, and is dropped"
   // `splines`, `concentrate`, `nodesep`, `dir`, `constraint`, `weight` — layout
   // and semantics, none of them ours to paint.
   const ast = new GraphvizAst(`digraph { splines=ortho ; concentrate=true ; a -> b [weight=100] }`);
-  expect([...ast.styles().keys()]).toEqual([]);
+  expect([...bag(ast.styles()).keys()]).toEqual([]);
 });
 
 test("a diagram of pure markup derives no appearance at all", () => {
   // example-1 says only `shape`, `label`, `icon` and `caption`, so the theme is
   // left to do all the talking.
-  expect([...one.styles().keys()]).toEqual([]);
+  expect([...bag(one.styles()).keys()]).toEqual([]);
 });
 
 // --- the point graph: everything layout does not need is gone --------------

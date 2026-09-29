@@ -8,7 +8,8 @@ the code disagree, this file wins until we change it together.
 > **Migration in progress.** This describes the redesign approved in
 > `research-lab/ui-redesign/design-story.md`. The code reaches it through the
 > sessions in `current-task.md`; until then `src/` still has the old package
-> names (`dot/`, `diagram/`, `stylist/`) and a SolidJS workbench.
+> names `dot/` and `diagram/` and a SolidJS workbench. `style/` (`StyleBook`)
+> and `ui/topic.ts` have landed.
 
 ---
 
@@ -159,7 +160,10 @@ data URIs through markdown-it's own image rule.
   CSSOM expands it in place, so the selector's own later properties win, and a
   mixin may apply another. **It may only name a selector the book already
   has** — sources arrive in order (theme, DOT, user) and the theme lists its
-  mixins first — so a cycle cannot be written and there is no cycle check.
+  mixins first — so a load in order writes no cycle and there is no cycle check.
+  **Open:** a later edit can still close one (`.b` applies `.a`, then `.a`
+  applies `.b`); the expansion then overflows the stack and every paint
+  throws until the next Open. Unfixed until we choose a rule (`current-task.md`).
   Naming an unknown selector is refused like an invalid value: `add` returns
   `false`. Changing a mixin re-feeds everything that applies it. Chromium has no
   native mixins yet; when it does, only the feed changes.

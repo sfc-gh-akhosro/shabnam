@@ -5,7 +5,7 @@
 // record, which is why they can disagree about resolution.
 
 import { parse } from "@ts-graphviz/ast";
-import type * as T from "../types.ts";
+import * as T from "../types.ts";
 import { buildModel } from "./model.ts";
 import { buildStyles } from "./styles.ts";
 import { buildPoints } from "./points.ts";
@@ -38,8 +38,10 @@ export class GraphvizAst implements T.Ast {
     return buildModel(this.written);
   }
 
-  styles(): T.DotStyles {
-    return buildStyles(this.written);
+  styles(): T.Style[] {
+    return [...buildStyles(this.written)].flatMap(([selector, properties]) =>
+      [...properties].map(([property, value]) => ({ selector, property, value, source: T.SOURCE.dot })),
+    );
   }
 
   points(): T.PointGraph {
