@@ -60,6 +60,25 @@ describe("@apply — names only what the book already has", () => {
     expect(admits(book([theme(".paper", "background", "white")]), user(".node", "@apply", ".paper"))).toBe(true);
   });
 
+  test("a newer mixin applies to an older theme selector", () => {
+    const rules = book([theme(".node", "padding", "1em"), user(".brand", "background", "navy")]);
+    expect(admits(rules, user(".node", "@apply", ".brand"))).toBe(true);
+  });
+
+  test("a loop is refused: itself, or two steps round", () => {
+    const self = book([user(".a", "color", "red")]);
+    expect(admits(self, user(".a", "@apply", ".a"))).toBe(false);
+    const two = book([user(".card", "color", "red"), user(".shadow", "@apply", ".card")]);
+    expect(admits(two, user(".card", "@apply", ".shadow"))).toBe(false);
+  });
+
+  test("three hops nest, a fourth is refused", () => {
+    const chain = [user(".d", "color", "red"), user(".c", "@apply", ".d"), user(".b", "@apply", ".c")];
+    expect(admits(book(chain), user(".a", "@apply", ".b"))).toBe(true);
+    const longer = book([...chain, user(".a", "@apply", ".b")]);
+    expect(admits(longer, user(".z", "@apply", ".a"))).toBe(false);
+  });
+
   test("expands in place, and the selector's own later properties win", () => {
     const rules = book([
       theme(".paper", "background", "white"),

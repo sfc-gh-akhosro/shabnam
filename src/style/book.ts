@@ -20,13 +20,25 @@ export type Book = Map<T.Selector, Map<T.Property, T.Style>>;
 /**
  * Whether the book lets a style in, before CSSOM is asked (architecture §5).
  * A lower source never overwrites a higher one, and an `@apply` may only name
- * selectors the book already has.
+ * selectors the book already has and may nest at most `NEST` deep — which is
+ * also what refuses a loop, since a loop nests forever.
  */
 export function admits(book: Book, style: T.Style): boolean {
   const existing = book.get(style.selector)?.get(style.property);
   if (existing !== undefined && style.source < existing.source) return false;
   if (style.property !== APPLY) return true;
-  return names(style.value).every((name) => book.has(name));
+  if (!names(style.value).every((name) => book.has(name))) return false;
+  const own = new Map(book.get(style.selector)).set(APPLY, style);
+  return nests(new Map(book).set(style.selector, own), style.selector, 0);
+}
+
+/** How many `@apply` hops a selector may take: `.node → .brand → .paper → .glass`. */
+const NEST = 3;
+
+function nests(book: Book, selector: T.Selector, depth: number): boolean {
+  if (depth > NEST) return false;
+  const apply = book.get(selector)?.get(APPLY);
+  return apply === undefined || names(apply.value).every((name) => nests(book, name, depth + 1));
 }
 
 /**

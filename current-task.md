@@ -21,7 +21,4 @@ Nothing scheduled. Pick from For Later.
 
 # For Later
 
-- **Decide the `@apply` cycle rule** (architecture §5, Open). Either names
-  must be written *earlier* than the applying selector (no check, but a new
-  user mixin cannot be applied to a theme selector like `.node`), or `admits`
-  gets a small cycle check and §5 allows it.
+Nothing yet.
