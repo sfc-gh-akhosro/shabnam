@@ -10,21 +10,10 @@ Every session reads it first. Each session starts fresh, ends green
 (`bun test` and `bun run test:browser`), and ends with the closing ceremony
 and a commit. The app works at the end of every session.
 
-## Session 1 — The law follows the story
-
-Story → types → architecture, before any code.
-
-- Rewrite `user-story.md` from the design story: `Diagram` as the living state,
-  the pieces, how they talk (call · native event · `Topic` · `await` ·
-  `COMMANDS`), vanilla DOM instead of SolidJS.
-- Rewrite `app-architecture.md` to match: stack (SolidJS out), players,
-  packages and arrows, `index.html` as skeleton, the mixin rule, the new tree.
-- Sketch the target `src/types.ts` section by section (design types only;
-  details stay in code), marking what exists today and what is new.
-- Done when: the three files agree with the design story and with each other.
-  No `src/` code changes.
-
 ## Session 2 — The pieces, in the lab
+
+- Carried over from Session 1 (the law files are rewritten): sketch the target
+  `src/types.ts` as the story's types only, and `ui/types.ts` for the pieces.
 
 - `research-lab/ui-redesign/`: `index.html` (the new skeleton and
   `<template>`s, linking `src/app.css`), `ui/topic.ts`, `ui/radios.ts`,
@@ -43,8 +32,13 @@ Story → types → architecture, before any code.
   the `Style`. `absorb` and `reset` are gone.
 - `DotReader.styles()` (still `GraphvizAst` until Session 4) returns
   `Style[]` stamped `source: 1`.
+- `@apply` at minimal support (architecture §5): names only selectors already
+  in the book, and an unknown name makes `add` return `false`. Move the theme's
+  mixins (`.paper .glass .row .col`) to the top of `basic-theme.json`, and delete
+  the cycle check.
 - Mixins stop reaching CSSOM: they are expanded where they are `@apply`d and
-  never fed to the sheet on their own.
+  never fed to the sheet on their own. Changing a mixin re-feeds the selectors
+  that apply it.
 - `topic.ts` moves from the lab to `src/ui/`.
 - The Solid rows tab keeps working through a thin adapter, which is deleted in
   Session 6.

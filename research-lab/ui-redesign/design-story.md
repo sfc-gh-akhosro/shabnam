@@ -198,6 +198,9 @@ What falls out:
 - **The reader stamps `source: 1`.** It knows where its styles came from.
 - **No row id in the public shape.** A style is found by selector + property,
   as CSSOM finds it; the row carries the pair as `data-` attributes.
+- **`@apply` only looks back.** It names class selectors the book already
+  has (the theme lists its mixins first), so a whole load is `add` in order,
+  no cycle can be written, and an unknown name is just `add` returning `false`.
 - **No `reset()`.** Open makes a new `Diagram`, whose new `StyleBook` is seeded
   from the theme — `add` in a loop again.
 
