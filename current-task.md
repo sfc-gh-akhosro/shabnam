@@ -10,20 +10,17 @@ Every session reads it first. Each session starts fresh, ends green
 (`bun test` and `bun run test:browser`), and ends with the closing ceremony
 and a commit. The app works at the end of every session.
 
-## Session 2 — The pieces, in the lab
+## Lab, done in Session 2
 
-- Carried over from Session 1 (the law files are rewritten): sketch the target
-  `src/types.ts` as the story's types only, and `ui/types.ts` for the pieces.
+`research-lab/ui-redesign/` holds the pieces (`ui/`), the target types
+(`types.ts`, `ui/types.ts`), the skeleton, `lab.css` (the renames over
+`app.css`) and the probe. Run it with `bun run research-lab/ui-redesign/serve.ts`
+→ `http://localhost:3100`. Two shapes the lab settled, for Session 6 to keep:
 
-- `research-lab/ui-redesign/`: `index.html` (the new skeleton and
-  `<template>`s, linking `src/app.css`), `ui/topic.ts`, `ui/radios.ts`,
-  `ui/checks.ts`, `ui/row-list.ts`, `ui/dialog-ask.ts`.
-- `lab.ts` shows every piece with fake data in rest, checked and invalid
-  states. `probe.ts` prints every topic publish and every custom event.
-- Try the CSS renames (`.radios`, `.checks`, `.pin`, `.rows.notes`, `.col`)
-  in a lab stylesheet laid over `app.css`.
-- Done when: the page looks right by eye, the probe output reads like §4 of
-  the story, and nothing in `src/` changed.
+- `Checks<K>` binds a `Topic<Set<K>>`, so `view.pinned` is a one-key set.
+- `DialogAsk` is a `<form method="dialog">`: the pressed button's `value` is
+  the answer, `"ok"` reads the form, anything else (Cancel, Escape) is
+  `undefined`. No submit handler.
 
 ## Session 3 — StyleBook: one way in
 
