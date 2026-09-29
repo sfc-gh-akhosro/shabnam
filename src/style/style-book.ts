@@ -10,13 +10,11 @@
 // over; that is what opening a DOT does.
 
 import * as T from "../types.ts";
-import { Topic } from "../ui/topic.ts";
 import { admits, APPLY, type Book, expand, fileStyles, painted } from "./book.ts";
 import { priority, Sheet } from "./sheet.ts";
 import basicTheme from "../../theme/basic-theme.json";
 
 export class StyleBook implements T.StyleBook {
-  readonly changed = new Topic(0);
   #book: Book = new Map();
   #sheet = new Sheet();
 
@@ -45,7 +43,6 @@ export class StyleBook implements T.StyleBook {
   #paint(style: T.Style): void {
     if (style.property === APPLY) this.#sheet.feed(this.#book);
     else for (const one of painted(this.#book, style.selector)) this.#sheet.paint(one, expand(this.#book, one));
-    this.changed.pub(this.changed.value + 1);
   }
 }
 

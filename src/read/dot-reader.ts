@@ -40,7 +40,7 @@ export class DotReader implements T.DotReader {
 
   styles(): T.Style[] {
     return [...buildStyles(this.written)].flatMap(([selector, properties]) =>
-      [...properties].map(([property, value]) => ({ selector, property, value, source: T.SOURCE.dot })),
+      [...properties].map(([property, value]): T.Style => ({ selector, property, value, source: 1 })),
     );
   }
 

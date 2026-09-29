@@ -5,11 +5,8 @@ what and why (`user-story.md`); the types say the shapes (`src/types.ts`, and a
 package's own `types.ts`); the craft is `coding-rules.md`. When this file and
 the code disagree, this file wins until we change it together.
 
-> **Migration nearly done.** This describes the redesign approved in
-> `research-lab/ui-redesign/design-story.md`, and the code now implements it:
-> the workbench is vanilla DOM over an `index.html` skeleton, and SolidJS is
-> gone. Left for `current-task.md`: the final `types.ts` pass and trimming the
-> design story.
+> The redesign in `research-lab/ui-redesign/design-story.md` is implemented;
+> that file now keeps only the reasons this one does not repeat.
 
 ---
 
@@ -211,8 +208,8 @@ Toolbar, textareas and canvas are plain HTML with one listener each.
 Rules:
 
 - A topic holds a fact, never a verb. Topics: `diagram.dot`, `diagram.notes`,
-  `diagram.script`, `styleBook.changed`, `view.tab`, `view.pinned`,
-  `view.shown`.
+  `diagram.script`, `view.tab`, `view.pinned`, `view.shown`. The style book
+  publishes nothing: the styles tab re-reads it (below).
 - A subscriber that throws, throws. Nothing is unmounted — tabs flip `hidden` —
   so there is no `unsub`.
 - **Nothing draws while you type.** Text panes publish on `input`, but only

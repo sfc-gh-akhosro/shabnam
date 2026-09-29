@@ -72,9 +72,10 @@ export class Diagram implements T.Diagram {
 
     await painted();
     const boxes = this.measure();
-    this.inject("cluster-shells", this.painter.clusters(boxes, model));
-    this.inject("node-shells", this.painter.shells(boxes, model));
-    this.inject("connector-paths", this.painter.connectors(boxes, model, this.metrics()));
+    const svg = this.painter.svg(boxes, model, this.metrics());
+    this.inject("cluster-shells", svg.clusters);
+    this.inject("node-shells", svg.shells);
+    this.inject("connector-paths", svg.connectors);
     this.place();
     this.inject("action-js", this.script.value);
   }

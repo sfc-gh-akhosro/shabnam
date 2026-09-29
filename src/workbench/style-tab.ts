@@ -18,8 +18,6 @@ import { type RowAt, type RowEdit, type RowKind, RowList } from "../ui/row-list.
 import { Topic } from "../ui/topic.ts";
 import * as T from "../types.ts";
 
-type SourceName = keyof typeof T.SOURCE;
-
 /** A row as the list holds it: the book's style, and whether the book refused it. */
 type Listed = T.Style & { refused: boolean };
 
@@ -42,7 +40,7 @@ const STYLE_ROW: RowKind<Listed> = {
   attrs: (row) => ({ "data-source": String(row.source), "data-selector": row.selector, "data-property": row.property }),
 };
 
-const blank = (): Listed => ({ selector: "", property: "", value: "", source: T.SOURCE.user, refused: false });
+const blank = (): Listed => ({ selector: "", property: "", value: "", source: 2, refused: false });
 const keyed = (row: T.Style) => row.selector !== "" && row.property !== "" && row.value !== "";
 
 /** The list always ends with an untouched blank; filling it appends the next. */
@@ -53,7 +51,7 @@ function ready(rows: Listed[]): Listed[] {
 
 export class StyleTab {
   /** View state only: hiding a source writes nothing and paints nothing. */
-  readonly sources = new Topic(new Set<SourceName>(Object.keys(T.SOURCE) as SourceName[]));
+  readonly sources = new Topic(new Set(T.SOURCE.values()));
   #list: RowList<Listed>;
   #selectors: HTMLDataListElement;
   #book!: T.StyleBook;
@@ -63,7 +61,7 @@ export class StyleTab {
   #shown: number[] = [];
 
   constructor(section: HTMLElement) {
-    const names = new Map((Object.keys(T.SOURCE) as SourceName[]).map((name) => [name, name]));
+    const names = new Map([...T.SOURCE.values()].map((name) => [name, name]));
     new Checks(section.querySelector(".checks")!, "source", names, this.sources);
     this.sources.sub(() => this.#render());
     this.#selectors = section.querySelector("#selector-list")!;
@@ -83,7 +81,7 @@ export class StyleTab {
 
   #render(): void {
     const on = this.sources.value;
-    this.#shown = this.#rows.flatMap((row, at) => (on.has(nameOf(row.source)) ? [at] : []));
+    this.#shown = this.#rows.flatMap((row, at) => (on.has(T.SOURCE.get(row.source)!) ? [at] : []));
     this.#list.render(this.#shown.map((at) => this.#rows[at]!));
     this.#shown.forEach((at, i) => this.#list.mark(i, this.#rows[at]!.refused));
     const names = new Set(this.#rows.map((row) => row.selector).filter((name) => name !== ""));
@@ -93,7 +91,7 @@ export class StyleTab {
   #edit({ index, row }: RowEdit<Listed>): void {
     const at = this.#shown[index]!;
     const before = this.#rows[at]!;
-    const after = { ...row, source: T.SOURCE.user };
+    const after: Listed = { ...row, source: 2 };
     // Only a changed key removes the old entry, and even when the new value is
     // refused below, so a rekeyed row cannot leave a stale entry under its old name.
     const rekeyed = before.selector !== after.selector || before.property !== after.property;
@@ -124,8 +122,4 @@ export class StyleTab {
     this.#rows = ready(this.#rows);
     this.#render();
   }
-}
-
-function nameOf(source: T.Source): SourceName {
-  return (Object.keys(T.SOURCE) as SourceName[]).find((name) => T.SOURCE[name] === source)!;
 }

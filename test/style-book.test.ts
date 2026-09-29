@@ -23,9 +23,9 @@ function book(styles: T.Style[]): Book {
 const at =
   (source: T.Source) =>
   (selector: string, property: string, value: string): T.Style => ({ selector, property, value, source });
-const theme = at(T.SOURCE.theme);
-const dot = at(T.SOURCE.dot);
-const user = at(T.SOURCE.user);
+const theme = at(0);
+const dot = at(1);
+const user = at(2);
 
 describe("the guard — one entry per key, arbitrated by source", () => {
   test("a repeated key is one entry, not two rows", () => {
@@ -132,7 +132,7 @@ describe("the shipped theme", () => {
   const styles = fileStyles(basicTheme as T.StyleFile);
 
   test("is all source 0", () => {
-    for (const style of styles) expect(style.source).toBe(T.SOURCE.theme);
+    for (const style of styles) expect(style.source).toBe(0);
   });
 
   test("lists its mixins first, so every style is admitted in order", () => {
@@ -165,8 +165,8 @@ describe("the saved document — your rules, over a named theme", () => {
     expect(asDocument(mixed)).toEqual({
       theme: "basic-theme.json",
       style: {
-        ".node": { color: { value: "pink", source: T.SOURCE.user } },
-        "#lake": { color: { value: "red", source: T.SOURCE.user } },
+        ".node": { color: { value: "pink", source: 2 } },
+        "#lake": { color: { value: "red", source: 2 } },
       },
     });
   });
@@ -185,7 +185,7 @@ describe("the saved document — your rules, over a named theme", () => {
   });
 
   test("a bare file still reads — what an exported page carries", () => {
-    const file: T.StyleFile = { ".node": { padding: { value: "1em", source: T.SOURCE.user } } };
+    const file: T.StyleFile = { ".node": { padding: { value: "1em", source: 2 } } };
     expect(documentStyles(file)).toEqual([user(".node", "padding", "1em")]);
   });
 });

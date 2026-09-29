@@ -15,7 +15,7 @@ import type * as T from "../types.ts";
 /** How far apart two members of a contracted group sit, before CSS resizes. */
 const SPREAD: T.Px = 20;
 
-export class DagreLayout implements T.Layout {
+export class DagreLayout implements T.DagreLayout {
   place(graph: T.PointGraph): T.Positions {
     const stand = this.standIns(graph);
     return this.expand(graph, stand, this.run(graph, stand));

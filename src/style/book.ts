@@ -92,7 +92,7 @@ export function asFile(styles: T.Style[]): T.StyleFile {
 
 /** What Save styles writes: the user's rules only, over a named theme. */
 export function asDocument(styles: T.Style[]): T.StyleDocument {
-  return { theme: THEME_NAME, style: asFile(styles.filter((style) => style.source === T.SOURCE.user)) };
+  return { theme: THEME_NAME, style: asFile(styles.filter((style) => style.source === 2)) };
 }
 
 /** A file's styles, in order, each at its own source. The theme, an export seed. */

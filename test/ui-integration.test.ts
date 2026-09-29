@@ -5,7 +5,6 @@ import { DagreLayout } from "../src/layout/dagre-layout.ts";
 import { DotReader } from "../src/read/dot-reader.ts";
 import { bag } from "./bag.ts";
 import type { Note, Style } from "../src/types.ts";
-import { SOURCE } from "../src/types.ts";
 import { asFile } from "../src/style/book.ts";
 import { annotationHtml } from "../src/diagram/notes.ts";
 import basicTheme from "../theme/basic-theme.json";
@@ -93,10 +92,10 @@ describe("UI & Workbench Integration Suite", () => {
   test("The export seed carries the DOT, the script, the whole book, and the notes", () => {
     const text = { dot: BARE_BONE_DOT, script: "console.log('hello');" };
     const styles: Style[] = [
-      { selector: ".node", property: "background", value: "red", source: SOURCE.theme },
-      { selector: ".node", property: "color", value: "white", source: SOURCE.dot },
-      { selector: ".node", property: "@apply", value: ".glass", source: SOURCE.user },
-      { selector: "#a", property: "border-width", value: "2px", source: SOURCE.user },
+      { selector: ".node", property: "background", value: "red", source: 0 },
+      { selector: ".node", property: "color", value: "white", source: 1 },
+      { selector: ".node", property: "@apply", value: ".glass", source: 2 },
+      { selector: "#a", property: "border-width", value: "2px", source: 2 },
     ];
     const notes: Note[] = [note({ selector: "#a", dy: "4em", text: "note" })];
 

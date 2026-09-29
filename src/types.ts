@@ -206,7 +206,14 @@ export type Note = {
 /** Who wrote a style: theme · DOT · you. The order *is* the access rule. */
 export type Source = 0 | 1 | 2;
 
-export const SOURCE = { theme: 0, dot: 1, user: 2 } as const satisfies Record<string, Source>;
+export type SourceName = "theme" | "dot" | "user";
+
+/** Source → its name, in access order. The style filter's labels. */
+export const SOURCE: Map<Source, SourceName> = new Map([
+  [0, "theme"],
+  [1, "dot"],
+  [2, "user"],
+]);
 
 /** One style rule. Found by selector + property, as CSSOM finds it. */
 export type Style = { selector: Selector; property: Property; value: CssValue; source: Source };
@@ -244,16 +251,17 @@ export interface DotReader {
  * The only source of geometry. One implementation: `DagreLayout`. `rank=same`
  * is served by contraction inside it, which no type above it knows about.
  */
-export interface Layout {
+export interface DagreLayout {
   place(graph: PointGraph): Positions;
 }
 
 export interface DiagramPainter {
   frame(model: DiagramModel, positions: Positions): string;
-  clusters(boxes: Box[], model: DiagramModel): string;
-  shells(boxes: Box[], model: DiagramModel): string;
-  connectors(boxes: Box[], model: DiagramModel, metrics: ConnectorMetrics): string;
+  svg(boxes: Box[], model: DiagramModel, metrics: ConnectorMetrics): SvgLayers;
 }
+
+/** One SVG string per group under `#diagram-svg`, named by its sink. */
+export type SvgLayers = { clusters: string; shells: string; connectors: string };
 
 export interface StyleBook {
   /** The only way in. False: a higher source owns it, an `@apply` names a
@@ -262,7 +270,6 @@ export interface StyleBook {
   remove(style: Style): void;
   /** What the styles tab shows, in order. */
   styles(): Style[];
-  readonly changed: Topic<number>;
 }
 
 /** The living state: what you wrote, and how it draws itself. */
