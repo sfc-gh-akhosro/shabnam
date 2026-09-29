@@ -4,14 +4,14 @@
 // attribute the author typed.
 
 import { expect, test } from "bun:test";
-import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
+import { DotReader } from "../src/read/dot-reader.ts";
 import { bag } from "./bag.ts";
 import type * as T from "../src/types.ts";
 
 const FIXTURE = new URL("../research-lab/example-1.dot", import.meta.url).pathname;
 
 function rules(dot: string): ReturnType<typeof bag> {
-  return bag(new GraphvizAst(dot).styles());
+  return bag(new DotReader(dot).styles());
 }
 
 function shape(out: ReturnType<typeof bag>): string {

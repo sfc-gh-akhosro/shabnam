@@ -1,5 +1,5 @@
 // The one markdown engine (§0, §7). A pure string-to-string worker, so it sits
-// in `diagram/` beside the other workers and touches no DOM.
+// in `paint/` beside the other workers and touches no DOM.
 //
 // We hand-rolled this once — an `MD` map of six regexes whose own comment called
 // it "the second grammar we own", against §1. Nobody writes a markdown parser.

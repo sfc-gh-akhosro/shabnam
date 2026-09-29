@@ -7,7 +7,7 @@
 import type * as T from "../types.ts";
 import { membersOf } from "./model.ts";
 
-export function buildPoints(written: T.Written): T.PointGraph {
+export function buildGraph(written: T.Written): T.PointGraph {
   const sameRank = groupsAskingForOneRank(written);
   const pinned = new Set(sameRank.flat());
 

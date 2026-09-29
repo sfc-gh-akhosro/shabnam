@@ -1,11 +1,11 @@
-// Diagram facade. Workers in this folder stay private; this is the package API.
+// DiagramPainter facade. Workers in this folder stay private; this is the package API.
 
 import type * as T from "../types.ts";
 import { EdgeDrawer } from "./edge-drawer.ts";
 import { LayoutFramer } from "./layout-framer.ts";
 import { NodeSheller } from "./node-sheller.ts";
 
-export class Diagram implements T.Diagram {
+export class DiagramPainter implements T.DiagramPainter {
   private framer = new LayoutFramer();
   private sheller = new NodeSheller();
   private edger = new EdgeDrawer();

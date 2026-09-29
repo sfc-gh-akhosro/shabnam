@@ -4,7 +4,7 @@
    Tokens, then the skeleton. Everything is reached by element and position, so
    the markup carries almost no hooks: the ids below are the sinks the engine
    writes and the coordinate contract, and the only classes are `.rows`/`.row`
-   and the three box names from the styles-tab prototype. `@apply` is a Stylist feature, not real CSS, so a rule that wants a core
+   and the three box names from the styles-tab prototype. `@apply` is a StyleBook feature, not real CSS, so a rule that wants a core
    class copies its properties.
 
    Every id here is two hyphenated words, and that is not a style preference: a

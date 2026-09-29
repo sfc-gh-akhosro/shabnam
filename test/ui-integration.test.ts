@@ -1,8 +1,8 @@
 import { readdirSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
-import { LayoutFramer } from "../src/diagram/layout-framer.ts";
-import { DagreLayout } from "../src/dot/dagre-layout.ts";
-import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
+import { LayoutFramer } from "../src/paint/layout-framer.ts";
+import { DagreLayout } from "../src/layout/dagre-layout.ts";
+import { DotReader } from "../src/read/dot-reader.ts";
 import { bag } from "./bag.ts";
 import type { Annotation, Style, TabText } from "../src/types.ts";
 import { SOURCE } from "../src/types.ts";
@@ -36,8 +36,8 @@ const layout = new DagreLayout();
 const framer = new LayoutFramer();
 
 function drawn(dot: string): string {
-  const ast = new GraphvizAst(dot);
-  return framer.frame(ast.model(), layout.place(ast.points()));
+  const reader = new DotReader(dot);
+  return framer.frame(reader.model(), layout.place(reader.graph()));
 }
 
 describe("UI & Workbench Integration Suite", () => {
@@ -46,7 +46,7 @@ describe("UI & Workbench Integration Suite", () => {
   });
 
   test("Bare-bone DOT derives nothing — tokens are the theme's", () => {
-    expect([...bag(new GraphvizAst(BARE_BONE_DOT).styles()).keys()]).toEqual([]);
+    expect([...bag(new DotReader(BARE_BONE_DOT).styles()).keys()]).toEqual([]);
   });
 
   test("shape=record correctly parses and builds nested flex structure", () => {
@@ -77,7 +77,7 @@ describe("UI & Workbench Integration Suite", () => {
 
   test("a derived bag never invents a margin", async () => {
     const FIXTURE = new URL("../research-lab/example-1.dot", import.meta.url).pathname;
-    const derived = bag(new GraphvizAst(await Bun.file(FIXTURE).text()).styles());
+    const derived = bag(new DotReader(await Bun.file(FIXTURE).text()).styles());
 
     expect(derived.size).toBe(0);
     for (const [, properties] of derived) {

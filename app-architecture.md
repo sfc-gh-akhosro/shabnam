@@ -7,9 +7,10 @@ the code disagree, this file wins until we change it together.
 
 > **Migration in progress.** This describes the redesign approved in
 > `research-lab/ui-redesign/design-story.md`. The code reaches it through the
-> sessions in `current-task.md`; until then `src/` still has the old package
-> names `dot/` and `diagram/` and a SolidJS workbench. `style/` (`StyleBook`)
-> and `ui/topic.ts` have landed.
+> sessions in `current-task.md`. Landed: `style/` (`StyleBook`), `ui/topic.ts`,
+> and the `read/`, `layout/`, `paint/` packages. Still old: `DiagramPainter`
+> lives in `paint/` with no `diagram/` package yet, the workbench is SolidJS,
+> and `workbench/engine.ts` does what `Diagram.draw()` will.
 
 ---
 

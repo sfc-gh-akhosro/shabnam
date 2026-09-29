@@ -5,13 +5,13 @@
 // rather than producing markup the browser will silently repair.
 
 import { expect, test } from "bun:test";
-import { shapeHtml } from "../src/diagram/node-shaper.ts";
-import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
+import { shapeHtml } from "../src/paint/node-shaper.ts";
+import { DotReader } from "../src/read/dot-reader.ts";
 import type { DiagramNode } from "../src/types.ts";
 
 function node(label: string): DiagramNode {
   const dot = `digraph { n [shape=record label="${label}"] }`;
-  return new GraphvizAst(dot).model().nodes.get("n")!;
+  return new DotReader(dot).model().nodes.get("n")!;
 }
 
 function html(label: string): string {
@@ -87,7 +87,7 @@ test("inline markdown reaches both shapes, and so does the author's HTML", () =>
   expect(html("**bold** | *thin* | `mono`")).toContain("<code>mono</code>");
 
   const box = shapeHtml(
-    new GraphvizAst('digraph { n [label="**b** and <b>bare</b>"] }').model().nodes.get("n")!,
+    new DotReader('digraph { n [label="**b** and <b>bare</b>"] }').model().nodes.get("n")!,
   );
   expect(box).toContain("<strong>b</strong>");
   expect(box).toContain("<b>bare</b>");

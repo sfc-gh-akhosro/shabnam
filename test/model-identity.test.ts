@@ -1,15 +1,15 @@
-// Identity is decided once, in GraphvizAst, for everyone (§3.1). These are the
+// Identity is decided once, in DotReader, for everyone (§3.1). These are the
 // claims the rest of the app builds on: **CSS naming is DOT naming**, subgraph
 // names become classes verbatim, and a space is the one thing we sanitise.
 
 import { expect, test } from "bun:test";
-import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
+import { DotReader } from "../src/read/dot-reader.ts";
 import type { DiagramModel } from "../src/types.ts";
 
 const FIXTURE = new URL("../research-lab/example-1.dot", import.meta.url).pathname;
 
 function model(dot: string): DiagramModel {
-  return new GraphvizAst(dot).model();
+  return new DotReader(dot).model();
 }
 
 const fixture = model(await Bun.file(FIXTURE).text());

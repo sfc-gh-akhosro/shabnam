@@ -5,11 +5,11 @@
 // exercises the design is worth more than a diagram invented for a test.
 
 import { expect, test } from "bun:test";
-import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
+import { DotReader } from "../src/read/dot-reader.ts";
 import { bag } from "./bag.ts";
 
 const fixture = async (name: string) =>
-  new GraphvizAst(await Bun.file(new URL(`../research-lab/${name}.dot`, import.meta.url)).text());
+  new DotReader(await Bun.file(new URL(`../research-lab/${name}.dot`, import.meta.url)).text());
 
 const one = await fixture("example-1");
 const two = await fixture("example-2");
@@ -35,7 +35,7 @@ test("membership is cumulative — a node named in two subgraphs belongs to both
 });
 
 test("membership is textual, so a cluster written after its edges still collects", async () => {
-  const late = await new GraphvizAst(`digraph { a -> b; subgraph cluster_x { a } }`).model();
+  const late = await new DotReader(`digraph { a -> b; subgraph cluster_x { a } }`).model();
   expect(late.nodes.get("a")!.classes).toEqual(["cluster_x"]);
   expect(late.clusters[0]!.nodes).toEqual(["a"]);
 });
@@ -47,15 +47,15 @@ test("an anonymous subgraph is numbered by appearance order", () => {
 });
 
 test("parallel edges are suffixed, so one id never names two edges", () => {
-  const twice = new GraphvizAst("digraph { a -> b; a -> b; a -> b }");
+  const twice = new DotReader("digraph { a -> b; a -> b; a -> b }");
   expect(twice.model().edges.map((edge) => edge.id)).toEqual(["a_b", "a_b_2", "a_b_3"]);
 });
 
 test("`{a b} -> {c d}` is a cross product, and a chain is a chain", () => {
-  const cross = new GraphvizAst("digraph { {a b} -> {c d} }");
+  const cross = new DotReader("digraph { {a b} -> {c d} }");
   expect(cross.model().edges.map((edge) => edge.id)).toEqual(["a_c", "a_d", "b_c", "b_d"]);
 
-  const chain = new GraphvizAst("digraph { a -> b -> c }");
+  const chain = new DotReader("digraph { a -> b -> c }");
   expect(chain.model().edges.map((edge) => edge.id)).toEqual(["a_b", "b_c"]);
 });
 
@@ -74,7 +74,7 @@ test("a node knows its own shape, pushed down from the branch above it", () => {
 });
 
 test("innermost wins, and the node's own statement wins over every declaration", () => {
-  const ast = new GraphvizAst(`digraph {
+  const reader = new DotReader(`digraph {
     node [shape=box]
     subgraph cluster_a {
       node [shape=record]
@@ -84,7 +84,7 @@ test("innermost wins, and the node's own statement wins over every declaration",
     }
     outer
   }`);
-  const nodes = ast.model().nodes;
+  const nodes = reader.model().nodes;
   expect(nodes.get("outer")!.shape).toBe("box");
   expect(nodes.get("inner")!.shape).toBe("record");
   expect(nodes.get("deeper")!.shape).toBe("ellipse");
@@ -92,17 +92,17 @@ test("innermost wins, and the node's own statement wins over every declaration",
 });
 
 test("a node that never named a label falls back to its id", () => {
-  expect(new GraphvizAst("digraph { core }").model().nodes.get("core")!.label).toBe("core");
+  expect(new DotReader("digraph { core }").model().nodes.get("core")!.label).toBe("core");
 });
 
 test("`\\N` is the node's own name, and `\\n` is left for the line-break contract", () => {
-  const ast = new GraphvizAst(String.raw`digraph { core [label="\N \n tail"] }`);
-  expect(ast.model().nodes.get("core")!.label).toBe(String.raw`core \n tail`);
+  const reader = new DotReader(String.raw`digraph { core [label="\N \n tail"] }`);
+  expect(reader.model().nodes.get("core")!.label).toBe(String.raw`core \n tail`);
 });
 
 test("`\\G` is the cluster's own name", () => {
-  const ast = new GraphvizAst(String.raw`digraph { subgraph cluster_x { label="\G" ; a } }`);
-  expect(ast.model().clusters[0]!.label).toBe("cluster_x");
+  const reader = new DotReader(String.raw`digraph { subgraph cluster_x { label="\G" ; a } }`);
+  expect(reader.model().clusters[0]!.label).toBe("cluster_x");
 });
 
 // --- appearance keeps its provenance --------------------------------------
@@ -115,12 +115,12 @@ test("a `node [...]` composes a flat selector from the branch it was written on"
 });
 
 test("the root names the canvas, an edge declaration is `.edge`, a subgraph is its class", () => {
-  const ast = new GraphvizAst(`digraph {
+  const reader = new DotReader(`digraph {
     bgcolor="white"
     edge [color="grey"]
     subgraph cluster_a { bgcolor="azure" ; node [fillcolor="coral"] ; a }
   }`);
-  const styles = bag(ast.styles());
+  const styles = bag(reader.styles());
   // `#diagram-canvas`, not `:root`: `:root` is `<html>` on screen and the `<svg>`
   // after export, so one rule would paint two different things.
   expect(styles.get("#diagram-canvas")).toEqual(new Map([["background-color", "white"]]));
@@ -132,16 +132,16 @@ test("the root names the canvas, an edge declaration is `.edge`, a subgraph is i
 });
 
 test("a bare graph attribute and a `graph [...]` produce the same rule", () => {
-  const bare = bag(new GraphvizAst(`digraph { bgcolor="white" }`).styles());
-  const listed = bag(new GraphvizAst(`digraph { graph [bgcolor="white"] }`).styles());
+  const bare = bag(new DotReader(`digraph { bgcolor="white" }`).styles());
+  const listed = bag(new DotReader(`digraph { graph [bgcolor="white"] }`).styles());
   expect([...listed]).toEqual([...bare]);
 });
 
 test("a nested declaration composes both names, because there is no wrapper element", () => {
-  const ast = new GraphvizAst(`digraph {
+  const reader = new DotReader(`digraph {
     subgraph cluster_a { subgraph inner { node [fillcolor="coral"] ; a } }
   }`);
-  expect([...bag(ast.styles()).keys()]).toEqual([".cluster_a.inner.node, .cluster_a.inner.record"]);
+  expect([...bag(reader.styles()).keys()]).toEqual([".cluster_a.inner.node, .cluster_a.inner.record"]);
 });
 
 test("a node's own attributes are its `#id`", () => {
@@ -150,8 +150,8 @@ test("a node's own attributes are its `#id`", () => {
 });
 
 test("appearance is **not** resolved onto members — that is the whole asymmetry", () => {
-  const ast = new GraphvizAst(`digraph { subgraph cluster_a { node [fillcolor="coral"] ; a ; b } }`);
-  const selectors = [...bag(ast.styles()).keys()];
+  const reader = new DotReader(`digraph { subgraph cluster_a { node [fillcolor="coral"] ; a ; b } }`);
+  const selectors = [...bag(reader.styles()).keys()];
   expect(selectors).toEqual([".cluster_a.node, .cluster_a.record"]);
   expect(selectors).not.toContain("#a");
 });
@@ -159,10 +159,10 @@ test("appearance is **not** resolved onto members — that is the whole asymmetr
 test("a bare number gains `px`, because `font-size: 12` is not valid CSS", () => {
   // The one value we correct (§3.2): unitless lengths were being refused by
   // CSSOM, so `#horizon`'s `fontsize=12` had never once been painted.
-  const ast = new GraphvizAst(`digraph {
+  const reader = new DotReader(`digraph {
     node [fontsize=12 penwidth=3 height=0.5 fontname="Inter" fillcolor="#ddffdd"]
   }`);
-  expect(bag(ast.styles()).get(".node, .record")).toEqual(
+  expect(bag(reader.styles()).get(".node, .record")).toEqual(
     new Map<string, string>([
       ["font-size", "12px"],
       ["border-width", "3px"],
@@ -176,8 +176,8 @@ test("a bare number gains `px`, because `font-size: 12` is not valid CSS", () =>
 test("an attribute the registry does not know is not appearance, and is dropped", () => {
   // `splines`, `concentrate`, `nodesep`, `dir`, `constraint`, `weight` — layout
   // and semantics, none of them ours to paint.
-  const ast = new GraphvizAst(`digraph { splines=ortho ; concentrate=true ; a -> b [weight=100] }`);
-  expect([...bag(ast.styles()).keys()]).toEqual([]);
+  const reader = new DotReader(`digraph { splines=ortho ; concentrate=true ; a -> b [weight=100] }`);
+  expect([...bag(reader.styles()).keys()]).toEqual([]);
 });
 
 test("a diagram of pure markup derives no appearance at all", () => {
@@ -189,29 +189,29 @@ test("a diagram of pure markup derives no appearance at all", () => {
 // --- the point graph: everything layout does not need is gone --------------
 
 test("layout is given ids and arrows, and no attribute of any kind", () => {
-  const points = one.points();
-  expect(points.rankdir).toBe("LR");
-  expect(points.nodes).toContain("lake");
-  expect(points.arrows.every((arrow) => Object.keys(arrow).sort().join() === "from,to")).toBe(true);
+  const graph = one.graph();
+  expect(graph.rankdir).toBe("LR");
+  expect(graph.nodes).toContain("lake");
+  expect(graph.arrows.every((arrow) => Object.keys(arrow).sort().join() === "from,to")).toBe(true);
 });
 
 test("`rank=same` arrives as member lists, and a group of one is not a group", () => {
-  expect(two.points().sameRank).toEqual([
+  expect(two.graph().sameRank).toEqual([
     ["bq", "geap", "gcs"],
     ["runtime", "horizon"],
     ["engine", "connectors", "analyst"],
     ["ge", "gcp", "spcs", "agents", "ml"],
   ]);
-  expect(new GraphvizAst("digraph { subgraph { rank=same ; a } }").points().sameRank).toEqual([]);
+  expect(new DotReader("digraph { subgraph { rank=same ; a } }").graph().sameRank).toEqual([]);
 });
 
 test("a cluster is boxed, unless contraction is already holding its members", () => {
-  expect([...one.points().boxes.keys()]).toEqual([
+  expect([...one.graph().boxes.keys()]).toEqual([
     "cluster_sources",
     "cluster_platform",
     "cluster_consumer",
   ]);
   // Both of example-2's clusters ask for `rank=same`, so boxing them as well
   // would constrain the same nodes twice.
-  expect([...two.points().boxes.keys()]).toEqual([]);
+  expect([...two.graph().boxes.keys()]).toEqual([]);
 });

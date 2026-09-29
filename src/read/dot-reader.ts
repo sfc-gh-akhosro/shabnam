@@ -8,12 +8,12 @@ import { parse } from "@ts-graphviz/ast";
 import * as T from "../types.ts";
 import { buildModel } from "./model.ts";
 import { buildStyles } from "./styles.ts";
-import { buildPoints } from "./points.ts";
+import { buildGraph } from "./graph.ts";
 
 /** A DOT name, made safe to use as an id. Nothing more is owed to a typo (§3.1). */
 const idOf = (name: string): T.NodeId => name.replace(/ /g, "_");
 
-export class GraphvizAst implements T.Ast {
+export class DotReader implements T.DotReader {
   private readonly written: T.Written;
   private anonymous = 0;
   /** `tail_head`, then `_2`, `_3` … so parallel edges keep separate ids (§3.1). */
@@ -44,8 +44,8 @@ export class GraphvizAst implements T.Ast {
     );
   }
 
-  points(): T.PointGraph {
-    return buildPoints(this.written);
+  graph(): T.PointGraph {
+    return buildGraph(this.written);
   }
 
   // --- the walk -----------------------------------------------------------

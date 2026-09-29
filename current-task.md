@@ -22,14 +22,9 @@ and a commit. The app works at the end of every session.
   reach CSSOM, `topic.ts` is in `src/ui/`. The Solid styles tab runs through
   `workbench/rows.tsx`, an adapter that mints its own row ids; delete it in
   Session 6.
-
-## Session 4 — Renames: read, layout, paint
-
-- `dot/` → `read/` (`GraphvizAst` → `DotReader`, `points()` → `graph()`),
-  `dagre-layout.ts` → `layout/`, `diagram/` → `paint/` (`Diagram` facade →
-  `DiagramPainter`).
-- Only names and paths change. Behaviour stays the same.
-- Done when: tests are green and `grep` finds no old names.
+- Session 4: `read/` (`DotReader`, `model`, `styles`, `graph`), `layout/`
+  (`DagreLayout`), `paint/` (`DiagramPainter` + workers). The engine holds a
+  `painter`; `diagram/` is free for Session 5's `Diagram`.
 
 ## Session 5 — Diagram: the living state that draws itself
 

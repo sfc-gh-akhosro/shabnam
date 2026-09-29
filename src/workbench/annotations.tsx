@@ -24,7 +24,7 @@
 // never reach `querySelectorAll`, which throws on one it cannot parse.
 
 import { Index } from "solid-js";
-import { renderAnnotation } from "../diagram/markdown.ts";
+import { renderAnnotation } from "../paint/markdown.ts";
 import type * as T from "../types.ts";
 
 /** Minted so a row can be pointed at. Live-DOM only, like a rule's id. */

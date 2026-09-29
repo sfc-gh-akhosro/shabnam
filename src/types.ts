@@ -168,7 +168,7 @@ export type Box = {
 
 /**
  * What the router needs that only the page knows (§3.4). Measured pixels, so
- * they travel in from the workbench the way `Box[]` does: a `diagram/` worker
+ * they travel in from the workbench the way `Box[]` does: a `paint/` worker
  * that called `getComputedStyle` would be reading the page it exists to
  * describe. `clearance` is a preference with a floor; `radius` `0` is sharp.
  */
@@ -234,13 +234,13 @@ export interface Topic<T> {
 
 /**
  * The DOT reader. One walk, three answers, and the parsed tree escapes nowhere.
- * One implementation: `GraphvizAst`, which is the only thing that reads DOT.
+ * One implementation: the `DotReader` class, which is the only thing that reads DOT.
  */
-export interface Ast {
+export interface DotReader {
   model(): DiagramModel;
   /** The DOT's appearance, each stamped source 1. */
   styles(): Style[];
-  points(): PointGraph;
+  graph(): PointGraph;
 }
 
 /**
@@ -251,7 +251,7 @@ export interface Layout {
   place(graph: PointGraph): Positions;
 }
 
-export interface Diagram {
+export interface DiagramPainter {
   frame(model: DiagramModel, positions: Positions): string;
   clusters(boxes: Box[], model: DiagramModel): string;
   shells(boxes: Box[], model: DiagramModel): string;

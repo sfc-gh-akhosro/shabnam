@@ -4,9 +4,9 @@
 // which drives it through CSSOM — writing its `textContent` from `inject`
 // would wipe every rule the book inserted, so the sink is not in the map.
 
-import { Diagram } from "../diagram/diagram.ts";
-import { DagreLayout } from "../dot/dagre-layout.ts";
-import { GraphvizAst } from "../dot/graphviz-ast.ts";
+import { DiagramPainter } from "../paint/diagram-painter.ts";
+import { DagreLayout } from "../layout/dagre-layout.ts";
+import { DotReader } from "../read/dot-reader.ts";
 import type { StyleBook } from "../style/style-book.ts";
 import * as T from "../types.ts";
 import { annotationHtml } from "./annotations.tsx";
@@ -33,7 +33,7 @@ const SINK_WRITE = new Map<string, (element: Element, text: string) => void>([
 
 export class Engine implements T.Workbench {
   private layout = new DagreLayout();
-  private diagram = new Diagram();
+  private painter = new DiagramPainter();
 
   constructor(
     private text: T.TabText,
@@ -42,9 +42,9 @@ export class Engine implements T.Workbench {
   ) {}
 
   async redraw(): Promise<void> {
-    let ast: GraphvizAst;
+    let reader: DotReader;
     try {
-      ast = new GraphvizAst(this.text.dot);
+      reader = new DotReader(this.text.dot);
     } catch (error) {
       // The one sanctioned catch (§5): malformed DOT is what you have after
       // most edits. `alert` is the message; the last picture is whatever is
@@ -52,19 +52,19 @@ export class Engine implements T.Workbench {
       alert(error instanceof Error ? error.message : String(error));
       return;
     }
-    const model = ast.model();
+    const model = reader.model();
     // The book is kept, not flushed. The DOT's styles arrive at source 1 and are
     // refused wherever the user has written at 2, so a redraw cannot take a
     // typed row back off them.
-    for (const style of ast.styles()) this.styleBook().add(style);
+    for (const style of reader.styles()) this.styleBook().add(style);
 
-    this.inject("diagram-html", this.diagram.frame(model, this.layout.place(ast.points())));
+    this.inject("diagram-html", this.painter.frame(model, this.layout.place(reader.graph())));
 
     await painted();
     const boxes = this.measure();
-    this.inject("cluster-shells", this.diagram.clusters(boxes, model));
-    this.inject("node-shells", this.diagram.shells(boxes, model));
-    this.inject("connector-paths", this.diagram.connectors(boxes, model, this.metrics()));
+    this.inject("cluster-shells", this.painter.clusters(boxes, model));
+    this.inject("node-shells", this.painter.shells(boxes, model));
+    this.inject("connector-paths", this.painter.connectors(boxes, model, this.metrics()));
     this.annotate();
     this.inject("action-js", this.text.action);
   }

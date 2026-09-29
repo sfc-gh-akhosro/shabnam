@@ -6,14 +6,14 @@
 // instead of picking them out of curves.
 
 import { expect, test } from "bun:test";
-import { EdgeDrawer } from "../src/diagram/edge-drawer.ts";
-import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
+import { EdgeDrawer } from "../src/paint/edge-drawer.ts";
+import { DotReader } from "../src/read/dot-reader.ts";
 import type { Box, ConnectorMetrics, DiagramModel, Point } from "../src/types.ts";
 
 const SHARP: ConnectorMetrics = { clearance: 14, radius: 0 };
 
 function makeModel(dot: string): DiagramModel {
-  return new GraphvizAst(dot).model();
+  return new DotReader(dot).model();
 }
 
 function pathOf(svg: string, id: string): string {

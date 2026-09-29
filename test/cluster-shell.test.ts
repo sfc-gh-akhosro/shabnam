@@ -1,12 +1,12 @@
 // Cluster shells: SVG bounding boxes drawn around member nodes of `subgraph cluster_...`.
 
 import { expect, test } from "bun:test";
-import { NodeSheller } from "../src/diagram/node-sheller.ts";
-import { GraphvizAst } from "../src/dot/graphviz-ast.ts";
+import { NodeSheller } from "../src/paint/node-sheller.ts";
+import { DotReader } from "../src/read/dot-reader.ts";
 import type { Box, DiagramModel } from "../src/types.ts";
 
 function makeModel(dot: string): DiagramModel {
-  return new GraphvizAst(dot).model();
+  return new DotReader(dot).model();
 }
 
 test("clusters draw an SVG box enclosing member node bounding boxes", () => {
