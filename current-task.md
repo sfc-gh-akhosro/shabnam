@@ -2,73 +2,87 @@
 Always read these files in each session:
 - [describe the app](./user-story.md)
 - [how to design and develop](./coding-rules.md)
-- [what have been decided](./app-architecture.md)
 
-# Current task
+# Implementation Plan
 
-Sessions 1–4 of the viz-replacement plan are done and in
-[`docs/archive.md`](docs/archive.md) (archive Sessions 6–9). The walls are
-live, viz.js is gone, the harvest is recorded, and the files agree.
+The design is [`research-lab/ui-redesign/design-story.md`](research-lab/ui-redesign/design-story.md).
+Every session reads it first. Each session starts fresh, ends green
+(`bun test` and `bun run test:browser`), and ends with the closing ceremony
+and a commit. The app works at the end of every session.
 
-Pick up from **For Later**. Nothing is scheduled.
+## Session 1 — The law follows the story
 
----
+Story → types → architecture, before any code.
 
-## Problems found, which the plan does not silently absorb
+- Rewrite `user-story.md` from the design story: `Diagram` as the living state,
+  the pieces, how they talk (call · native event · `Topic` · `await` ·
+  `COMMANDS`), vanilla DOM instead of SolidJS.
+- Rewrite `app-architecture.md` to match: stack (SolidJS out), players,
+  packages and arrows, `index.html` as skeleton, the mixin rule, the new tree.
+- Sketch the target `src/types.ts` section by section (design types only;
+  details stay in code), marking what exists today and what is new.
+- Done when: the three files agree with the design story and with each other.
+  No `src/` code changes.
 
-**2. `PointGraph` drops edge weights, and `example-2` tunes layout with them.**
-It uses `weight=0` twice, `weight=100`, `constraint=false` and a graph-level
-`concentrate=true`. Session 2 inspected the picture: the rank partition held
-and no weights were added. Leave them off unless a later look says the order
-inside a rank is wrong. The honest fix then is optional `weight` and `minlen`
-on `Arrow` — those are structure, not style.
+## Session 2 — The pieces, in the lab
 
-**3. Anonymous subgraph names change**, `%1` → `subgraph_1`, and it is now under
-test both ways round. Any saved style naming `.subgraph_N` in the old form
-breaks. No verb loads a style document today (S11), so this costs nothing now and
-would cost something later.
+- `research-lab/ui-redesign/`: `index.html` (the new skeleton and
+  `<template>`s, linking `src/app.css`), `ui/topic.ts`, `ui/radios.ts`,
+  `ui/checks.ts`, `ui/row-list.ts`, `ui/dialog-ask.ts`.
+- `lab.ts` shows every piece with fake data in rest, checked and invalid
+  states. `probe.ts` prints every topic publish and every custom event.
+- Try the CSS renames (`.radios`, `.checks`, `.pin`, `.rows.notes`, `.col`)
+  in a lab stylesheet laid over `app.css`.
+- Done when: the page looks right by eye, the probe output reads like §4 of
+  the story, and nothing in `src/` changed.
 
-**4. Ports are dropped.** `a:p1:n -> b` keeps the node and discards the port, as
-today. Noted, not fixed.
+## Session 3 — StyleBook: one way in
 
----
+- `stylist/` → `style/`, `Stylist` → `StyleBook`: `add(style): boolean`,
+  `remove(style)`, `styles()`, `changed: Topic<number>`. Source travels on
+  the `Style`. `absorb` and `reset` are gone.
+- `DotReader.styles()` (still `GraphvizAst` until Session 4) returns
+  `Style[]` stamped `source: 1`.
+- Mixins stop reaching CSSOM: they are expanded where they are `@apply`d and
+  never fed to the sheet on their own.
+- `topic.ts` moves from the lab to `src/ui/`.
+- The Solid rows tab keeps working through a thin adapter, which is deleted in
+  Session 6.
+- Done when: tests are green, the styles tab behaves as before, and a theme
+  `.row` no longer reaches the chrome.
 
-## For Later
+## Session 4 — Renames: read, layout, paint
 
-### The refactor pass over the rest of `src/`
+- `dot/` → `read/` (`GraphvizAst` → `DotReader`, `points()` → `graph()`),
+  `dagre-layout.ts` → `layout/`, `diagram/` → `paint/` (`Diagram` facade →
+  `DiagramPainter`).
+- Only names and paths change. Behaviour stays the same.
+- Done when: tests are green and `grep` finds no old names.
 
-Session 2 ate the baggers, the bucketing and the attribute bag. What it does
-not touch, and what still wants a tidy: `app.css`'s `.annotations` block is 23
-lines and should be 8, three of its five class hooks exist only to carry a
-width, `FIELD` / `field()` lose two columns with them, and `mark()`'s offset
-chain is five lines doing two lines' work. Plus the open question of comment
-density across the whole tree, which wants one answer rather than a file at a
-time.
+## Session 5 — Diagram: the living state that draws itself
 
-### Two design threads still open
+- `src/diagram/diagram.ts`: `Diagram` holds `dot`, `notes` and `script` as
+  topics, plus a `styleBook`. `draw()` absorbs `Engine.redraw`, and `place()`
+  re-anchors the notes. `files.ts` moves here. Open DOT makes a new `Diagram`.
+- `engine.ts` is deleted. The Solid workbench calls `diagram.draw()` so the
+  app keeps running.
+- Done when: draw, open, save and all exports work, and tests are green.
 
-- **Drop SolidJS for plain TS.** Five components, one enum, two small lists, one
-  dialog — and §5 forbids the reactivity a framework is for. Second choice is
-  `lit-html` alone; `LitElement`'s value is shadow DOM, which we rejected.
-- **Emit HTML by element instead of by string.** Only worth doing in the same pass
-  as the above. The standalone half — collapsing the two disagreeing HTML escapers
-  into one — is worth doing regardless.
+## Session 6 — Workbench, vanilla
 
----
+- `src/index.html` becomes the skeleton plus templates. `ui/` pieces move in
+  from the lab.
+- `workbench/`: `workbench.ts`, `commands.ts` (`COMMANDS` and chords, replacing
+  `keys.ts`), `style-tab.ts`, `note-tab.ts`, `export-dialog.ts`.
+- `app.css` gets the renames tried in the lab. The look stays the same.
+- Delete every `.tsx` file, SolidJS and its JSX plugin.
+- Done when: the app works as before, `package.json` has no `solid-js`, and
+  the browser tests are re-pointed at the new DOM and green.
 
-## Risks
+## Session 7 — Close the loop
 
-- **`bun add` and `bun run test:browser` both need `dangerously_disable_sandbox`.**
-  The sandbox refuses the install tempdir (`EPERM`) and the port 3101 bind
-  (`EADDRINUSE`); neither is a real conflict, and `lsof` shows nothing listening.
-- **A dev server left running holds port 3000 for real**, and `build/dev.ts`
-  bundles per request from a process that predates your `bun add` — so it serves
-  a 500 naming the new dependency while `bun run build` succeeds from the same
-  tree. Kill and restart it.
-- **A throw inside a browser check stage is silent.** The run stops and the report
-  keeps the last published stage. Reach for a temporary
-  `.catch((e) => check("DEBUG", false, e.stack))` at the call site.
-- **`git push` needs the sandbox disabled too** — the proxy answers
-  `CONNECT tunnel failed, response 403`, which reads like credentials and is not.
-- **The tree often holds uncommitted WIP.** A suite that turns red mid-session may
-  be the user's edit rather than yours. Say which.
+- Final `types.ts` pass: the design types only, readable top to bottom.
+- Check that the story, the architecture and the code agree, then trim
+  `design-story.md` to what the code did not already say.
+
+# For Later
