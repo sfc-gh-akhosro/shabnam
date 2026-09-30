@@ -33,12 +33,12 @@ test("a subgraph name becomes a class on its member nodes", () => {
   expect(fixture.nodes.get("portal")!.classes).toEqual(["cluster_consumer"]);
 });
 
-test("an edge points at node ids, and parallel edges are suffixed", () => {
+test("an edge points at node ids, and parallel edges share one id", () => {
   const blobs = fixture.edges.find((edge) => edge.id === "blobs_core")!;
   expect([blobs.from, blobs.to]).toEqual(["blobs", "core"]);
 
   const twice = model("digraph { a -> b; a -> b; a -> b }");
-  expect(twice.edges.map((edge) => edge.id)).toEqual(["a_b", "a_b_2", "a_b_3"]);
+  expect(twice.edges.map((edge) => edge.id)).toEqual(["a_b", "a_b", "a_b"]);
 });
 
 test("rankdir survives, and the model carries no coordinates", () => {

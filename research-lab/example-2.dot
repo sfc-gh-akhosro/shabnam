@@ -6,11 +6,9 @@ digraph snowflake_gcp_integration {
     concentrate=true;
 
     
-    {
+    subgraph gcp {
         // GCP Services
-        
-        node [fillcolor="#ddffdd"]
-        
+
         runtime
         bq
         geap
@@ -21,7 +19,7 @@ digraph snowflake_gcp_integration {
     }
 
 
-    subgraph {
+    subgraph invis_ranks {
         node[shape=none height=0]
         "Provider Services" -> "Lakehouse \n Federated Catalog" -> "Snowflake \n Data Services" -> "Consumer Apps" [style=invis]
     }

@@ -30,9 +30,6 @@ const POINTS = `node [shape=point width=0 height=0 label=""]`;
 export class DotReader implements T.DotReader {
   private readonly written: T.Written;
   private readonly pointDot: T.PointDot;
-  private anonymous = 0;
-  /** `tail_head`, then `_2`, `_3` … so parallel edges keep separate ids (§3.1). */
-  private readonly drawn = new Map<string, number>();
 
   constructor(dot: string) {
     this.written = {
@@ -77,9 +74,11 @@ export class DotReader implements T.DotReader {
     }
   }
 
+  /** An unnamed subgraph is there for `dot`, not for styling: it is no scope,
+   *  and its statements belong to the one around it (§3). */
   private subgraph(child: any, at: T.Scope): void {
-    this.anonymous += 1;
-    const name = idOf(child.id?.value ?? `subgraph_${this.anonymous}`);
+    if (!child.id) return this.walk(child, at);
+    const name = idOf(child.id.value);
     this.written.nesting.set(name, at);
     if (!this.written.scopes.has(name)) this.written.scopes.set(name, new Map());
     this.walk(child, [...at, name]);
@@ -112,17 +111,10 @@ export class DotReader implements T.DotReader {
     for (let i = 0; i < steps.length - 1; i += 1) {
       for (const from of steps[i]!) {
         for (const to of steps[i + 1]!) {
-          const id = this.edgeId(from, to);
-          this.written.edges.push({ id, from, to, scope: at, attrs: attrsOf(stmt) });
+          this.written.edges.push({ id: `${from}_${to}`, from, to, scope: at, attrs: attrsOf(stmt) });
         }
       }
     }
-  }
-
-  private edgeId(from: T.NodeId, to: T.NodeId): T.EdgeId {
-    const nth = (this.drawn.get(`${from}>${to}`) ?? 0) + 1;
-    this.drawn.set(`${from}>${to}`, nth);
-    return nth === 1 ? `${from}_${to}` : `${from}_${to}_${nth}`;
   }
 
   /** Naming a node anywhere makes it a member of every scope it sits in. */

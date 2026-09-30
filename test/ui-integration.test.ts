@@ -55,11 +55,8 @@ describe("UI & Workbench Integration Suite", () => {
     const html = drawn(RECORD_DOT);
 
     expect(html).toContain('class="record"');
-    expect(html).toContain('class="cell _1"');
-    expect(html).toContain("<div>");
-    expect(html).toContain('class="cell _2_1"');
-    expect(html).toContain('class="cell _2_2"');
-    expect(html).toContain('class="cell _3"');
+    expect(html).toContain("<span>Header</span><div><span>Left</span><span>Right</span></div><span>Footer</span>");
+    expect(html).not.toContain('class="cell');
     expect(html).toContain("Header");
     expect(html).toContain("Left");
     expect(html).toContain("Right");
@@ -71,10 +68,26 @@ describe("UI & Workbench Integration Suite", () => {
 
     expect(html).toContain('<div class="diagram">');
     expect(html).toContain('<div class="rank">');
-    expect(html).toContain('id="a" class="node cluster_source"');
-    expect(html).toContain('id="b" class="node cluster_source"');
+    expect(html).toContain('id="a" class="node cluster_source cluster"');
+    expect(html).toContain('id="b" class="node cluster_source cluster"');
     expect(html).toContain('id="c" class="node"');
     expect(html).not.toContain("style=");
+  });
+
+  test("a member of any cluster wears `.cluster`, and never also `.subgraph`", () => {
+    const html = drawn(`digraph { subgraph gcp { subgraph cluster_a { gcs } runtime } lone }`);
+    expect(html).toContain('id="gcs" class="node gcp cluster_a cluster"');
+    expect(html).toContain('id="runtime" class="node gcp subgraph"');
+    expect(html).toContain('id="lone" class="node"');
+  });
+
+  test("membership is added by the painter, not the model", () => {
+    const model = new DotReader(`digraph { subgraph gcp { runtime } }`).model();
+    expect(model.nodes.get("runtime")!.classes).toEqual(["gcp"]);
+  });
+
+  test("an unnamed subgraph gives its members no class", () => {
+    expect(drawn(`digraph { { a } }`)).toContain('id="a" class="node"');
   });
 
   test("a derived bag never invents a margin", async () => {

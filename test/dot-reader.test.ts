@@ -30,8 +30,8 @@ test("a subgraph keeps its DOT name, `cluster_` included", () => {
 });
 
 test("membership is cumulative — a node named in two subgraphs belongs to both", () => {
-  // `bq` is listed inside the anonymous GCP group and again inside `cluster_a`.
-  expect(two.model().nodes.get("bq")!.classes).toEqual(["subgraph_1", "cluster_a"]);
+  // `bq` is listed inside `gcp` and again inside `cluster_a`.
+  expect(two.model().nodes.get("bq")!.classes).toEqual(["gcp", "cluster_a"]);
 });
 
 test("membership is textual, so a cluster written after its edges still collects", async () => {
@@ -40,15 +40,15 @@ test("membership is textual, so a cluster written after its edges still collects
   expect(late.clusters[0]!.nodes).toEqual(["a"]);
 });
 
-test("an anonymous subgraph is numbered by appearance order", () => {
-  // `%1` under the old reader; `.subgraph_1` here, and any saved style naming
-  // the old form breaks — noted, and cheap while no verb loads a style file.
-  expect(two.model().nodes.get("Provider_Services")!.classes).toEqual(["subgraph_2"]);
+test("an unnamed subgraph is no scope, and gives its members no class", () => {
+  const sample = new DotReader(`digraph { subgraph cluster_x { { a } b } { c } }`).model();
+  expect(sample.nodes.get("a")!.classes).toEqual(["cluster_x"]);
+  expect(sample.nodes.get("c")!.classes).toEqual([]);
 });
 
-test("parallel edges are suffixed, so one id never names two edges", () => {
+test("parallel edges share one id — the DOT gives them one name", () => {
   const twice = new DotReader("digraph { a -> b; a -> b; a -> b }");
-  expect(twice.model().edges.map((edge) => edge.id)).toEqual(["a_b", "a_b_2", "a_b_3"]);
+  expect(twice.model().edges.map((edge) => edge.id)).toEqual(["a_b", "a_b", "a_b"]);
 });
 
 test("`{a b} -> {c d}` is a cross product, and a chain is a chain", () => {
@@ -68,7 +68,7 @@ test("an invisible cluster still says so, and still contributes its class", () =
 // --- markup is resolved ----------------------------------------------------
 
 test("a node knows its own shape, pushed down from the branch above it", () => {
-  // `node [shape=none]` sits on the anonymous subgraph, not on the node.
+  // `node [shape=none]` sits on `invis_ranks`, not on the node.
   expect(two.model().nodes.get("Provider_Services")!.shape).toBe("none");
   expect(two.model().nodes.get("gcs")!.shape).toBe("record");
 });
@@ -108,10 +108,8 @@ test("`\\G` is the cluster's own name", () => {
 // --- appearance keeps its provenance --------------------------------------
 
 test("a `node [...]` composes a flat selector from the branch it was written on", () => {
-  // One rule naming the branch, not three `#id` rules and a guess at the default.
-  expect(bag(two.styles()).get(".subgraph_1.node, .subgraph_1.record")).toEqual(
-    new Map([["background-color", "#ddffdd"]]),
-  );
+  // One rule naming the branch, not one `#id` rule per member.
+  expect([...bag(two.styles()).keys()]).toContain(".invis_ranks.node, .invis_ranks.record");
 });
 
 test("the root names the canvas, an edge declaration is `.edge`, a subgraph is its class", () => {
@@ -142,6 +140,11 @@ test("a nested declaration composes both names, because there is no wrapper elem
     subgraph cluster_a { subgraph inner { node [fillcolor="coral"] ; a } }
   }`);
   expect([...bag(reader.styles()).keys()]).toEqual([".cluster_a.inner.node, .cluster_a.inner.record"]);
+});
+
+test("a declaration inside an unnamed subgraph belongs to the scope around it", () => {
+  const reader = new DotReader(`digraph { subgraph cluster_a { { node [fillcolor="coral"] ; a } } }`);
+  expect([...bag(reader.styles()).keys()]).toEqual([".cluster_a.node, .cluster_a.record"]);
 });
 
 test("a node's own attributes are its `#id`", () => {

@@ -1,6 +1,6 @@
 // SHAPE_HTML — a registry, not a class (§8). shape → the node's HTML layer.
 // The HTML layer exists to be measured, so it stays in flow and carries the
-// identity: DOT id + one type class (`node` / `record`) + one subgraph class (§3.1).
+// identity: the DOT's names, plus at most one kind and one membership class (§3).
 
 import type * as T from "../types.ts";
 import { renderLabel } from "./markdown.ts";
@@ -35,22 +35,19 @@ function box(node: T.DiagramNode): string {
 // separates cells, `{}` flips the flex axis. Depth rises at `{` and falls at
 // `}`, so flipping at both reproduces depth parity without counting it.
 //
-// A cell's class is its **path**: `._2_1` is the first field inside the second
-// top-level item. Positional, but positional the way a filesystem is — inserting
-// a sibling at one level leaves every other level alone.
+// A cell carries no class: the markup is the selector. `.record > span` is a
+// top-level field, `.record div` a flipped group, `:nth-child()` a position.
 //
 // A leading `{` is the node's own axis, not a container inside it. Records are
-// written `{Head | {A | B}}`, and honouring that brace as a level would push the
-// whole diagram down to `._1_1`, `._1_2_1` — a level of path that says nothing.
+// written `{Head | {A | B}}`, and honouring that brace as a level would wrap the
+// whole record in one div that says nothing.
 
 type Cell = {
-  classes: string[];
   span: number; // indices this cell swallowed — `{me || you}` gives `me` two
   text: string;
 };
 
 type Cursor = {
-  path: number[]; // the index of the current cell at each level
   dir: string; // the axis the next `{` will flip away from
   depth: number; // open braces, so an unbalanced label throws
   outer: boolean; // the leading `{` is the node element, and emits no div
@@ -62,7 +59,7 @@ function record(node: T.DiagramNode): string {
   const label = node.label.trim();
   const outer = label.startsWith("{");
   const dir = outer ? "col" : "row";
-  const cursor: Cursor = { path: [0], dir, depth: 0, outer, prev: "", pending: null };
+  const cursor: Cursor = { dir, depth: 0, outer, prev: "", pending: null };
 
   const fields = walk(label, cursor);
   if (cursor.depth !== 0) throw new Error(`unbalanced {} in record label of ${node.id}`);
@@ -94,8 +91,7 @@ function cell(raw: string, cursor: Cursor, next: string): string {
     return "";
   }
   const out = flush(cursor);
-  bump(cursor);
-  cursor.pending = { classes: [path(cursor)], span: 1, text: label };
+  cursor.pending = { span: 1, text: label };
   return out;
 }
 
@@ -114,28 +110,16 @@ function container(sep: string, cursor: Cursor): string {
   if (isOuter) return "";
 
   cursor.dir = cursor.dir === "row" ? "col" : "row";
-  if (!open) {
-    cursor.path.pop();
-    return "</div>";
-  }
-  // A group takes an index of its own, or the field after it would reuse one.
-  bump(cursor);
-  cursor.path.push(0);
-  return `<div>`;
+  return open ? "<div>" : "</div>";
 }
 
 function isSlot(prev: string, next: string): boolean {
   return prev !== "{" && prev !== "}" && next !== "{" && next !== "}";
 }
 
-function bump(cursor: Cursor): void {
-  cursor.path[cursor.path.length - 1] += 1;
-}
-
-// An empty slot spends an index and hands it to the cell before it, which is
-// what "the previous field is twice the size" means in classes as well as width.
+// An empty slot hands its width to the cell before it: that is what "the
+// previous field is twice the size" means.
 function grow(cursor: Cursor): void {
-  bump(cursor);
   if (cursor.pending === null) return;
   cursor.pending.span += 1;
 }
@@ -147,13 +131,7 @@ function flush(cursor: Cursor): string {
 
   // `--span` is data; Base CSS turns it into growth, so a theme can still say no.
   const span = cell.span > 1 ? ` style="--span:${cell.span}"` : "";
-  const extra = cell.classes.join(" ");
-  const classes = extra === "" ? "cell" : `cell ${extra}`;
-  return `<span class="${classes}"${span}>${renderLabel(cell.text)}</span>`;
-}
-
-function path(cursor: Cursor): string {
-  return `_${cursor.path.join("_")}`;
+  return `<span${span}>${renderLabel(cell.text)}</span>`;
 }
 
 // The first *unescaped* separator: `\|` and `\{` are literal text, so a bare
@@ -166,9 +144,9 @@ function separator(text: string): number {
   return -1;
 }
 
-// `<p6> 6th` — a port is a stable name beside the path class. We cannot honour it
-// as an edge attachment point, since connectors are drawn from measured boxes
-// (§3.4), so this is all it is: a name the author already chose.
+// `<p6> 6th` — a port. We cannot honour it as an edge attachment point, since
+// connectors are drawn from measured boxes (§4), so it is dropped: the field
+// keeps its text and the port gives nothing.
 function splitPort(text: string): [string, string] {
   if (!text.startsWith("<")) return ["", text];
 
@@ -180,9 +158,16 @@ function splitPort(text: string): [string, string] {
 
 function identity(node: T.DiagramNode): string {
   const kind = SHAPE_CLASS.get(node.shape) ?? "node";
-  const classes = [kind, ...styleWords(node.style), ...node.classes].join(" ");
+  const classes = [kind, ...styleWords(node.style), ...node.classes, ...membership(node.classes)].join(" ");
   const shape = kind === "node" ? ` data-shape="${node.shape}"` : "";
   return `id="${node.id}" class="${classes}"${shape}`;
+}
+
+// One membership class, or none: in any cluster is `.cluster`, and a cluster is
+// already a subgraph, so it never also wears `.subgraph` (§3).
+function membership(classes: T.SubgraphName[]): string[] {
+  if (classes.some((name) => name.startsWith("cluster"))) return ["cluster"];
+  return classes.length > 0 ? ["subgraph"] : [];
 }
 
 // `style="invis,filled"` → `invis filled`. A word is what a class is, so each

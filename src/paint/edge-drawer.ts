@@ -11,7 +11,7 @@ import type * as T from "../types.ts";
 import { EdgeRouter } from "./edge-router.ts";
 import { styleWords } from "./node-shaper.ts";
 
-const ARROW = `<defs><marker id="connector-arrow" class="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" /></marker></defs>`;
+const ARROW = `<defs><marker id="connector-arrow" class="arrow" viewBox="0 0 10 10" refX="9" refY="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" /></marker></defs>`;
 
 export class EdgeDrawer {
   private router = new EdgeRouter();

@@ -1,7 +1,73 @@
 {
+  "#diagram-canvas, svg": {
+    "--theme-color": {
+      "value": "white",
+      "source": 0
+    },
+    "--primary-color": {
+      "value": "blue",
+      "source": 0
+    },
+    "--secondary-color": {
+      "value": "green",
+      "source": 0
+    },
+    "--accent-color": {
+      "value": "orange",
+      "source": 0
+    },
+    "--main-font": {
+      "value": "sans-serif",
+      "source": 0
+    },
+    "--title-font": {
+      "value": "sans-serif",
+      "source": 0
+    },
+    "--base-font-size": {
+      "value": "13px",
+      "source": 0
+    },
+    "--vertical-gap": {
+      "value": "2em",
+      "source": 0
+    },
+    "--horizontal-gap": {
+      "value": "2em",
+      "source": 0
+    },
+    "--raised-shadow": {
+      "value": "-1px 0 4px 2px grey, inset 0 0 4px 2px white",
+      "source": 0
+    },
+    "--flat-shadow": {
+      "value": "0 0 2px",
+      "source": 0
+    },
+    "--vertical-pad": {
+      "value": "0.75em",
+      "source": 0
+    },
+    "--horizontal-pad": {
+      "value": "0.5em",
+      "source": 0
+    },
+    "--glass-background": {
+      "value": "color-mix(in srgb, var(--primary-color) 10%, transparent)",
+      "source": 0
+    },
+    "--paper-background": {
+      "value": "color-mix(in srgb, var(--secondary-color) 10%, var(--theme-color))",
+      "source": 0
+    },
+    "--connector-radius": {
+      "value": "6px",
+      "source": 0
+    }
+  },
   ".paper": {
     "background": {
-      "value": "color-mix(in srgb, var(--primary-color) 10%, white)",
+      "value": "var(--paper-background)",
       "source": 0
     },
     "box-shadow": {
@@ -15,7 +81,7 @@
   },
   ".glass": {
     "background": {
-      "value": "color-mix(in srgb, var(--secondary-color) 10%, transparent)",
+      "value": "var(--glass-background)",
       "source": 0
     },
     "box-shadow": {
@@ -44,72 +110,6 @@
     },
     "flex-flow": {
       "value": "column",
-      "source": 0
-    }
-  },
-  "#diagram-canvas, svg": {
-    "--theme-color": {
-      "value": "white",
-      "source": 0
-    },
-    "--primary-color": {
-      "value": "#0b3d91",
-      "source": 0
-    },
-    "--secondary-color": {
-      "value": "#1565c0",
-      "source": 0
-    },
-    "--accent-color": {
-      "value": "#ff8f00",
-      "source": 0
-    },
-    "--main-font": {
-      "value": "sans-serif",
-      "source": 0
-    },
-    "--title-font": {
-      "value": "sans-serif",
-      "source": 0
-    },
-    "--base-font-size": {
-      "value": "13px",
-      "source": 0
-    },
-    "--vertical-gap": {
-      "value": "2em",
-      "source": 0
-    },
-    "--horizontal-gap": {
-      "value": "2em",
-      "source": 0
-    },
-    "--raised-shadow": {
-      "value": "0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)",
-      "source": 0
-    },
-    "--flat-shadow": {
-      "value": "0 0 2px",
-      "source": 0
-    },
-    "--vertical-pad": {
-      "value": "0.75em",
-      "source": 0
-    },
-    "--horizontal-pad": {
-      "value": "0.5em",
-      "source": 0
-    },
-    "--glass-background": {
-      "value": "color-mix(in srgb, var(--secondary-color) 10%, transparent)",
-      "source": 0
-    },
-    "--paper-background": {
-      "value": "color-mix(in srgb, var(--primary-color) 10%, var(--theme-color))",
-      "source": 0
-    },
-    "--connector-radius": {
-      "value": "6px",
       "source": 0
     }
   },
@@ -261,7 +261,7 @@
       "source": 0
     }
   },
-  ".cell": {
+  ".record span": {
     "flex": {
       "value": "1",
       "source": 0
@@ -279,7 +279,7 @@
       "source": 0
     }
   },
-  ".cell._1": {
+  ".record > span": {
     "@apply": {
       "value": ".glass",
       "source": 0
@@ -330,6 +330,20 @@
   ".arrow": {
     "fill": {
       "value": "var(--secondary-color)",
+      "source": 0
+    },
+    "overflow": {
+      "value": "visible",
+      "source": 0
+    }
+  },
+  ".arrow path": {
+    "transform": {
+      "value": "scale(2)",
+      "source": 0
+    },
+    "transform-origin": {
+      "value": "9px 5px",
       "source": 0
     }
   }

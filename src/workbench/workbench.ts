@@ -11,7 +11,7 @@
 // at main's right edge brings it back, unless the pin is checked.
 
 import { Diagram } from "../diagram/diagram.ts";
-import { documentStyles } from "../style/book.ts";
+import { documentStyles, fileStyles } from "../style/book.ts";
 import { Checks } from "../ui/checks.ts";
 import { Radios } from "../ui/radios.ts";
 import { Topic } from "../ui/topic.ts";
@@ -73,7 +73,8 @@ export class Workbench {
     pinned: new Topic(new Set(["pinned"])),
     shown: new Topic(true),
   };
-  readonly picker: HTMLInputElement;
+  readonly projectPicker: HTMLInputElement;
+  readonly dotPicker: HTMLInputElement;
   readonly exportDialog: ExportDialog;
   #styleTab: StyleTab;
   #noteTab: NoteTab;
@@ -85,7 +86,8 @@ export class Workbench {
     this.#layout = layout;
     this.skeleton = [...body.children].filter((el) => el.tagName !== "SCRIPT").map((el) => el.outerHTML).join("\n");
     const $ = <E extends Element>(selector: string) => body.querySelector<E>(selector)!;
-    this.picker = $("main > nav > input[type=file]");
+    this.projectPicker = $("main > nav > input[data-picks=project]");
+    this.dotPicker = $("main > nav > input[data-picks=dot]");
     this.exportDialog = new ExportDialog($("dialog"));
     this.#styleTab = new StyleTab($("[data-tab=styles]"));
     this.#noteTab = new NoteTab($(".rows.notes"));
@@ -98,7 +100,8 @@ export class Workbench {
     new Checks($(".checks.pin"), "pin", new Map([["pinned", ""]]), this.view.pinned);
     this.#bindView(body);
     this.#bindVerbs(body);
-    this.picker.addEventListener("change", () => this.#open());
+    this.projectPicker.addEventListener("change", () => this.#open());
+    this.dotPicker.addEventListener("change", () => this.#loadDot());
 
     ($("main > nav > img") as HTMLImageElement).src = LOGO_URI;
     document.head.append(Object.assign(document.createElement("link"), { rel: "icon", href: LOGO_URI }));
@@ -122,10 +125,23 @@ export class Workbench {
     this.#styleTab.read(diagram.styleBook);
   }
 
+  /** A project: its DOT, and your rules laid over a fresh theme. */
   async #open(): Promise<void> {
+    const project: T.Project = JSON.parse(await this.projectPicker.files![0]!.text());
+    this.projectPicker.value = "";
+    this.#replace(project.dot, fileStyles(project["user-styles"]));
+  }
+
+  /** A bare DOT: a fresh book, the theme only. */
+  async #loadDot(): Promise<void> {
+    const dot = await this.dotPicker.files![0]!.text();
+    this.dotPicker.value = "";
+    this.#replace(dot, []);
+  }
+
+  #replace(dot: string, styles: T.Style[]): void {
     const old = this.diagram;
-    this.#adopt(new Diagram(this.#layout, await this.picker.files![0]!.text(), old.script.value, old.notes.value, []));
-    this.picker.value = "";
+    this.#adopt(new Diagram(this.#layout, dot, old.script.value, old.notes.value, styles));
     this.draw();
   }
 

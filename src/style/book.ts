@@ -102,7 +102,7 @@ export function asFile(styles: T.Style[]): T.StyleFile {
   return file;
 }
 
-/** What Save styles writes: the user's rules only, over a named theme. */
+/** The user's rules only, over a named theme — what a project's `user-styles` holds. */
 export function asDocument(styles: T.Style[]): T.StyleDocument {
   return { theme: THEME_NAME, style: asFile(styles.filter((style) => style.source === 2)) };
 }
@@ -112,6 +112,12 @@ export function fileStyles(file: T.StyleFile): T.Style[] {
   return Object.entries(file).flatMap(([selector, properties]) =>
     Object.entries(properties).map(([property, { value, source }]) => ({ selector, property, value, source })),
   );
+}
+
+/** What Save writes: the theme by name, the DOT, and the user's rules. */
+export function asProject(dot: string, styles: T.Style[]): T.Project {
+  const { theme, style } = asDocument(styles);
+  return { theme, dot, "user-styles": style };
 }
 
 /**

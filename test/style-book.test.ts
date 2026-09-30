@@ -166,7 +166,7 @@ describe("the shipped theme", () => {
 
   test("resolves, mixins and all", () => {
     const rules = book(styles);
-    expect(expand(rules, ".node").get("background")).toContain("color-mix(");
+    expect(expand(rules, ".node").get("background")).toBe("var(--paper-background)");
     expect(expand(rules, ".cluster_").get("fill")).toBe("var(--glass-background)");
     for (const selector of rules.keys()) expect(expand(rules, selector).has("@apply")).toBe(false);
   });

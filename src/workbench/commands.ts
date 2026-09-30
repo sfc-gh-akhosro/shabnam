@@ -7,15 +7,19 @@
 // typing, not a chord.
 
 import { download, exportHtml, exportPicture } from "../diagram/files.ts";
-import { asDocument } from "../style/book.ts";
+import { asProject } from "../style/book.ts";
 import type * as T from "../types.ts";
 import type { Workbench } from "./workbench.ts";
 
 export function commands(bench: Workbench): Map<T.Command, () => void> {
   return new Map<T.Command, () => void>([
     ["draw", () => bench.draw()],
-    ["open", () => bench.picker.click()],
-    ["save", () => download("diagram.dot", bench.diagram.dot.value, "text/vnd.graphviz")],
+    ["open", () => bench.projectPicker.click()],
+    ["save", () => {
+      const project = asProject(bench.diagram.dot.value, bench.diagram.styleBook.styles());
+      download("diagram.shabnam.json", JSON.stringify(project, null, 2), "application/json");
+    }],
+    ["load-dot", () => bench.dotPicker.click()],
     ["export-picture", async () => {
       const options = await bench.exportDialog.ask();
       if (options === undefined) return;
@@ -23,20 +27,17 @@ export function commands(bench: Workbench): Map<T.Command, () => void> {
       download(`diagram.${options.format}`, picture, picture.type);
     }],
     ["export-html", async () => download("diagram.html", await exportHtml(bench.diagram, bench.skeleton), "text/html")],
-    ["save-styles", () => {
-      const json = JSON.stringify(asDocument(bench.diagram.styleBook.styles()), null, 2);
-      download("style-rules.json", json, "application/json");
-    }],
   ]);
 }
 
-/** Key → action. The browser-claimed ones (`p`, `s`, `o`) are `preventDefault`ed
+/** Key → action. The browser-claimed ones (`p`, `s`, `o`, `l`) are `preventDefault`ed
  *  by the listener, which is why `Cmd+P` exports rather than prints. */
 export function chords(verbs: Map<T.Command, () => void>, tabs: T.TabId[], tab: T.Topic<T.TabId>): Map<string, () => void> {
   return new Map<string, () => void>([
     ["enter", verbs.get("draw")!],
     ["o", verbs.get("open")!],
     ["s", verbs.get("save")!],
+    ["l", verbs.get("load-dot")!],
     ["p", verbs.get("export-picture")!],
     ["e", verbs.get("export-html")!],
     ...tabs.map((id, i): [string, () => void] => [String(i + 1), () => tab.pub(id)]),

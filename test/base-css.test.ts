@@ -101,7 +101,7 @@ test("an empty subgraph says nothing", () => {
   expect([...sample.keys()].some((s) => s.includes(".cluster_a"))).toBe(false);
 });
 
-test("an anonymous subgraph is one class rule, not one `#id` per member", () => {
+test("an unnamed subgraph's declaration lands on the scope around it", () => {
   const sample = rules(`digraph {
     node [fillcolor="#ffffff" style=filled]
     {
@@ -110,8 +110,8 @@ test("an anonymous subgraph is one class rule, not one `#id` per member", () => 
     }
     d; e; f; g;
   }`);
-  expect(sample.get(".subgraph_1.node, .subgraph_1.record")?.get("background-color"))
-    .toBe("#ddffdd");
+  expect(sample.get(".node, .record")?.get("background-color")).toBe("#ddffdd");
+  expect([...sample.keys()].some((selector) => selector.includes("subgraph"))).toBe(false);
   expect(shape(sample).match(/#ddffdd/g)).toHaveLength(1);
 });
 

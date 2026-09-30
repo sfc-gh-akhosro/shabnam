@@ -69,7 +69,7 @@ Everything is client-side: no server, no build step at runtime, no telemetry. Ch
 
 | | |
 |---|---|
-| File verbs | Load/save DOT, save styles, export standalone HTML, export picture (SVG or PNG) |
+| File verbs | Open/save project (DOT + your styles), load DOT, export standalone HTML, export picture (SVG or PNG) |
 | Shortcuts | `↵` redraw · `o`/`s` DOT · `p` picture · `e` HTML · `1`–`4` tabs |
 | Drawing | SVG shells around the HTML, connectors with arrowheads, per-node icons and captions |
 | Theming | one shipped theme; rows grouped by origin; a colour row paints at once, a size row waits for Redraw |

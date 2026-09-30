@@ -102,27 +102,42 @@ notes ─▶ #annotation-html, placed;  script runs last
 
 ## 3. Identity
 
-**Identity in CSS is identity in DOT.**
+**Identity in CSS is identity in DOT.** Every id and every class but a handful
+comes from the DOT, and that handful is closed.
 
-| DOT | CSS |
-|---|---|
-| node `lake` | `#lake` |
-| edge `lake -> runtime` | `#lake_runtime` (`_2`, `_3` for parallels) |
-| `subgraph cluster_source` | `.cluster_source` on every member |
-| anonymous subgraph | `.subgraph_1`, `.subgraph_2` by order |
-| `style="invis,filled"` | classes `invis filled` |
+**From the DOT**
+
+| DOT | Becomes | On |
+|---|---|---|
+| node `lake` | `#lake` | the node's box |
+| edge `lake -> runtime` | `#lake_runtime` | the edge's path |
+| named subgraph `gcp`, `cluster_a` | `.gcp`, `.cluster_a` | every member node, and every edge written inside it |
+| cluster `cluster_a` | `#cluster_a` | the cluster's box |
+| `style="invis,filled"` | `.invis .filled` | the element written on |
+| `shape=cylinder` | `data-shape="cylinder"` | the node's box |
 
 A space becomes `_`, and that is the whole sanitizer. No prefix, no `cluster_`
-stripping.
+stripping. Parallel edges share one id. An unnamed subgraph gives nothing: it is
+there for `dot`, not for styling, so it is no scope and its statements belong to
+the one around it. A subgraph worth styling is worth a name.
+
+**Added by the app, at most one per group**
+
+| Group | Classes | On |
+|---|---|---|
+| kind | `.node` · `.record` · `.edge` | node box · record box · edge path |
+| membership | `.cluster` · `.subgraph` | in any cluster → `.cluster`; only in named non-cluster subgraphs → `.subgraph` |
+| cluster box | `.cluster_` | the cluster's box |
+| parts | `.rank` · `.label` · `.icon` · `.shell` · `.arrow` | rank row · label text · icon · SVG outline · arrowhead marker |
+
+Nothing else is invented. A `.cluster` is a subgraph; it never also wears
+`.subgraph`. Record fields carry no class: the markup is the selector —
+`.record > span` a top-level field, `.record span` any field, `.record div` a
+flipped group, `:nth-child()` a position. A record port (`<f0>`) gives nothing.
 
 **Every id the app owns is two hyphenated words** (`#diagram-canvas`), because
 node ids are bare DOT names and share the namespace. Selectors about diagram
 content never reach through a sink id.
-
-Invented classes are few: `rank`, `node`, `record`, `shell`, `edge`, `arrow`,
-`cluster_`, `cell`, `label`, `icon`, and a record cell's path (`._2_1`). An
-element carries one invented class; further classes are DOT names. Other shapes
-name themselves in `data-shape`.
 
 ---
 
@@ -150,6 +165,13 @@ preferring fewest turns, then shortest. Clearance is a preference with a floor:
 try with clearance, then touching, then a plain dog-leg. An edge always draws.
 Bends round by one radius, clamped to half the shorter segment. Same-rank pairs
 attach top/bottom, decided by measured overlap.
+
+**The arrow is SVG's default marker.** One `<marker class="arrow">`, with no
+`markerUnits` / `markerWidth` / `markerHeight` of our own, so it is sized in
+the edge's stroke width and grows with `.edge { stroke-width }`, per edge. The
+theme styles its content: `fill` for colour, `transform: scale()` on
+`.arrow path` for a size other than the default. One marker serves every edge,
+so it has one colour.
 
 **Notes** are ordered rows; the mark is derived and never read back.
 `data-selector` is a real selector run with `querySelectorAll`; the centre of
@@ -192,9 +214,10 @@ data URIs through markdown-it's own image rule.
 - A draw re-adds the DOT's styles at source 1 and never flushes; opening a DOT
   makes a new `Diagram` with a new book seeded from the theme. That is the reset.
 
-One theme ships: `theme/basic-theme.json`. **Save styles** writes
-`{ theme, style }` with the user's source-2 rules only. An export carries the
-whole book.
+One theme ships: `theme/basic-theme.json`. **Save** writes a project,
+`{ theme, dot, "user-styles" }`: the theme by name, the DOT as text, and the
+user's source-2 rules only. **Open** reads a project back; **Load DOT** reads a
+bare DOT over the theme alone. An export carries the whole book.
 
 ---
 
@@ -250,7 +273,7 @@ Rules:
   mark.
 - Open makes a new `Diagram` and the workbench *adopts* it: the textareas are
   set once, the note tab follows its `notes`, the style tab reads its book.
-- Keys: `Cmd+Enter` draw · `Cmd+O` / `Cmd+S` open / save DOT · `Cmd+P` / `Cmd+E`
+- Keys: `Cmd+Enter` draw · `Cmd+O` / `Cmd+S` open / save project · `Cmd+L` load DOT · `Cmd+P` / `Cmd+E`
   export picture / HTML · `Cmd+1…4` tabs. The browser-claimed ones are
   `preventDefault`ed.
 

@@ -166,7 +166,7 @@ export type ConnectorMetrics = {
 export type TabId = "dot" | "styles" | "notes" | "script";
 
 /** Every verb. The toolbar and the chords share one map of them. */
-export type Command = "draw" | "open" | "save" | "export-picture" | "export-html" | "save-styles";
+export type Command = "draw" | "open" | "save" | "load-dot" | "export-picture" | "export-html";
 
 /**
  * One note, as its row holds it — and the row is the model (§4). An **ordered
@@ -206,9 +206,13 @@ export type Style = { selector: Selector; property: Property; value: CssValue; s
 /** What a style JSON holds. One shape, sourced; the theme is all `0`. */
 export type StyleFile = Record<string, Record<string, { value: string; source: Source }>>;
 
-/** What Save Styles writes: your rules, and the theme they were laid over.
+/** Your rules, and the theme they were laid over — what a project carries.
  *  Only source `2` travels (§4.4). */
 export type StyleDocument = { theme: string; style: StyleFile };
+
+/** What Save writes and Open reads: the theme by name, the DOT as text, and
+ *  your rules. Only source `2` travels in `user-styles`. */
+export type Project = { theme: string; dot: string; "user-styles": StyleFile };
 
 /** A typed value you subscribe to. A fact, never a verb. */
 export interface Topic<T> {
