@@ -116,19 +116,31 @@ micro-managing it behaves erratically.
 
 ## Soft 7
 
-Limits that keep code readable. Break one occasionally when the design forces
-it, not routinely.
+Soft ranges, written *(low, mid, high)*. They keep a page readable. They are
+not a quota, and they are not the design. Story and architecture come first;
+break a number when those need it, not to make the table look used. The
+average across files should sit near the middle. One-liners are common and
+fine.
 
-| | Soft 7 |
+A **player** is who talks to someone else: one public class, one conversation.
+The steps inside that job are paragraphs, not players, and not files.
+
+| | *(low, mid, high)* |
 |---|---|
-| lines in a block | about 7 — one step of logic |
-| blocks in a function | about 7, so a function stays under about 50 lines |
-| methods on an interface | about 7; a new verb replaces one or goes into a map |
-| code files per package | about 7, not counting `types.ts` and `story.md` |
-| classes per file | one main class, plus its helpers |
+| method / function | *(9, 25, 49)* lines — `3×3`, `5×5`, `7×7`. One-liners are fine. |
+| interface | *(3, 5, 7)* public methods; a new verb replaces one or goes into a map |
+| class | *(27, 125, 350)* lines — `9×3`, `25×5`, then a hard-ish 350. Implements the interface, plus private methods and helper functions in the same class or file. |
+| file | *(100, 500, 1000)* lines — the class and its core methods, plus the helpers and private methods |
+| code files per package | about 7, not counting `types.ts` and `story.md`. Start at 1. A new file is a new player, not a chapter of the same class. |
+| classes per file | one main class. Its helpers stay in that file. A helper is not a player. |
 | map entries, packages | no limit — this is how the app grows |
 
-A package is a subject expert on the team. Flat is better than nested.
+A package is a subject expert on the team. One expert, one mouth: one public
+class. Flat is better than nested.
+
+If a working lab file already has the design, that file *is* the package. Type
+it, strip what `src/` must not have, stop. Size is not a reason to split what
+already reads.
 
 ## Dependencies
 

@@ -96,11 +96,14 @@ onto it.
 
 ## Connectors
 
-Connectors are an ortho snake along the gutters between ranks and the gaps
-between rows — the layout already is a grid, so there is no search for free
-space. A route prefers fewest turns, then shortest. It keeps a clearance from
-boxes when it can and grazes them when it must; an edge always draws, because a
-missing edge is a lie about the architecture. Bends are rounded by one radius.
+Connectors run across ranks through **pathways** — the gaps between nodes, each
+node grown by a clearance — and along ranks only in the **gutters** between
+them; the layout already is a grid, so there is no search for free space. A
+route needs as few pathways as it can, then picks its ports: fewer bends, then
+the directional face, then shorter. Crossing runs slide apart before a gutter
+gets a second lane. An edge always draws, because a missing edge is a lie about
+the architecture. Bends are rounded by one radius. The whole story is
+`src/connectors/connectors-story.md`.
 
 ## Export
 

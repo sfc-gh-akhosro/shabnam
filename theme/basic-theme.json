@@ -63,6 +63,14 @@
     "--connector-radius": {
       "value": "6px",
       "source": 0
+    },
+    "--node-clearance": {
+      "value": "24px",
+      "source": 0
+    },
+    "--connector-lane": {
+      "value": "6px",
+      "source": 0
     }
   },
   ".paper": {

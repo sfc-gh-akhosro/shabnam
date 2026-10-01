@@ -5,6 +5,8 @@
 // which drives it through CSSOM — writing its `textContent` from `inject`
 // would wipe every rule the book inserted, so the sink is not in the map.
 
+import { Connectors } from "../connectors/connectors.ts";
+import type { ConnectorRules } from "../connectors/types.ts";
 import { DiagramPainter } from "../paint/diagram-painter.ts";
 import { DotReader } from "../read/dot-reader.ts";
 import { StyleBook } from "../style/style-book.ts";
@@ -67,11 +69,13 @@ export class Diagram implements T.Diagram {
     // typed row back off them.
     for (const style of reader.styles()) this.styleBook.add(style);
 
-    this.inject("diagram-html", this.painter.frame(model, this.layout.layout(reader.points())));
+    const ranks = this.layout.layout(reader.points());
+    this.inject("diagram-html", this.painter.frame(model, ranks));
 
     await painted();
     const boxes = this.measure();
-    const svg = this.painter.svg(boxes, model, this.metrics());
+    const connectors = new Connectors(Connectors.place(ranks, boxes), this.rules());
+    const svg = this.painter.svg(boxes, model, connectors.paths(model.edges));
     this.inject("cluster-shells", svg.clusters);
     this.inject("node-shells", svg.shells);
     this.inject("connector-paths", svg.connectors);
@@ -116,16 +120,17 @@ export class Diagram implements T.Diagram {
     }));
   }
 
-  // The other half of measuring: the two numbers the router needs are CSS, and a
-  // pure worker cannot read CSS (§3.4). `1em` is the clearance a route prefers to
-  // keep off a foreign node; `--connector-radius` curves its bends.
-  private metrics(): T.ConnectorMetrics {
-    const canvas = document.getElementById("diagram-canvas")!;
-    const style = getComputedStyle(canvas);
-    const em = parseFloat(style.fontSize);
-    return { clearance: em, radius: px(style.getPropertyValue("--connector-radius"), em) };
+  // The other half of measuring: the connectors' numbers are CSS tokens in px,
+  // and a pure package cannot read CSS (§4).
+  private rules(): ConnectorRules {
+    const style = getComputedStyle(document.getElementById("diagram-canvas")!);
+    const px = (token: string) => parseFloat(style.getPropertyValue(token));
+    return { clearance: px("--node-clearance"), inset: MARKER_INSET, lane: px("--connector-lane"), radius: px("--connector-radius") };
   }
 }
+
+/** Room the arrowhead needs at a face, so an attachment never sits on a corner. */
+const MARKER_INSET = 6;
 
 // The centre of the box that contains every match, in viewport coordinates. One
 // match is the ordinary case and falls out of the same arithmetic.
@@ -154,16 +159,4 @@ function painted(): Promise<void> {
     requestAnimationFrame(() => done());
     setTimeout(() => done(), 0);
   });
-}
-
-// A CSS length in the two units a theme actually writes a radius in. Anything
-// else, or nothing at all, falls back to the default rather than throwing: a
-// missing token is a theme that did not say, not a broken diagram.
-const RADIUS_DEFAULT = 6;
-
-function px(value: string, em: number): number {
-  const text = value.trim();
-  const measure = parseFloat(text);
-  if (Number.isNaN(measure)) return RADIUS_DEFAULT;
-  return text.endsWith("em") ? measure * em : measure;
 }

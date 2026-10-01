@@ -151,17 +151,6 @@ export type Box = {
   height: number;
 };
 
-/**
- * What the router needs that only the page knows (§3.4). Measured pixels, so
- * they travel in from the workbench the way `Box[]` does: a `paint/` worker
- * that called `getComputedStyle` would be reading the page it exists to
- * describe. `clearance` is a preference with a floor; `radius` `0` is sharp.
- */
-export type ConnectorMetrics = {
-  clearance: number;
-  radius: number;
-};
-
 /** Four tabs, in order. `styles` and `notes` are rows views, not text. */
 export type TabId = "dot" | "styles" | "notes" | "script";
 
@@ -250,7 +239,8 @@ export interface GraphvizLayout {
 
 export interface DiagramPainter {
   frame(model: DiagramModel, ranks: Ranks): string;
-  svg(boxes: Box[], model: DiagramModel, metrics: ConnectorMetrics): SvgLayers;
+  /** `ds[i]` is the connector outline of `model.edges[i]`. */
+  svg(boxes: Box[], model: DiagramModel, ds: string[]): SvgLayers;
 }
 
 /** One SVG string per group under `#diagram-svg`, named by its sink. */

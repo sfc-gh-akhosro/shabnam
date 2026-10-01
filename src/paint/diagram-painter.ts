@@ -14,11 +14,11 @@ export class DiagramPainter implements T.DiagramPainter {
     return this.framer.frame(model, ranks);
   }
 
-  svg(boxes: T.Box[], model: T.DiagramModel, metrics: T.ConnectorMetrics): T.SvgLayers {
+  svg(boxes: T.Box[], model: T.DiagramModel, ds: string[]): T.SvgLayers {
     return {
       clusters: this.sheller.clusters(boxes, model),
       shells: this.sheller.shells(boxes, model),
-      connectors: this.edger.draw(boxes, model, metrics),
+      connectors: this.edger.draw(model, ds),
     };
   }
 }

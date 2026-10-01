@@ -45,10 +45,11 @@ first.
 | `DotReader` | the only reader of DOT (walls `@ts-graphviz/ast`) | no |
 | `GraphvizLayout` | the only source of geometry (walls `@hpcc-js/wasm-graphviz`) | no |
 | `DiagramPainter` | model + ranks → HTML; measured boxes → SVG | no — returns strings |
+| `Connectors` | placement → one path `d` per edge (`src/connectors/connectors-story.md`) | no — returns strings |
 | `StyleBook` | the style rules and the one live CSSOM sheet | owns `#style-css` |
 | `Workbench` | the page: pieces, bindings, verbs | owns the chrome |
 
-`read/`, `layout/` and `paint/` are pure: data in, data out, tested as plain
+`read/`, `layout/`, `paint/` and `connectors/` are pure: data in, data out, tested as plain
 functions. Only `Diagram`, `StyleBook` and the `ui/` + `workbench/` packages
 touch the page.
 
@@ -68,7 +69,9 @@ dot ─DotReader──┬─▶ model          who exists, connects, belongs —
 styles ─▶ styleBook.add(each)
 points ─GraphvizLayout─▶ positions (x,y of 0×0 points) ─▶ ranks: NodeId[][]
 model + ranks ─DiagramPainter─▶ #diagram-html
-  [browser paints] ─▶ measure boxes ─DiagramPainter─▶ cluster, shell, connector SVG
+  [browser paints] ─▶ measure boxes ─Connectors.place─▶ placement
+  placement ─Connectors─▶ d per edge
+  boxes + d's ─DiagramPainter─▶ cluster, shell, connector SVG
 notes ─▶ #annotation-html, placed;  script runs last
 ```
 
@@ -160,11 +163,22 @@ content never reach through a sink id.
 Child order is load-bearing: SVG paints over HTML, so shells are stroke-only
 chrome around the measured div, and the div owns background, border and label.
 
-**Connectors** are an ortho snake along the rank gutters and row gaps,
-preferring fewest turns, then shortest. Clearance is a preference with a floor:
-try with clearance, then touching, then a plain dog-leg. An edge always draws.
-Bends round by one radius, clamped to half the shorter segment. Same-rank pairs
-attach top/bottom, decided by measured overlap.
+**Connectors** follow `src/connectors/connectors-story.md`: pathways, then
+ports, then polish. A node is its box in rank coordinates — `{ rank, start,
+length, cross, depth }` in whole px — and ranks and order are read from the
+measured boxes, never from `rankdir`, so BT and RL need no case. Connectors run
+across ranks through pathways (the free gaps left when every node grows by
+`--node-clearance` at both ends of the order axis) and along ranks only in
+gutters, the midpoints between neighbouring ranks. Part 1 needs the fewest
+pathways; part 2 picks the port pair by fewer bends, then directional, then
+shorter; part 3 slides attachments to avoid a lane, lanes a gutter
+(`--connector-lane`) only where both ends differ, and rounds bends by
+`--connector-radius`, clamped to half the shorter segment. Every node offers
+its directional port; the first and last of a rank also offer their open side,
+in a corridor one `--node-clearance` wide, one clearance out. **An edge always draws:** with no clear
+pathway the fallback is the directional pair plus one jog in the head's
+gutter. The one exception is an edge to a node that does not paint
+(`.invis`): it has nothing to join, and its `d` is empty. The tokens are px and sit on `#diagram-canvas, svg` (§5).
 
 **The arrow is SVG's default marker.** One `<marker class="arrow">`, with no
 `markerUnits` / `markerWidth` / `markerHeight` of our own, so it is sized in
@@ -312,7 +326,8 @@ src/
   diagram/     Diagram, files (export), notes (the marks)
   read/        DotReader, model, styles, points
   layout/      GraphvizLayout
-  paint/       DiagramPainter, framer, shaper, sheller, router, drawer, markdown
+  paint/       DiagramPainter, framer, shaper, sheller, drawer, markdown
+  connectors/  Connectors: pathways, ports, polish, outline
   style/       StyleBook, sheet
   ui/          topic, radios, checks, row-list, dialog-ask
   workbench/   workbench, commands, style-tab, note-tab, export-dialog
@@ -320,7 +335,7 @@ svg/  icon/  theme/  test/  build/  docs/  research-lab/  dist/
 ```
 
 Imports point one way: `workbench → ui, diagram` · `diagram → read, layout,
-paint, style` · `ui → types`. A `ui/` piece never imports the diagram.
+paint, connectors, style` · `connectors → types` only · `ui → types`. A `ui/` piece never imports the diagram.
 Registries (`SHAPE_HTML`, `SHELL_SVG`, `ATTR_CSS`, `ROW_KINDS`, `COMMANDS`) live
 with the code that consults them.
 

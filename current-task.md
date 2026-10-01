@@ -4,80 +4,92 @@ Always read these files in each session:
 
 # Current Task
 
-## Connectors: replace the ortho snake with the `connectors2` design
+## Connectors: port the lab class into `src/`, logic intact
 
-**Goal.** `src/` draws connectors with the router proven in
-`research-lab/connectors/` (pathways → ports → polish) becomes a pure package with its own story. The old snake (`src/paint/edge-router.ts` and
-most of `edge-drawer.ts`) is deleted.
+**Goal.** `src/connectors/` is `research-lab/connectors/connectors.js` behind
+the no-DOM wall: measures in, one path `d` per edge out. The logic is the
+lab's. If a picture differs from the lab page, the port is wrong.
+
+**Why this task exists.** The last port retyped the lab into six files (about
+401 lines), renamed its internals and changed its geometry: gutters and the
+open-port corridor were built from `clearance` because `--gap` was dropped, and
+a fallback and an invisible-node case were added. Do not repeat that.
 
 **Read first:**
-- `research-lab/connectors/story.md` — the human story (parts 1–3). This is the law for behaviour.
-- `research-lab/connectors/connectors.js` — the working algorithm, as a DOM-reading class.
-- `research-lab/connectors/index.html` — the 12-edge fixture: 14 bends in total, in LR and TD.
-- All three files in `research-lab/connectors/` stay; do not delete or move them.
+- `research-lab/connectors/connectors.js` — the product. 200 lines, one class.
+- `research-lab/connectors/story.md` — the human story, parts 1–3.
+- `research-lab/connectors/index.html` — the 12-edge fixture: 14 bends, LR and TD.
+- The three lab files stay where they are.
 
-### Decisions already made (with the user)
+### Decisions (made with the user)
 
-- **The class takes no DOM.** It is built from a placement — what the layout and the measurement already give us — and returns one SVG path `d` per edge. Rendering is `Diagram.inject("connector-paths", …)`, the existing generic "write into a layer". There is no `render` in the package.
-- **One node is its box in rank coordinates**, `Map<NodeId, Placed>`, in whole px:
-  `{ rank, start, length, cross, depth }`.
-  - `start` and `length` are the position and size on the order axis.
-  - `cross` and `depth` are the position and size on the rank axis (width in LR, height in TD).
-  - `cross` is needed because nodes in one rank can differ in width and alignment. The directional port sits on the node's own face, the open-side ports sit along its own `depth`, and gutters are the midpoints between neighbouring ranks' outer edges.
-- **Clearance.** `--node-clearance` grows each node at both ends of the order axis; that cuts the pathways. On the rank axis connectors only run in gutters (midpoints), and the open-side ports start at least `--node-clearance` out, so the effect is clearance on all sides.
-- **Ranks and order come from geometry.** Ranks are sorted ascending along the rank axis, and nodes by `start`. The axis is read from the measured boxes, never from `rankdir`. BT/RL then need no special case.
-- **Port choice**, from the story: fewer bends, then directional, then shorter path (`length = entry.at − exit.at`).
-  - Every node offers its directional port on the face toward the other end.
-  - The first and last node of a rank also offer their open outer side: 3 positions in LR (`nw n ne` / `sw s se`), and 1 middle port in TD.
-  - No debug or port-name logic.
-- **An edge always draws.** When no port pair finds clear pathways, use the smallest fallback: the directional pair plus one jog in the head's gutter, ignoring the middle ranks.
-
-- **Package at `src/connectors/`**, not inside `paint/`, because it has its own story.
-- **Tokens in px**: `--node-clearance: 24px` and `--connector-lane: 6px`, beside `--connector-radius`. They go on `#diagram-canvas, svg` per §5 (not `:root`), so exports carry them. `inset` (room for the marker) is a code constant.
+- **Keep the wall that exists.** `Connectors.place(ranks, boxes) → Placement`
+  is the only code that knows boxes. `new Connectors(placement, rules)
+  .paths(links) → string[]`, one `d` per link in order. `EdgeDrawer` writes
+  markup only. `DiagramPainter.svg(boxes, model, ds)` stays. Axis from the
+  measured boxes, never `rankdir`. A node is `{ rank, start, length, cross,
+  depth }` in whole px.
+- **One player, one file.** `src/connectors/connectors.ts` is the class and its
+  helpers. Pathways, ports and polish are paragraphs of the story, not files.
+  Delete `pathways.ts`, `ports.ts`, `polish.ts`, `outline.ts`.
+- **Copy, do not retype.** Lab function and field names stay: `meet`,
+  `nearest`, `holding`, `ports`, `stab`, `choose`, `place`, `points`,
+  `inRank`, `assignLanes`, `rounded`; `r i lo hi o m0 m1 extra free segs`.
+  The only new code is the wall: `place` (+ building the lab's `g`, which
+  `measure` built from the DOM) and `paths` (lab `route` + `polish`, with
+  `rounded` returning the `d`s instead of `render` writing them).
+- **`--gap`, as in the lab.** A token on `#diagram-canvas, svg`, beside
+  `--node-clearance` (lab `--clear`), `--connector-lane` (lab `--lane`) and
+  `--connector-radius` (lab `--edge-radius`). Gutters are `m0 − gap/2`,
+  midpoints, `m1 + gap/2`; the open corridor is `[lo − gap, lo − clear]` and
+  `[hi + clear, hi + gap]`. No number is derived from another. `inset` stays
+  the code constant 6.
+- **Invisible is not there.** The connectors' entry removes it: `place` drops
+  a node that does not paint (`.invis` measures 0×0), and an edge to a node it
+  dropped is not routed. Past the entry, the router never sees one. No other
+  code removes them.
+- **No fallback.** Lab `choose` returns the best clear pair. If there is none,
+  it throws. Let it.
 
 ### Steps
 
-1. **`app-architecture.md` first, reviewed with the user.**
-   - §1: add a `Connectors` player (no DOM). Add `connectors/` to the pure packages.
-   - §2: the measure line becomes boxes → placement → `Connectors` → `d` per edge → painter.
-   - §4: replace the "ortho snake" paragraph with the new rules, pointing at the story. Keep the arrow paragraph and "an edge always draws".
-   - §8: add `connectors/`. `paint/` loses `router`. Imports gain `diagram → connectors`; `connectors → types` only.
-   - `coding-rules.md`: no change expected.
-2. **`src/connectors/connectors-story.md`**, a very important doc:
-   - The user's story, proofread and lightly reordered, keeping the user's vocabulary: gutters, pathways, ports, lanes.
-   - The design: the steps and algorithms in general (free gaps + greedy stabbing; the port table + the three-key sort; slide; in-rank; lanes; rounded outline; fallback).
-   - The core types and interface, one line each.
-3. **`src/connectors/types.ts`**, core only: `Px`, `Placed` (`rank, start, length, cross, depth`), `Placement`, `ConnectorRules` (clearance, inset, lane, radius), `Link` (`from`/`to`; a `DiagramEdge` fits), `Gap`, `Port`, `Route`, and `interface Connectors { paths(links): string[] }`. `paths` returns one `d` per link, in the same order, because parallel edges share an id.
-4. **The package**, soft 7, with files named after players:
-   - `connectors.ts`: the class, `static place(ranks: Ranks, boxes: Box[]): Placement` (the only code that knows boxes), `constructor(placement, rules)`, and `paths(links)`.
-   - `pathways.ts`: part 1.
-   - `ports.ts`: part 2.
-   - `polish.ts`: part 3 (slide, in-rank, lanes).
-   - `outline.ts`: rounded `d`, and the only `[m, c] → x,y` mapping.
-5. **Wire and remove:**
-   - `Diagram.draw()`: keep `ranks` and build the placement after `painted()`.
-   - `metrics()` → `rules()`, reading the tokens.
-   - `EdgeDrawer` shrinks to markup: ARROW plus `<path id class d marker-end>`.
-   - `DiagramPainter.svg` takes the `d`s.
-   - Delete `edge-router.ts`, the snake helpers and `T.ConnectorMetrics`.
-6. **Tests:**
-   - Delete `test/smart-connectors.test.ts`.
-   - Add `test/connectors.test.ts`: pure, hand-written placements, `radius: 0`, one test per story claim:
-     - adjacent ranks
-     - a middle-rank pathway
-     - an open port that saves bends
-     - in-rank neighbours
-     - slide instead of a lane
-     - lanes only when both ends differ
-     - the fallback draws
-   - Add the lab fixture as a parity test on the bend count per edge. No float checks.
-   - The browser checks stay as they are.
+Stop after step 1 for review, as the ritual says.
+
+1. **Story, types, architecture.** No class code.
+   - `src/connectors/connectors-story.md`: rewritten from the lab story and
+     the lab's rules, in the user's words (gutters, pathways, ports, lanes).
+     Every number traces to the lab. Remove the corridor-from-clearance, the
+     fallback, the empty-`d` exception and the `bands`/`open` wording. The
+     public types at the end, one line each.
+   - `src/connectors/types.ts`: the public contract only — `Px`, `Placed`,
+     `Placement`, `ConnectorRules` (`gap, clear, inset, lane, radius`),
+     `Link`, `interface Connectors { paths(links): string[] }`. The lab's
+     inner records are typed in `connectors.ts`. Root `src/types.ts` is
+     unchanged.
+   - `app-architecture.md` §4: point at the package story, name the tokens,
+     state the three decisions above in one sentence each; keep the arrow
+     paragraph. §8: `connectors/` is one file. §1 and §2 stay.
+   - `user-story.md` Connectors paragraph: only what "no fallback" makes untrue.
+2. **Stitch.** Paste the lab class into `connectors.ts`, swap
+   `measure`/`render` for `place`/`paths`, add TS types. Delete the four extra
+   files.
+3. **Wire.** `Diagram.rules()` reads `--gap`; add `--gap` to
+   `theme/basic-theme.json` with the lab's value (5em).
+4. **Tests.** Replace `test/connectors.test.ts`: pure, radius 0, one test per
+   story claim (adjacent ranks, middle-rank pathway, open port saving bends,
+   in-rank neighbours, slide instead of a lane, lanes only when both ends
+   differ), plus the lab fixture parity on bends per edge
+   `[2,2,2,0,0,2,2,0,2,0,0,2]` in LR and TD, on the lab's boxes and numbers
+   (`gap` 5em, `clear` 2em at 13px). Drop the fallback and invisible-node
+   tests. No float checks. If parity fails, fix the copy, not the geometry.
 
 ### Done when
 
 - `bun test` and `bun run test:browser` pass.
-- The starter diagram and the examples look right by eye in LR and TB.
-- No reference is left to `EdgeRouter`, `snake` or `ConnectorMetrics`.
-- §4 describes what the code does.
+- `src/connectors/` is `connectors.ts`, `types.ts`, `connectors-story.md` —
+  about 250–280 lines of code, down from about 401.
+- The starter and `research-lab/example-2.dot` on `bun run dev` look like the
+  lab page by eye.
+- No fallback, no derived gap, no renamed lab internals.
 
 ## For Later
