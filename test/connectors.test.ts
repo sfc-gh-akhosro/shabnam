@@ -1,21 +1,24 @@
 // Connectors, one test per claim in `src/connectors/connectors-story.md`.
-// Placements are hand-written in LR (`cross` is x, `start` is y), and the
+// Boxes are hand-written in LR (ranks 120 apart on x, `start` is y), and the
 // radius is 0, so every `Q` in a `d` is one bend and the corners read straight
 // back out of it.
 
 import { expect, test } from "bun:test";
 import { Connectors } from "../src/connectors/connectors.ts";
-import type { ConnectorRules, Link, Placed } from "../src/connectors/types.ts";
-import type { Box } from "../src/types.ts";
+import type { ConnectorRules } from "../src/connectors/types.ts";
+import type { Box, DiagramEdge } from "../src/types.ts";
 
-const SHARP: ConnectorRules = { clearance: 24, inset: 6, lane: 6, radius: 0 };
+const SHARP: ConnectorRules = { gap: 65, clear: 24, inset: 6, lane: 6, radius: 0 };
 
 type Row = [id: string, rank: number, start: number, length: number];
 
+const edge = ([from, to]: [string, string]): DiagramEdge => ({ id: `${from}_${to}`, from, to, classes: [], style: "" });
+
 /** Every node 60 wide, ranks 120 apart. */
 function draw(rows: Row[], links: [string, string][], rules = SHARP): string[] {
-  const nodes = new Map(rows.map(([id, rank, start, length]): [string, Placed] => [id, { rank, start, length, cross: rank * 120, depth: 60 }]));
-  return new Connectors({ axis: "x", nodes }, rules).paths(links.map(([from, to]): Link => ({ from, to })));
+  const ranks = [...new Set(rows.map(([, rank]) => rank))].sort().map((r) => rows.filter(([, rank]) => rank === r).map(([id]) => id));
+  const boxes = rows.map(([id, rank, start, length]): Box => ({ id, left: rank * 120, top: start, width: 60, height: length }));
+  return new Connectors(rules).route(ranks, boxes, links.map(edge));
 }
 
 const bends = (d: string) => (d.match(/Q/g) ?? []).length;
@@ -61,7 +64,8 @@ test("in-rank neighbours join straight inside the rank", () => {
 });
 
 test("crossing runs slide apart instead of taking a lane", () => {
-  const rows: Row[] = [["geap", 0, 65, 80], ["bq", 0, 210, 80], ["gcs", 0, 355, 25], ["runtime", 1, 105, 25], ["horizon", 1, 195, 60]];
+  const rows: Row[] = [["geap", 0, 65, 80], ["bq", 0, 210, 80], ["gcs", 0, 355, 25], ["runtime", 1, 105, 25], ["horizon", 1, 195, 60], ["below", 1, 400, 40]];
+  // `below` keeps horizon off its rank's open bottom, so both runs turn in the gutter.
   const [up, down] = draw(rows, [["gcs", "horizon"], ["bq", "runtime"]]);
   const jog = (d: string) => corners(d).filter(([x]) => x === 90);
   // Both run in the one gutter, at its middle, and their stretches do not meet.
@@ -71,47 +75,32 @@ test("crossing runs slide apart instead of taking a lane", () => {
 });
 
 test("a gutter lanes only runs whose two ends both differ", () => {
-  const rows: Row[] = [["a", 0, 0, 40], ["b", 0, 100, 40], ["d", 1, 200, 40], ["c", 1, 300, 40]];
+  const rows: Row[] = [["a", 0, 0, 40], ["b", 0, 100, 40], ["d", 1, 50, 40], ["c", 1, 150, 40]];
   const gutterX = (d: string) => corners(d).map(([x]) => x!).filter((x) => x > 60 && x < 120);
   const [ad, ac] = draw(rows, [["a", "d"], ["a", "c"]]);
   expect(new Set([...gutterX(ad!), ...gutterX(ac!)]).size).toBe(1);
-  const [ad2, bc] = draw(rows, [["a", "d"], ["b", "c"]]);
-  expect(gutterX(ad2!)[0]).not.toBe(gutterX(bc!)[0]);
+  // a→c runs down past b→d running up, and the two share no end.
+  const [ac2, bd] = draw(rows, [["a", "c"], ["b", "d"]]);
+  expect(gutterX(ac2!)[0]).not.toBe(gutterX(bd!)[0]);
 });
 
-test("with no clear pathway the fallback still draws, jogging in the head's gutter", () => {
+test("with no clear pathway it throws: there is no fallback", () => {
   const rows: Row[] = [
     ["a0", 0, -500, 40], ["a", 0, 100, 40], ["a2", 0, 900, 40],
     ["wall", 1, -1000, 2000],
     ["b0", 2, -500, 40], ["b", 2, 300, 40], ["b2", 2, 900, 40],
   ];
-  const [d] = draw(rows, [["a", "b"]]);
-  expect(bends(d!)).toBe(2);
-  expect(corners(d!)[0]).toEqual([60, 120]);
-  expect(corners(d!).filter(([x]) => x === 210).length).toBe(2);
+  expect(() => draw(rows, [["a", "b"]])).toThrow("no clear pathway from a to b");
 });
 
-test("a node that does not paint is not placed, and its edge has nothing to join", () => {
-  const boxes: Box[] = [
-    { id: "hidden", left: 0, top: 0, width: 0, height: 0 },
-    { id: "a", left: 100, top: 100, width: 60, height: 40 },
-    { id: "b", left: 300, top: 100, width: 60, height: 40 },
-  ];
-  const placement = Connectors.place([["hidden", "a"], ["b"]], boxes);
-  expect([...placement.nodes.keys()]).toEqual(["a", "b"]);
-  const [ab, hidden] = new Connectors(placement, SHARP).paths([{ from: "a", to: "b" }, { from: "hidden", to: "b" }]);
-  expect(corners(ab!)).toEqual([[160, 120], [300, 120]]);
-  expect(hidden).toBe("");
-});
-
-// The lab fixture (`research-lab/connectors/index.html`), as the browser
-// measured it: 12 edges, 14 bends, in LR and in TD.
+// The lab fixture, as the browser measured it on the lab page (now in git
+// history): 12 edges, 17 bends, in LR and in TD.
 const EDGES: [string, string][] = [
   ["connectors", "gcp"], ["gcs", "horizon"], ["bq", "runtime"], ["horizon", "runtime"],
   ["horizon", "engine"], ["engine", "spcs"], ["engine", "ml"], ["engine", "connectors"],
   ["horizon", "analyst"], ["analyst", "agents"], ["agents", "ge"], ["geap", "agents"],
 ];
-const LAB_BENDS = [2, 2, 2, 0, 0, 2, 2, 0, 2, 0, 0, 2];
+const LAB_BENDS = [1, 1, 2, 0, 2, 2, 2, 0, 2, 2, 0, 3];
 
 type Measured = [id: string, left: number, top: number, width: number, height: number][][];
 
@@ -132,8 +121,8 @@ for (const [name, measured] of [["LR", LR], ["TD", TD]] as const) {
   test(`the lab fixture keeps its bends per edge in ${name}`, () => {
     const ranks = measured.map((rank) => rank.map(([id]) => id));
     const boxes = measured.flat().map(([id, left, top, width, height]): Box => ({ id, left, top, width, height }));
-    // The lab's clearance was 2em at 13px.
-    const connectors = new Connectors(Connectors.place(ranks, boxes), { ...SHARP, clearance: 26 });
-    expect(connectors.paths(EDGES.map(([from, to]) => ({ from, to }))).map(bends)).toEqual(LAB_BENDS);
+    // The lab's numbers: gap 5em and clear 2em, at 13px.
+    const connectors = new Connectors({ ...SHARP, gap: 65, clear: 26 });
+    expect(connectors.route(ranks, boxes, EDGES.map(edge)).map(bends)).toEqual(LAB_BENDS);
   });
 }

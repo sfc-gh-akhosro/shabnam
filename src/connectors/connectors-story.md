@@ -1,109 +1,171 @@
 # Connectors
 
-The story of how an edge finds its way, told from the router's chair. The lab
-that proved it is `research-lab/connectors/`; this package is that lab without
-the DOM.
+How the diagram gets its edges. It began as a DOM lab page, and keeps that
+page's names; the 12-edge fixture it was proved on is the parity test in
+`test/connectors.test.ts`.
 
 ---
 
-## The story
+## How a draw gets its edges
 
-The layout is simple. We have **ranks**, and every node sits in one. Seen from
-here a rank has no width: a node is a stretch on the **order axis** (up-down in
-`rankdir=LR`) with a **start** and a **length**, plus where it sits on the
-**rank axis** (its **cross** and **depth**), because nodes in one rank can
-differ in width and alignment.
+`Diagram.draw()` does this, in order:
 
-Two words carry the whole design:
+1. **Layout.** Graphviz says which nodes are in which rank, in order: `ranks`.
+2. **Paint.** The node divs go on the page.
+3. **Measure.** `Diagram` reads each painted node's box — id, left, top,
+   width, height: `boxes`. A node that does not paint (`.invis`, 0×0) is left
+   out here, and so is any edge that touches one.
+4. **Route.** `Diagram` hands `ranks`, `boxes` and the model's `edges` to
+   `Connectors`, and gets back one SVG path string per edge, in order.
+5. **Draw.** `Diagram` gives those strings to the painter; `EdgeDrawer` writes
+   each one as `<path d="…">` in the connector layer.
+
+`Connectors` never touches the DOM. Boxes and edges in, path strings out.
+
+### Inside `Connectors`
+
+One code file, `connectors.ts`, has the class `Connectors`, which implements
+the `BoxConnectors` interface using the `Box[]` and `DiagramEdge[]` it
+receives.
+
+How it is used: `Diagram.draw()` prepares the data — `ranks`, `boxes`,
+`edges` — calls `connectors.route(...)` to get one SVG path per edge, and
+feeds those to the painter to draw.
+
+```ts
+interface BoxConnectors {
+  route(ranks: Ranks, boxes: Box[], edges: DiagramEdge[]): string[];  // one `d` per edge
+}
+
+class Connectors implements BoxConnectors {
+  constructor(rules: ConnectorRules)
+  route(ranks, boxes, edges): string[]     // public: measure → pick → polish → rounded
+  // private steps:
+  //   measure(ranks, boxes, rules): Grid   boxes → { id, r, i, lo, hi, o, m0, m1 } per node
+  //   pick(): Route[]                       pathways + ports (parts 1, 2)
+  //   polish(routes): Point[][]             part 3
+}
+```
+
+`ranks` stays an argument: which nodes share a rank is Graphviz's answer, and
+reading it back from box positions is a guess (it is what broke the last
+port).
+
+Where the lab page read and wrote the DOM, this class takes and returns data:
+
+- **`measure()`** reads `boxes`: each node becomes `{ id, r, i, lo, hi, o,
+  m0, m1 }` by arithmetic on left, top, width and height. Whether ranks run
+  left-right (LR) or top-down (TD) is read from the boxes — the rank centres
+  spread along one axis — never from `rankdir`.
+- **`pick()`** is the lab's `route`, renamed because `route` is now the public
+  method.
+- **`rounded()`** returns the path strings the lab wrote into the SVG.
+
+`rules` are numbers, each its own, none derived from another. `Diagram` reads
+them from CSS tokens on `#diagram-canvas`:
+
+| rule | token | used for | theme |
+|---|---|---|---|
+| `gap` | `--gap` | outer gutters, `gap / 2` out | 5em |
+| `clear` | `--node-clearance` | grows nodes; open ports keep this far | 12px |
+| `inset` | `--connector-inset` | how near a face's end polish may slide | 6px |
+| `lane` | `--connector-lane` | lane spacing | 6px |
+| `radius` | `--connector-radius` | bend radius | 6px |
+
+---
+
+## The world
+
+We have **ranks**, and every node sits in one. Seen from here a rank has no
+width: a node is a stretch on the **order axis** (up-down in LR) from `lo` to
+`hi`, with its middle `o`, and it sits on the **rank axis** from `m0` to `m1`,
+because nodes in one rank can differ in width. `i` is its order in the rank,
+`r` its rank.
 
 - **Gutters** run between ranks, along them (up-down in LR, like a house's
-  gutters). A gutter is the midpoint between two neighbouring ranks' outer
-  edges. It is always free.
+  gutters). Inside, a gutter is the midpoint between two neighbouring ranks'
+  outer faces. Outside, the first sits `gap / 2` before the first rank and the
+  last `gap / 2` after the last. A gutter is always free.
 - **Pathways** run across ranks, through the gaps between nodes (left-right in
-  LR). Every node grows by `--node-clearance` at both ends of the order axis
-  before the gaps are cut, so a connector never grazes a node. Margins and gaps
-  are space for connectors; the grown box is not.
+  LR). Every node grows by `clear` at both ends of the order axis before the
+  gaps are cut, so a connector never grazes a node. A rank's pathways are its
+  `free` intervals.
+
+Coordinates are `[m, c]`: `m` across ranks, `c` along a rank. They become
+`x,y` only when the path string is written.
 
 Routing is three parts.
 
-### Part 1 — find the pathways
+## Part 1 — find the pathways
 
 Going from rank 1 to rank 4, a route is just the pathway it takes through each
-middle rank. During this part we only go forward, toward the head, so there is
-no distance to compare between solutions: the question is only how few
-pathways we can get away with. Fewer pathways is fewer bends — the beginning
-and the end are part 2's job. Adjacent ranks need no pathway at all, and
-in-rank pairs wait for the polish.
+middle rank. We only go forward, toward the head, so the question is only how
+few pathways we can get away with. Fewer pathways is fewer bends; the
+beginning and the end are part 2's job.
 
-### Part 2 — choose the ports
+`stab` walks from tail to head, intersecting (`meet`) each rank's free set
+with the one before while something is left, and starting a new segment
+(`segs`) when nothing is. Each new segment is one jog — two bends — in the
+gutter before it. Only pathways inside the span of the two ports count.
 
-With the pathways known, pick where to leave and where to arrive.
+Adjacent ranks need no pathway. In-rank pairs wait for part 3.
 
-- Every node offers its **directional port**: the middle of its face toward
-  the other end.
-- The first and last node of a rank also offer their **open side**, the one
-  with nothing beyond it: three positions in LR (`nw n ne`, or `sw s se`),
-  one middle port in TD.
+## Part 2 — choose the ports
 
-The pair wins by, in order:
+- Every node offers its **directional port**: the centre of its face toward
+  the other end (`e` out, `w` in, in LR). It is a point while ports are
+  chosen.
+- The first node of a rank also offers its **open side** — the one with
+  nothing beyond it — and so does the last. In LR that is three points along
+  the face (`nw n ne`, or `sw s se`), inset `min(round(depth / 6), 24)` from
+  its ends; in TD one, the middle. An open port runs out as far as it needs,
+  never closer than `clear`: `(−∞, lo − clear]` before the node, or
+  `[hi + clear, ∞)` after it. It costs one `extra` bend.
+
+`choose` tries every exit × every entry and keeps a pair only if every segment
+has a pathway. The pair wins by, in order:
 
 1. fewer bends;
-2. directional ports;
+2. directional ports (fewer `extra`);
 3. the shorter path.
 
-### Part 3 — polish
+**A shared bend is free.** Edges are chosen in DOT order. A bend an earlier
+edge already makes — same node, same side, same port, same gutter — costs the
+next edge nothing, so two edges leaving one side together count their common
+corner once. `place` then pins them to one point, and the corner is drawn
+once.
 
-- **Slide.** Two connectors crossing in a gutter can often miss each other by
-  moving an attachment along its side — bring one entry down and the other
-  exit up — with no new lane.
-- **In-rank.** Neighbours draw straight inside the rank; others go round
-  through the emptier of the two gutters.
-- **Lanes.** Connectors that share neither tail nor head and still collide in
-  a gutter get neighbouring lanes, `--connector-lane` apart.
-- **Radius.** Every bend rounds by `--connector-radius`. That is it.
+If no pair is clear there is no fallback: it throws, and we look at the
+layout.
 
-An edge always draws: a missing edge is a lie about the architecture.
+Ports are fixed only while choosing. Once a pair wins, a directional end gets
+its whole face back (`side`, minus `inset` at each end) for part 3; with
+nothing to avoid, it still lands at the centre.
+
+## Part 3 — polish
+
+- **Slide.** `place` puts every attachment on one face of a node at the point
+  nearest the node's middle that all of them allow. Then two runs crossing in
+  a gutter can often miss each other by moving an attachment along its side —
+  bring one entry down and the other exit up (`gcs_horizon` / `bq_runtime`) —
+  with no new lane.
+- **In-rank.** Neighbours join centre to centre, with a jog halfway between
+  them if their centres do not line up. Others go round, side centre to side
+  centre, through the gutter before or after the rank that carries fewer runs
+  over the pair — a `[` or a `]`.
+- **Lanes.** `assignLanes`: in each gutter, runs that share a tail or a head
+  are one group. Groups that still overlap get neighbouring lanes, `lane`
+  apart, ordered to cross as little as possible and centred on the gutter.
+- **Radius.** `rounded` rounds every bend by `radius`, clamped to half the
+  shorter segment, and writes the path string.
 
 ---
 
-## The design
-
-- **Placement.** `Connectors.place(ranks, boxes)` is the only code that knows
-  boxes. The rank axis is the one the rank centres spread along; ranks are
-  sorted along it and nodes by `start`, so BT and RL are not special. A node
-  that does not paint (`.invis` is `display: none`) measures 0×0 at the
-  origin; it is not placed, and an edge touching it gets an empty `d` — there
-  is nothing to join. That is the one edge that does not draw.
-- **Pathways: free gaps + greedy stabbing.** Each rank's free set is the
-  complement of its grown nodes. Walking from tail to head we intersect free
-  sets while the intersection is non-empty and start a new band when it
-  empties; each new band is one jog, two bends, in the gutter before it.
-- **Ports: the table and the three-key sort.** Every exit × every entry is
-  tried; a pair is kept only if every band is non-empty, then sorted by bends,
-  then by how many open ports it uses, then by `entry.at − exit.at`. An open
-  port runs in a corridor one clearance wide, one clearance out, as in the lab; left unbounded it
-  gave different routes than the lab on its own fixture.
-- **Fallback.** No pair clear: the directional pair, joined straight if their
-  faces overlap, else one jog in the head's gutter, ignoring the middle ranks.
-- **Slide.** Attachments on one face are grouped and put at the point nearest
-  the node's middle that every member allows; then gutter runs that would
-  cross are pulled apart within their slack.
-- **In-rank.** Neighbours: straight across the overlap of their depths.
-  Others: round through the gutter with fewer runs over the pair.
-- **Lanes.** Per gutter, runs that share a tail or a head merge into one group;
-  groups that overlap get lanes, ordered to cross as little as possible, and
-  are centred on the gutter.
-- **Outline.** Collinear points drop, bends round by the radius clamped to half
-  the shorter segment, and `[m, c]` becomes `x,y` — the only place that does.
-
 ## The types
 
-- `Px` — whole pixels.
-- `Placed` — one node's box in rank coordinates: `rank, start, length, cross, depth`.
-- `Placement` — the rank axis, and every node placed.
-- `ConnectorRules` — clearance, inset, lane, radius.
-- `Link` — `from` and `to`; a `DiagramEdge` fits.
-- `Gap` — a free interval on the order axis.
-- `Port` — where a connector leaves or arrives, and the gaps it may use.
-- `Route` — a link's ports and bands, before it becomes points.
-- `Connectors` — `paths(links)`: one `d` per link, in order.
+- `BoxConnectors` — the interface: `route(ranks, boxes, edges): string[]`.
+- `Connectors` — the class that implements it: `constructor(rules)`.
+- `ConnectorRules` — `{ gap, clear, inset, lane, radius }` in px. New, in `types.ts`.
+- `Ranks`, `Box`, `DiagramEdge` — already in `src/types.ts`, unchanged.
+
+The lab's inner records stay inside `connectors.ts` with their lab names.

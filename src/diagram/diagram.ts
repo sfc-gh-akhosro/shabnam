@@ -74,8 +74,13 @@ export class Diagram implements T.Diagram {
 
     await painted();
     const boxes = this.measure();
-    const connectors = new Connectors(Connectors.place(ranks, boxes), this.rules());
-    const svg = this.painter.svg(boxes, model, connectors.paths(model.edges));
+    // A node that does not paint (`.invis`, 0×0) is not there for the
+    // connectors, and neither is an edge that touches one.
+    const shown = new Set(boxes.filter((box) => box.width || box.height).map((box) => box.id));
+    const edges = model.edges.filter((edge) => shown.has(edge.from) && shown.has(edge.to));
+    const placed = ranks.map((rank) => rank.filter((id) => shown.has(id))).filter((rank) => rank.length);
+    const ds = new Connectors(this.rules()).route(placed, boxes, edges);
+    const svg = this.painter.svg(boxes, { ...model, edges }, ds);
     this.inject("cluster-shells", svg.clusters);
     this.inject("node-shells", svg.shells);
     this.inject("connector-paths", svg.connectors);
@@ -120,17 +125,24 @@ export class Diagram implements T.Diagram {
     }));
   }
 
-  // The other half of measuring: the connectors' numbers are CSS tokens in px,
-  // and a pure package cannot read CSS (§4).
+  // The other half of measuring: the connectors' numbers are CSS tokens, and a
+  // pure package cannot read CSS (§4). `em` is the canvas's, as in the lab.
   private rules(): ConnectorRules {
     const style = getComputedStyle(document.getElementById("diagram-canvas")!);
-    const px = (token: string) => parseFloat(style.getPropertyValue(token));
-    return { clearance: px("--node-clearance"), inset: MARKER_INSET, lane: px("--connector-lane"), radius: px("--connector-radius") };
+    const em = parseFloat(style.fontSize);
+    const px = (token: string) => {
+      const value = style.getPropertyValue(token).trim();
+      return value.endsWith("em") ? parseFloat(value) * em : parseFloat(value);
+    };
+    return {
+      gap: px("--gap"),
+      clear: px("--node-clearance"),
+      inset: px("--connector-inset"),
+      lane: px("--connector-lane"),
+      radius: px("--connector-radius"),
+    };
   }
 }
-
-/** Room the arrowhead needs at a face, so an attachment never sits on a corner. */
-const MARKER_INSET = 6;
 
 // The centre of the box that contains every match, in viewport coordinates. One
 // match is the ordinary case and falls out of the same arithmetic.

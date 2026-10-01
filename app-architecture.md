@@ -5,8 +5,7 @@ what and why (`user-story.md`); the types say the shapes (`src/types.ts`, and a
 package's own `types.ts`); the craft is `coding-rules.md`. When this file and
 the code disagree, this file wins until we change it together.
 
-> The redesign in `research-lab/ui-redesign/design-story.md` is implemented;
-> that file now keeps only the reasons this one does not repeat.
+> The UI redesign is implemented; its reasons live in git history.
 
 ---
 
@@ -22,7 +21,7 @@ ignored, `rank: "same"` crashes it, and a zero `minlen` throws. The workaround,
 contracting each group to one stand-in, hid the members from crossing
 minimisation, so they came out in first-mention order. example-2 had 6
 crossings under dagre and 0 under `dot`; `test/dot-layout.test.ts` holds the 0.
-What `dot` reads from 0×0 points is probed in `research-lab/layout-probe/`.
+What `dot` reads from 0×0 points was probed in a lab now in git history.
 `ts-graphviz` could not replace it: its AST package only parses and prints, and
 its adapter shells out to a `dot` binary, which a browser cannot run. The price
 is about 630 KB gzipped, loaded once at boot.
@@ -163,22 +162,28 @@ content never reach through a sink id.
 Child order is load-bearing: SVG paints over HTML, so shells are stroke-only
 chrome around the measured div, and the div owns background, border and label.
 
-**Connectors** follow `src/connectors/connectors-story.md`: pathways, then
-ports, then polish. A node is its box in rank coordinates — `{ rank, start,
-length, cross, depth }` in whole px — and ranks and order are read from the
-measured boxes, never from `rankdir`, so BT and RL need no case. Connectors run
-across ranks through pathways (the free gaps left when every node grows by
-`--node-clearance` at both ends of the order axis) and along ranks only in
-gutters, the midpoints between neighbouring ranks. Part 1 needs the fewest
-pathways; part 2 picks the port pair by fewer bends, then directional, then
-shorter; part 3 slides attachments to avoid a lane, lanes a gutter
-(`--connector-lane`) only where both ends differ, and rounds bends by
-`--connector-radius`, clamped to half the shorter segment. Every node offers
-its directional port; the first and last of a rank also offer their open side,
-in a corridor one `--node-clearance` wide, one clearance out. **An edge always draws:** with no clear
-pathway the fallback is the directional pair plus one jog in the head's
-gutter. The one exception is an edge to a node that does not paint
-(`.invis`): it has nothing to join, and its `d` is empty. The tokens are px and sit on `#diagram-canvas, svg` (§5).
+**Connectors** are one class, `src/connectors/connectors.ts`; the story is
+`src/connectors/connectors-story.md`. It began as a DOM lab page and keeps
+that page's names (`meet`, `stab`, `choose`, `place`, `rounded`, …).
+`Diagram` measures the painted nodes and calls `new Connectors(rules)
+.route(ranks, boxes, edges)`, which returns one path `d` per edge; the painter
+draws them. Connectors never touch the DOM. The rank axis is read from the
+boxes, never from `rankdir`. The rules are numbers, each a token on
+`#diagram-canvas, svg` (§5): `--gap`, `--node-clearance`, `--connector-inset`,
+`--connector-lane`, `--connector-radius`; `Diagram` reads them, `em` included.
+
+- **Ports are points while choosing.** Directional ports are the centre of the
+  face; the first and last node of a rank add their open side (three points
+  in LR, one in TD), running out as far as needed, never closer than
+  `--node-clearance`. Fewer bends, then directional, then shorter.
+- **A shared bend is free.** Edges are chosen in DOT order; a corner an earlier
+  edge already makes costs the next nothing. So DOT edge order can change the
+  picture.
+- **Polish may leave the point.** After the pick, a directional end gets its
+  whole side back to slide along and avoid a lane.
+- **Invisible is not there.** `Diagram` leaves out a node that does not paint
+  (`.invis`, 0×0) and every edge that touches one, before routing.
+- **No fallback.** With no clear port pair, `choose` throws.
 
 **The arrow is SVG's default marker.** One `<marker class="arrow">`, with no
 `markerUnits` / `markerWidth` / `markerHeight` of our own, so it is sized in
@@ -327,7 +332,7 @@ src/
   read/        DotReader, model, styles, points
   layout/      GraphvizLayout
   paint/       DiagramPainter, framer, shaper, sheller, drawer, markdown
-  connectors/  Connectors: pathways, ports, polish, outline
+  connectors/  Connectors — one class, one file
   style/       StyleBook, sheet
   ui/          topic, radios, checks, row-list, dialog-ask
   workbench/   workbench, commands, style-tab, note-tab, export-dialog

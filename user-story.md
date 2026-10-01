@@ -101,8 +101,8 @@ node grown by a clearance — and along ranks only in the **gutters** between
 them; the layout already is a grid, so there is no search for free space. A
 route needs as few pathways as it can, then picks its ports: fewer bends, then
 the directional face, then shorter. Crossing runs slide apart before a gutter
-gets a second lane. An edge always draws, because a missing edge is a lie about
-the architecture. Bends are rounded by one radius. The whole story is
+gets a second lane. A layout with no clear way through is a bug we want to
+see, so it throws rather than drawing a guess. Bends are rounded by one radius. The whole story is
 `src/connectors/connectors-story.md`.
 
 ## Export

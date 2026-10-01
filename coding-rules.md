@@ -39,6 +39,12 @@ the conversations between players. Types hold what is known; enums are how a
 closed set of cases becomes code, and they replace `switch` and inheritance —
 polymorphism is a `Map` from case to function.
 
+So "the types" of a story or a package almost always means: the **major
+types**, the **major interfaces and their methods**, the **major class** named
+with what it implements and from which types ("`Connectors` implements
+`Connectors` over `Placement` and `ConnectorRules`"), and the **enums**. Not
+every record; inner ones stay with their code.
+
 Name the atomic types. `sameRank: NodeId[][]` reads on its own; `string[][]`
 needs a reference open beside it.
 
