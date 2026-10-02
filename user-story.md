@@ -39,28 +39,30 @@ right edge and it returns. A pin — a single checkbox — holds it open.
 
 ## The diagram is alive
 
-The **Diagram** is not a file we pass around. It is the living state of the
-page: it holds the DOT you wrote, its **style book**, its notes and its script,
-and it knows how to **draw** itself into the canvas. Everything else either
-helps it draw or lets you edit it.
+What you wrote is a **sketch** — the DOT, the notes, the script — and your
+styles live in the **Stylist**. The **Workbench** holds both while you edit
+them in its four tabs, and the **Chrome** along the top runs the verbs: draw,
+open, save, export. When you ask for a draw, the Workbench hands the sketch and
+the stylist to the **Painter**, which owns the canvas and is the only thing that
+writes the picture.
 
 Drawing is a short relay, each runner owning one leg:
 
-- The **DotReader** reads the DOT once and gives three answers: the *model*
+- The **Parser** reads the DOT once and gives three answers: the *model*
   (who exists, who connects, who belongs), the *styles* the author wrote in DOT,
   and the *points* — your own graph with everything that gives a node size cut
   away, so every node is a point and every layout hint you wrote survives.
-- The **GraphvizLayout** hands the points to Graphviz and reads back where
+- The **Layout** hands the points to Graphviz and reads back where
   they landed: each node gets a rank and an order inside it. That is all we
   ask of layout.
-- The **DiagramPainter** turns model and ranks into HTML — ranks of real
-  divs. The browser paints them under whatever CSS is live, we **measure** the
-  real boxes, and the painter draws the SVG around them: cluster boxes, node
-  shells, connectors.
+- The **Painter** frames model and ranks as HTML — ranks of real divs. The
+  browser paints them under whatever CSS is live, the Painter **measures** the
+  real boxes, the **Router** finds a way for every edge between them, and the
+  Painter draws one SVG around them: cluster boxes, node shells, connectors.
 - The notes are placed on what they point at, and the script runs last.
 
-Two libraries, two walls: only `DotReader` knows the DOT parser exists, only
-`GraphvizLayout` knows Graphviz does. Replacing either is one file.
+Two libraries, two walls: only the `Parser` knows the DOT parser exists, only
+the `Layout` knows Graphviz does. Replacing either is one file.
 
 Measuring after paint is the trick that makes CSS the boss. Put
 `font-size: 24px` on `.node` and the divs grow; the shells and connectors are
@@ -78,11 +80,11 @@ CSS without learning a second vocabulary.
 ## The style book
 
 Every style is one line: *selector's property = value*, plus where it came
-from — the **theme** (0), the **DOT** (1), or **you** (2). The **StyleBook**
+from — the **theme** (0), the **DOT** (1), or **you** (2). The **Stylist**
 keeps them and drives the browser's CSSOM directly; there is no CSS text on the
 way to the screen.
 
-There is one door in: `styleBook.add(style)`. It asks CSSOM first — a value the
+There is one door in: `stylist.add(style)`. It asks CSSOM first — a value the
 browser refuses never enters the book, and your row is marked invalid. It also
 refuses a style from a lower source than the one already there, so a redraw
 re-reading the DOT can never take a line back from you. That single guard is
@@ -96,14 +98,14 @@ onto it.
 
 ## Connectors
 
-Connectors run across ranks through **pathways** — the gaps between nodes, each
+The **Router** draws them. Connectors run across ranks through **pathways** — the gaps between nodes, each
 node grown by a clearance — and along ranks only in the **gutters** between
 them; the layout already is a grid, so there is no search for free space. A
 route needs as few pathways as it can, then picks its ports: fewer bends, then
 the directional face, then shorter. Crossing runs slide apart before a gutter
 gets a second lane. A layout with no clear way through is a bug we want to
 see, so it throws rather than drawing a guess. Bends are rounded by one radius. The whole story is
-`src/connectors/connectors-story.md`.
+`src/engine/story-router.md`.
 
 ## Export
 

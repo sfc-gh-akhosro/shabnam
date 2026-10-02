@@ -1,4 +1,4 @@
-// The browser half of the suite. `bun test` has no CSSOM, so the StyleBook's feed,
+// The browser half of the suite. `bun test` has no CSSOM, so the Stylist's feed,
 // the live repaint, and the rows tab cannot be reached from there at all (debt
 // S2). This serves the real app to a real headless Chrome, lets the page drive
 // its own UI, and reads one JSON report back out of the dumped DOM.

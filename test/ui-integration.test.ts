@@ -1,12 +1,13 @@
 import { readdirSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
-import { LayoutFramer } from "../src/paint/layout-framer.ts";
-import { GraphvizLayout } from "../src/layout/graphviz-layout.ts";
-import { DotReader } from "../src/read/dot-reader.ts";
+import { annotationHtml, frameHtml } from "../src/engine/painter.ts";
+import { Layout } from "../src/engine/layout.ts";
+import { Parser } from "../src/engine/parser.ts";
+
+const parse = (dot: string) => new Parser().parse(dot);
 import { bag } from "./bag.ts";
 import type { Note, Style } from "../src/types.ts";
-import { asFile } from "../src/style/book.ts";
-import { annotationHtml } from "../src/diagram/notes.ts";
+import { asFile } from "../src/engine/stylist.ts";
 import basicTheme from "../theme/basic-theme.json";
 
 const BARE_BONE_DOT = `digraph barebone {
@@ -34,12 +35,11 @@ const RECORD_DOT = `digraph records {
 /** A note with every field but the ones a test cares about left blank. */
 const note = (fields: Partial<Note> = {}): Note => ({ selector: "", dx: "", dy: "", class: "", text: "", ...fields });
 
-const layout = await GraphvizLayout.load();
-const framer = new LayoutFramer();
+const layout = await Layout.load();
 
 function drawn(dot: string): string {
-  const reader = new DotReader(dot);
-  return framer.frame(reader.model(), layout.layout(reader.points()));
+  const reader = parse(dot);
+  return frameHtml(reader.model, layout.ranks(reader.points));
 }
 
 describe("UI & Workbench Integration Suite", () => {
@@ -48,7 +48,7 @@ describe("UI & Workbench Integration Suite", () => {
   });
 
   test("Bare-bone DOT derives nothing — tokens are the theme's", () => {
-    expect([...bag(new DotReader(BARE_BONE_DOT).styles()).keys()]).toEqual([]);
+    expect([...bag(parse(BARE_BONE_DOT).styles).keys()]).toEqual([]);
   });
 
   test("shape=record correctly parses and builds nested flex structure", () => {
@@ -63,7 +63,7 @@ describe("UI & Workbench Integration Suite", () => {
     expect(html).toContain("Footer");
   });
 
-  test("LayoutFramer generates pure semantic HTML with zero inline styles", () => {
+  test("frameHtml generates pure semantic HTML with zero inline styles", () => {
     const html = drawn(BARE_BONE_DOT);
 
     expect(html).toContain('<div class="diagram">');
@@ -82,7 +82,7 @@ describe("UI & Workbench Integration Suite", () => {
   });
 
   test("membership is added by the painter, not the model", () => {
-    const model = new DotReader(`digraph { subgraph gcp { runtime } }`).model();
+    const model = parse(`digraph { subgraph gcp { runtime } }`).model;
     expect(model.nodes.get("runtime")!.classes).toEqual(["gcp"]);
   });
 
@@ -92,7 +92,7 @@ describe("UI & Workbench Integration Suite", () => {
 
   test("a derived bag never invents a margin", async () => {
     const FIXTURE = new URL("../research-lab/example-1.dot", import.meta.url).pathname;
-    const derived = bag(new DotReader(await Bun.file(FIXTURE).text()).styles());
+    const derived = bag(parse(await Bun.file(FIXTURE).text()).styles);
 
     expect(derived.size).toBe(0);
     for (const [, properties] of derived) {

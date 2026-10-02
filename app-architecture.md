@@ -1,8 +1,9 @@
 # Shabnam — App Architecture
 
 The decisions the story implies, stated so they can be checked. The story says
-what and why (`user-story.md`); the types say the shapes (`src/types.ts`, and a
-package's own `types.ts`); the craft is `coding-rules.md`. When this file and
+what and why (`user-story.md`); the types say the shapes (`src/types.ts` for
+what crosses a wall, a player's own file for what does not); the craft is
+`coding-rules.md`. When this file and
 the code disagree, this file wins until we change it together.
 
 > The UI redesign is implemented; its reasons live in git history.
@@ -38,19 +39,25 @@ first.
 
 ## 1. Players and walls
 
-| Player | Owns | Knows the DOM? |
-|---|---|---|
-| `Diagram` | the living state: dot, style book, notes, script; `draw()`, `place()` | writes the canvas sinks |
-| `DotReader` | the only reader of DOT (walls `@ts-graphviz/ast`) | no |
-| `GraphvizLayout` | the only source of geometry (walls `@hpcc-js/wasm-graphviz`) | no |
-| `DiagramPainter` | model + ranks → HTML; measured boxes → SVG | no — returns strings |
-| `Connectors` | placement → one path `d` per edge (`src/connectors/connectors-story.md`) | no — returns strings |
-| `StyleBook` | the style rules and the one live CSSOM sheet | owns `#style-css` |
-| `Workbench` | the page: pieces, bindings, verbs | owns the chrome |
+A player is an interface in `src/types.ts`, one class that implements it, and
+one file named for it. Helpers stay in the player's file unless they read as
+their own idea.
 
-`read/`, `layout/`, `paint/` and `connectors/` are pure: data in, data out, tested as plain
-functions. Only `Diagram`, `StyleBook` and the `ui/` + `workbench/` packages
-touch the page.
+| Player | Interface | Owns | Knows the DOM? |
+|---|---|---|---|
+| `Parser` | `parse(dot) → Parsed` | the only reader of DOT (walls `@ts-graphviz/ast`) | no |
+| `Layout` | `ranks(points)`, `positions(points)` | the only source of geometry (walls `@hpcc-js/wasm-graphviz`) | no |
+| `Router` | `route(ranks, boxes, edges, rules) → EdgePath[]` | placement → one outline per edge (`src/engine/story-router.md`) | no |
+| `Stylist` | `add`, `remove`, `styles`, `css` | the style book and the one live CSSOM sheet | owns `#style-css` |
+| `Painter` | `draw`, `frame`, `measure`, `drawSvg`, `annotate`, `snapshot` | `#diagram-canvas`: the only writer of the picture | owns the canvas |
+| `Workbench` | `sketch`, `stylist`, `tab`, `adopt`, `draw` | the aside: tabs, editors, hover, pin; what you wrote | owns the aside |
+| `Chrome` | `run(action)` | the nav bar: verbs, chords, files in and out | owns the nav |
+
+`Parser`, `Layout` and `Router` are pure: data in, data out, tested as plain
+functions. The Painter's string builders (`frameHtml`, `clusterSvg`,
+`annotationHtml`) and the Stylist's book rules are
+pure too and exported for the tests. `index.ts` makes the players and wires
+them; nobody else news one.
 
 **We never write a parser.** Reading DOT as a string — a tokenizer, recursive
 descent, regex over statements — is out of scope. The one grammar we own is the
@@ -62,19 +69,20 @@ record label split (`|` cells, `{}` flips the axis), and it reads the parsed
 ## 2. Draw
 
 ```
-dot ─DotReader──┬─▶ model          who exists, connects, belongs — markup resolved
-                ├─▶ styles         appearance, at the branch written — source 1
-                └─▶ points         the parsed DOT, trimmed of size, printed
-styles ─▶ styleBook.add(each)
-points ─GraphvizLayout─▶ positions (x,y of 0×0 points) ─▶ ranks: NodeId[][]
-model + ranks ─DiagramPainter─▶ #diagram-html
-  [browser paints] ─▶ measure boxes ─Connectors.place─▶ placement
-  placement ─Connectors─▶ d per edge
-  boxes + d's ─DiagramPainter─▶ cluster, shell, connector SVG
-notes ─▶ #annotation-html, placed;  script runs last
+Painter.draw(sketch, stylist):
+  dot ─Parser──┬─▶ model          who exists, connects, belongs — markup resolved
+               ├─▶ styles         appearance, at the branch written — source 1
+               └─▶ points         the parsed DOT, trimmed of size, printed
+  styles ─▶ stylist.add(each)
+  points ─Layout─▶ positions (x,y of 0×0 points) ─▶ ranks: NodeId[][]
+  model + ranks ─frame─▶ #diagram-html
+  [browser paints] ─measure─▶ NodeBox[]
+  ranks + boxes + edges ─Router─▶ EdgePath[]
+  boxes + paths ─drawSvg─▶ cluster, shell, connector SVG
+  notes ─annotate─▶ #annotation-html, placed;  script runs last
 ```
 
-- **One parse, three answers.** The parse tree never leaves `DotReader`.
+- **One parse, three answers.** The parse tree never leaves the `Parser`.
 - **An attribute is markup or appearance.** `label`, `shape`, `icon`, `caption`,
   `shell`, `style` decide what we build and are resolved down onto nodes.
   Anything in the `ATTR_CSS` registry is appearance and stays at the branch it
@@ -84,7 +92,7 @@ notes ─▶ #annotation-html, placed;  script runs last
   the author wrote; a bare DOT derives nothing and the theme speaks. The one
   correction: a bare number gains `px`.
 - **Layout is given the author's own graph, trimmed to points.** After the walk,
-  `DotReader` deletes every attribute in `SIZE` (labels, shape, width, height,
+  the `Parser` deletes every attribute in `SIZE` (labels, shape, width, height,
   font, margin, image…) wherever it sits, puts
   `node [shape=point width=0 height=0 label=""]` first, and prints the tree.
   `SIZE` is a deny-list on purpose: whatever `dot` reads — `rank=max`,
@@ -154,7 +162,7 @@ content never reach through a sink id.
     <g id="connector-paths"></g>
   </svg>
   <div id="annotation-html"></div>
-  <style id="style-css"></style>     <!-- the StyleBook's sheet. never textContent -->
+  <style id="style-css"></style>     <!-- the Stylist's sheet. never textContent -->
   <script id="action-js"></script>
 </article>
 ```
@@ -162,15 +170,16 @@ content never reach through a sink id.
 Child order is load-bearing: SVG paints over HTML, so shells are stroke-only
 chrome around the measured div, and the div owns background, border and label.
 
-**Connectors** are one class, `src/connectors/connectors.ts`; the story is
-`src/connectors/connectors-story.md`. It began as a DOM lab page and keeps
-that page's names (`meet`, `stab`, `choose`, `place`, `rounded`, …).
-`Diagram` measures the painted nodes and calls `new Connectors(rules)
-.route(ranks, boxes, edges)`, which returns one path `d` per edge; the painter
-draws them. Connectors never touch the DOM. The rank axis is read from the
-boxes, never from `rankdir`. The rules are numbers, each a token on
-`#diagram-canvas, svg` (§5): `--gap`, `--node-clearance`, `--connector-inset`,
-`--connector-lane`, `--connector-radius`; `Diagram` reads them, `em` included.
+**Connectors** are the `Router`, `src/engine/router.ts`; the story is
+`src/engine/story-router.md`. It began as a DOM lab page and keeps that page's
+names (`meet`, `stab`, `choose`, `place`, `rounded`, …). The Painter measures
+the painted nodes and calls `router.route(ranks, boxes, edges, rules)`, which
+returns one `EdgePath` — the edge and its `d` — per edge; the Painter draws
+them. The pairing is by object, not by id: parallel edges share an id. The
+router never touches the DOM. The rank axis is read from the boxes, never from
+`rankdir`. The rules are numbers, each a token on `#diagram-canvas, svg` (§5):
+`--gap`, `--node-clearance`, `--connector-inset`, `--connector-lane`,
+`--connector-radius`; the Painter reads them, `em` included.
 
 - **Ports are points while choosing.** Directional ports are the centre of the
   face; the first and last node of a rank add their open side (three points
@@ -181,7 +190,7 @@ boxes, never from `rankdir`. The rules are numbers, each a token on
   picture.
 - **Polish may leave the point.** After the pick, a directional end gets its
   whole side back to slide along and avoid a lane.
-- **Invisible is not there.** `Diagram` leaves out a node that does not paint
+- **Invisible is not there.** The Painter leaves out a node that does not paint
   (`.invis`, 0×0) and every edge that touches one, before routing.
 - **No fallback.** With no clear port pair, `choose` throws.
 
@@ -208,11 +217,11 @@ data URIs through markdown-it's own image rule.
 
 - A style is `selector · property · value · source` (0 theme, 1 DOT, 2 user).
   One entry per selector + property.
-- **`styleBook.add(style)` is the only way in.** It asks CSSOM first and returns
+- **`stylist.add(style)` is the only way in.** It asks CSSOM first and returns
   `false` for a refused value, which never enters the book. It refuses a lower
   source over a higher one; equal or higher overwrites, destructively.
 - The sheet is driven through CSSOM only — `insertRule`, `setProperty`,
-  `removeProperty`. The only CSS text is `serialize()`, for export.
+  `removeProperty`. The only CSS text is `stylist.css()`, for export.
 - **`@apply`, minimal.** Its value is one or more class selectors separated by
   spaces: `.card { @apply: .paper .row }`. The book keeps it as written; feeding
   CSSOM expands it in place, so the selector's own later properties win, and a
@@ -231,12 +240,14 @@ data URIs through markdown-it's own image rule.
   layers and in an exported file. A root graph attribute styles
   `#diagram-canvas`.
 - A draw re-adds the DOT's styles at source 1 and never flushes; opening a DOT
-  makes a new `Diagram` with a new book seeded from the theme. That is the reset.
+  makes the Workbench adopt a new `Stylist` seeded from the theme. That is the
+  reset. The Painter is handed the stylist on every draw and keeps none.
 
 One theme ships: `theme/basic-theme.json`. **Save** writes a project,
 `{ theme, dot, "user-styles" }`: the theme by name, the DOT as text, and the
 user's source-2 rules only. **Open** reads a project back; **Load DOT** reads a
-bare DOT over the theme alone. An export carries the whole book.
+bare DOT over the theme alone. An export carries the whole book as a
+`StyleFile`, in its `Seed`.
 
 ---
 
@@ -245,6 +256,9 @@ bare DOT over the theme alone. An export carries the whole book.
 `index.html` is the skeleton: `main` (toolbar, canvas, pin) beside `aside` (tab
 strip, four tab sections), plus the export `<dialog>` and one `<template>` per
 repeated part. Code fills what repeats; it never builds the frame.
+
+The pieces live in `src/ui/pieces.ts`. None knows DOT exists, and none imports
+a player.
 
 | Piece | Native core | Used for |
 |---|---|---|
@@ -256,27 +270,27 @@ repeated part. Code fills what repeats; it never builds the frame.
 
 Toolbar, textareas and canvas are plain HTML with one listener each.
 
-**How they talk — one mechanism per situation:**
+**How they talk — one mechanism per direction:**
 
-| Situation | Mechanism |
-|---|---|
-| owner tells a piece what to show | method call |
-| the user touched a piece | native event, bubbling; a custom event only when native says too little |
-| two parts share a fact | a `Topic` |
-| waiting for an answer | `await` |
-| a verb | `COMMANDS: Map<Command, () => void>`, shared by toolbar and chords |
+| Direction | Mechanism | Used by |
+|---|---|---|
+| owner → piece | method call | `RowList.render` / `mark`, the tabs' `read` / `show`, `painter.annotate` |
+| piece → owner | native event, bubbling; a custom event only when native says too little | `RowList` → tabs: `row-edit {index, row}`, `row-add`, `row-drop {index}` |
+| a shared fact | a `Topic` | `Radios` / `Checks` ↔ `tab`, `pinned`, `shown`; `sketch.notes` → `annotate` |
+| ask and wait | `await` | `DialogAsk.ask()` → the export options |
+| a verb | `data-action` + `ACTIONS: Map<Action, …>`, shared by toolbar and chords | nav buttons, `Cmd` keys |
 
 Rules:
 
-- A topic holds a fact, never a verb. Topics: `diagram.dot`, `diagram.notes`,
-  `diagram.script`, `view.tab`, `view.pinned`, `view.shown`. The style book
-  publishes nothing: the styles tab re-reads it (below).
+- A topic holds a fact, never a verb. Topics: `sketch.dot`, `sketch.notes`,
+  `sketch.script`, `tab`, `pinned`, `shown`. The stylist publishes nothing: the
+  styles tab re-reads it (below).
 - A subscriber that throws, throws. Nothing is unmounted — tabs flip `hidden` —
   so there is no `unsub`.
 - **Nothing draws while you type.** Text panes publish on `input`, but only
   `draw()` reads them. Rows commit on `change`. Draw has one trigger, the verb,
   so two draws never interleave.
-- A style row commits with `styleBook.add`; `false` marks the row `.invalid`.
+- A style row commits with `stylist.add`; `false` marks the row `.invalid`.
   The styles list is `column-reverse` with one blank row on top; the notes list
   reads top-down.
 - **`RowList.render` patches in place.** Rows are reused by position and only
@@ -290,8 +304,9 @@ Rules:
 - The notes list is the model and is published whole, a half-typed row and the
   waiting blank included; `placed` (selector and text both set) is what gates a
   mark.
-- Open makes a new `Diagram` and the workbench *adopts* it: the textareas are
-  set once, the note tab follows its `notes`, the style tab reads its book.
+- Open hands the Workbench a sketch and styles, and it *adopts* them: a new
+  sketch of Topics and a new stylist, the textareas set once, the note tab
+  following the new `notes`, the style tab reading the new book, then a draw.
 - Keys: `Cmd+Enter` draw · `Cmd+O` / `Cmd+S` open / save project · `Cmd+L` load DOT · `Cmd+P` / `Cmd+E`
   export picture / HTML · `Cmd+1…4` tabs. The browser-claimed ones are
   `preventDefault`ed.
@@ -309,7 +324,7 @@ or a tested state, never decoration.
 
 A wrapper, not a translation. **SVG** is the canvas cloned into a
 `<foreignObject>`, sized by the canvas's scroll size, with the book's
-`serialize()` inlined inside `<![CDATA[…]]>`. `app.css` is never inlined.
+`css()` inlined inside `<![CDATA[…]]>`. `app.css` is never inlined.
 **PNG** is that SVG through `Image` → `<canvas>` → `toBlob` at 3×.
 **Transparency** is one appended rule, `#diagram-canvas { background:
 transparent }`. **Export HTML** writes a standalone page carrying the
@@ -326,23 +341,27 @@ page lays out offline; the price is about 1.6 MB per exported HTML.
 
 ```
 src/
-  index.html   skeleton + templates        index.ts   new Workbench(document.body)
-  app.css      chrome only                 types.ts   the story's types
-  diagram/     Diagram, files (export), notes (the marks)
-  read/        DotReader, model, styles, points
-  layout/      GraphvizLayout
-  paint/       DiagramPainter, framer, shaper, sheller, drawer, markdown
-  connectors/  Connectors — one class, one file
-  style/       StyleBook, sheet
-  ui/          topic, radios, checks, row-list, dialog-ask
-  workbench/   workbench, commands, style-tab, note-tab, export-dialog
+  index.html   skeleton + templates        index.ts   makes the players, wires them
+  app.css      chrome only                 types.ts   shared types + player interfaces
+  engine/
+    parser.ts    Parser — walk, model, styles, points      story-parser.md
+    layout.ts    Layout
+    router.ts    Router                                    story-router.md
+    stylist.ts   Stylist (+ Sheet), book rules, style files
+    painter.ts   Painter — draw, frame, measure, SVG layers, notes, snapshot
+    shapes.ts    SHAPES, SHELLS, ICONS, record split, markdown
+  ui/
+    workbench.ts Workbench (+ StyleTab, NoteTab)
+    chrome.ts    Chrome — ACTIONS, chords, files, ExportDialog
+    pieces.ts    Topic, Radios, Checks, DialogAsk, RowList
 svg/  icon/  theme/  test/  build/  docs/  research-lab/  dist/
 ```
 
-Imports point one way: `workbench → ui, diagram` · `diagram → read, layout,
-paint, connectors, style` · `connectors → types` only · `ui → types`. A `ui/` piece never imports the diagram.
-Registries (`SHAPE_HTML`, `SHELL_SVG`, `ATTR_CSS`, `ROW_KINDS`, `COMMANDS`) live
-with the code that consults them.
+Imports point one way: `ui → engine, types` · `painter → shapes, types` ·
+`parser`, `layout`, `router`, `stylist` → `types` only (`layout` borrows
+`idOf`). `pieces.ts` imports only `types`. Registries (`SHAPES`, `SHELLS`,
+`ICONS`, `ATTR_CSS`, `SINKS`, `TABS`, `ACTIONS`, `CHORDS`, `FORMATS`) live with
+the code that consults them.
 
 Tests are two halves: pure under `bun test`, CSSOM and DOM under
 `bun run test:browser` in headless Chrome. The browser harness serves the real

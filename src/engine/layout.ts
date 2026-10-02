@@ -1,4 +1,4 @@
-// The only source of geometry (§2).
+// Layout — the only source of geometry (§2).
 //
 // Graphviz `dot`, compiled to WebAssembly, is visible here and nowhere else. It
 // is handed the reader's points — the author's graph with every size cut away —
@@ -6,7 +6,7 @@
 // rank share one coordinate on the rank axis, so ranks are read off exactly.
 
 import { Graphviz } from "@hpcc-js/wasm-graphviz";
-import { idOf } from "../read/dot-reader.ts";
+import { idOf } from "./parser.ts";
 import type * as T from "../types.ts";
 
 /** rankdir → which coordinate is the rank axis, and which way rank 0 faces. */
@@ -17,10 +17,10 @@ const AXES = new Map<T.Rankdir, { rank: (p: T.Point) => number; order: (p: T.Poi
   ["RL", { rank: (p) => -p.x, order: (p) => -p.y }],
 ]);
 
-export class GraphvizLayout implements T.GraphvizLayout {
+export class Layout implements T.Layout {
   /** The wasm loads once, at boot; after that every call is synchronous. */
-  static async load(): Promise<GraphvizLayout> {
-    return new GraphvizLayout(await Graphviz.load());
+  static async load(): Promise<Layout> {
+    return new Layout(await Graphviz.load());
   }
 
   private constructor(private readonly graphviz: Graphviz) {}
@@ -29,7 +29,7 @@ export class GraphvizLayout implements T.GraphvizLayout {
     return this.run(points).positions;
   }
 
-  layout(points: T.PointDot): T.Ranks {
+  ranks(points: T.PointDot): T.Ranks {
     const { rankdir, positions } = this.run(points);
     const axes = AXES.get(rankdir)!;
     const ranks = new Map<number, T.NodeId[]>();

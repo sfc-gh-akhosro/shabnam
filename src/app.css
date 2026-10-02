@@ -1,4 +1,4 @@
-/* Workbench chrome only. The diagram's own styling is the StyleBook's, and lands
+/* Workbench chrome only. The diagram's own styling is the Stylist's, and lands
    in `#style-css` — never here.
 
    Tokens, then the skeleton by element and position, then the four surfaces,

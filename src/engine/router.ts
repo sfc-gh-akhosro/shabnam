@@ -1,12 +1,12 @@
-// Connectors: ranks, boxes and edges in, one SVG path `d` per edge out. No DOM;
-// the story is `connectors-story.md`. Coordinates are [m, c]: m runs
+// Router: ranks, boxes and edges in, one SVG path `d` per edge out. No DOM;
+// the story is `story-router.md`. Coordinates are [m, c]: m runs
 // across ranks, c along a rank.
 
-import type { Box, DiagramEdge, NodeId, Ranks } from "../types.ts";
-import type { BoxConnectors, ConnectorRules } from "./types.ts";
+import type { DiagramEdge, EdgePath, NodeBox, NodeId, Ranks, RouteRules } from "../types.ts";
+import type * as T from "../types.ts";
 
 type Free = [lo: number, hi: number][];
-type Point = [m: number, c: number];
+type MC = [m: number, c: number];
 type Face = "m0" | "m1" | "lo" | "hi";
 type Node = { id: NodeId; r: number; i: number; lo: number; hi: number; o: number; m0: number; m1: number };
 type Rank = { nodes: Node[]; free: Free; m0: number; m1: number };
@@ -17,18 +17,18 @@ type Across = { from: Node; to: Node; exit: Port; entry: Port; segs: Seg[]; extr
 type Route = Across | { from: Node; to: Node; inRank: true };
 type Span = { m: number; lo: number; hi: number };
 
-export class Connectors implements BoxConnectors {
+export class Router implements T.Router {
   private g!: Grid;
   private edges: [NodeId, NodeId][] = [];
+  private rules!: RouteRules;
 
-  constructor(private readonly rules: ConnectorRules) {}
-
-  route(ranks: Ranks, boxes: Box[], edges: DiagramEdge[]): string[] {
-    this.g = measure(ranks, boxes, this.rules);
+  route(ranks: Ranks, boxes: NodeBox[], edges: DiagramEdge[], rules: RouteRules): EdgePath[] {
+    this.rules = rules;
+    this.g = measure(ranks, boxes, rules);
     this.edges = edges.map((e) => [e.from, e.to]);
     const paths = this.polish(this.pick());
-    const xy = ([m, c]: Point) => (this.g.lr ? `${m},${c}` : `${c},${m}`);
-    return paths.map((p) => rounded(p, this.rules.radius, xy));
+    const xy = ([m, c]: MC) => (this.g.lr ? `${m},${c}` : `${c},${m}`);
+    return paths.map((p, i) => ({ edge: edges[i]!, d: rounded(p, rules.radius, xy) }));
   }
 
   // Parts 1 and 2: pathways through the ranks and the port pair, chosen together. In-rank edges wait for polish.
@@ -46,15 +46,15 @@ export class Connectors implements BoxConnectors {
   }
 
   // Part 3: slide attachments, draw in-rank edges around the gutter traffic, then lane the gutters.
-  private polish(routes: Route[]): Point[][] {
+  private polish(routes: Route[]): MC[][] {
     const g = this.g, across = routes.filter((rt): rt is Across => !("inRank" in rt));
     place(across);
     const paths = routes.map((rt) => ("inRank" in rt ? null : rt.reversed ? points(g, rt).reverse() : points(g, rt)));
-    const busy = paths.filter((p): p is Point[] => p !== null).flatMap((p) => p.slice(1).flatMap(([m, c], k): Span[] =>
+    const busy = paths.filter((p): p is MC[] => p !== null).flatMap((p) => p.slice(1).flatMap(([m, c], k): Span[] =>
       m === p[k]![0] && g.gutters.includes(m) ? [{ m, lo: Math.min(c, p[k]![1]), hi: Math.max(c, p[k]![1]) }] : []));
     routes.forEach((rt, i) => { if ("inRank" in rt) paths[i] = inRank(g, rt.from, rt.to, busy); });
-    assignLanes(g, paths as Point[][], this.edges, this.rules.lane);
-    return paths as Point[][];
+    assignLanes(g, paths as MC[][], this.edges, this.rules.lane);
+    return paths as MC[][];
   }
 }
 
@@ -68,7 +68,7 @@ const holding = (F: Free, p: number) => F.find(([lo, hi]) => lo <= p && p <= hi)
 
 // Lab `measure`, reading boxes instead of the page. The rank axis is the one
 // the rank centres spread along; ranks are sorted along it, nodes by `lo`.
-function measure(painted: Ranks, boxes: Box[], { gap, clear, inset }: ConnectorRules): Grid {
+function measure(painted: Ranks, boxes: NodeBox[], { gap, clear, inset }: RouteRules): Grid {
   const byBox = new Map(boxes.map((b) => [b.id, b]));
   const centre = (ids: NodeId[], x: boolean) => ids.reduce((s, id) => {
     const b = byBox.get(id)!;
@@ -183,15 +183,15 @@ function place(routes: Across[]): void {
   }
 }
 
-function points(g: Grid, rt: Across): Point[] {
+function points(g: Grid, rt: Across): MC[] {
   const { from, to, exit, entry, segs } = rt;
-  const pts: Point[] = exit.extra ? [[exit.at, from[exit.face]], [exit.at, segs[0]!.p!]] : [[exit.at, segs[0]!.p!]];
+  const pts: MC[] = exit.extra ? [[exit.at, from[exit.face]], [exit.at, segs[0]!.p!]] : [[exit.at, segs[0]!.p!]];
   segs.slice(1).forEach((s, j) => { const m = g.gutters[from.r + s.k0]!; pts.push([m, segs[j]!.p!], [m, s.p!]); });
-  pts.push(...(entry.extra ? [[entry.at, segs.at(-1)!.p!], [entry.at, to[entry.face]]] as Point[] : [[entry.at, segs.at(-1)!.p!]] as Point[]));
+  pts.push(...(entry.extra ? [[entry.at, segs.at(-1)!.p!], [entry.at, to[entry.face]]] as MC[] : [[entry.at, segs.at(-1)!.p!]] as MC[]));
   return pts.filter((p, k) => !k || p[0] !== pts[k - 1]![0] || p[1] !== pts[k - 1]![1]);
 }
 
-function inRank(g: Grid, a: Node, b: Node, busy: Span[]): Point[] {
+function inRank(g: Grid, a: Node, b: Node, busy: Span[]): MC[] {
   if (a.i > b.i) return inRank(g, b, a, busy).reverse();
   if (b.i === a.i + 1) {
     // Centre to centre; a jog halfway between if the centres do not line up.
@@ -206,10 +206,10 @@ function inRank(g: Grid, a: Node, b: Node, busy: Span[]): Point[] {
 }
 
 type Leg = { c: number; side: number };
-type Run = { a: Point; b: Point; m: number; from: NodeId; to: NodeId; top: number; bottom: number; legs: Leg[] };
+type Run = { a: MC; b: MC; m: number; from: NodeId; to: NodeId; top: number; bottom: number; legs: Leg[] };
 type Group = { runs: Run[]; top: number; bottom: number; legs: Leg[]; key?: number; lane?: number };
 
-function assignLanes(g: Grid, paths: Point[][], edges: [NodeId, NodeId][], lane: number): void {
+function assignLanes(g: Grid, paths: MC[][], edges: [NodeId, NodeId][], lane: number): void {
   const runs = paths.flatMap((p, e) => p.slice(1, -2).map((_, j): Run => {
     const k = j + 1, [a, b] = [p[k]!, p[k + 1]!];
     return { a, b, m: a[0], from: edges[e]![0], to: edges[e]![1], top: Math.min(a[1], b[1]), bottom: Math.max(a[1], b[1]),
@@ -235,12 +235,12 @@ function assignLanes(g: Grid, paths: Point[][], edges: [NodeId, NodeId][], lane:
   }
 }
 
-function rounded(pts: Point[], radius: number, xy: (p: Point) => string): string {
+function rounded(pts: MC[], radius: number, xy: (p: MC) => string): string {
   const d = [`M${xy(pts[0]!)}`];
   for (let k = 1; k < pts.length - 1; k++) {
     const [p, q, s] = [pts[k - 1]!, pts[k]!, pts[k + 1]!];
     const r = Math.min(radius, Math.hypot(q[0] - p[0], q[1] - p[1]) / 2, Math.hypot(s[0] - q[0], s[1] - q[1]) / 2);
-    const toward = (from: Point, to: Point): Point => { const len = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1;
+    const toward = (from: MC, to: MC): MC => { const len = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1;
       return [from[0] + (to[0] - from[0]) * r / len, from[1] + (to[1] - from[1]) * r / len]; };
     d.push(`L${xy(toward(q, p))}`, `Q${xy(q)} ${xy(toward(q, s))}`);
   }

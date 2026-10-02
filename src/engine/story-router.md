@@ -1,4 +1,4 @@
-# Connectors
+# The Router
 
 How the diagram gets its edges. It began as a DOM lab page, and keeps that
 page's names; the 12-edge fixture it was proved on is the parity test in
@@ -8,38 +8,37 @@ page's names; the 12-edge fixture it was proved on is the parity test in
 
 ## How a draw gets its edges
 
-`Diagram.draw()` does this, in order:
+`Painter.draw()` does this, in order:
 
 1. **Layout.** Graphviz says which nodes are in which rank, in order: `ranks`.
 2. **Paint.** The node divs go on the page.
-3. **Measure.** `Diagram` reads each painted node's box — id, left, top,
+3. **Measure.** The Painter reads each painted node's box — id, left, top,
    width, height: `boxes`. A node that does not paint (`.invis`, 0×0) is left
    out here, and so is any edge that touches one.
-4. **Route.** `Diagram` hands `ranks`, `boxes` and the model's `edges` to
-   `Connectors`, and gets back one SVG path string per edge, in order.
-5. **Draw.** `Diagram` gives those strings to the painter; `EdgeDrawer` writes
-   each one as `<path d="…">` in the connector layer.
+4. **Route.** The Painter hands `ranks`, `boxes`, the model's `edges` and the
+   rules to the `Router`, and gets back one `EdgePath` — the edge and its SVG
+   path — per edge, in order.
+5. **Draw.** The Painter writes each one as `<path d="…">` in the connector
+   layer.
 
-`Connectors` never touches the DOM. Boxes and edges in, path strings out.
+The `Router` never touches the DOM. Boxes and edges in, paths out.
 
-### Inside `Connectors`
+### Inside the `Router`
 
-One code file, `connectors.ts`, has the class `Connectors`, which implements
-the `BoxConnectors` interface using the `Box[]` and `DiagramEdge[]` it
-receives.
+One code file, `router.ts`, has the class `Router`, which implements the
+`Router` interface using the `NodeBox[]` and `DiagramEdge[]` it receives.
 
-How it is used: `Diagram.draw()` prepares the data — `ranks`, `boxes`,
-`edges` — calls `connectors.route(...)` to get one SVG path per edge, and
-feeds those to the painter to draw.
+How it is used: `Painter.draw()` prepares the data — `ranks`, `boxes`,
+`edges`, and the `rules` read off the canvas's CSS tokens — calls
+`router.route(...)` to get one path per edge, and draws them.
 
 ```ts
-interface BoxConnectors {
-  route(ranks: Ranks, boxes: Box[], edges: DiagramEdge[]): string[];  // one `d` per edge
+interface Router {
+  route(ranks: Ranks, boxes: NodeBox[], edges: DiagramEdge[], rules: RouteRules): EdgePath[];
 }
 
-class Connectors implements BoxConnectors {
-  constructor(rules: ConnectorRules)
-  route(ranks, boxes, edges): string[]     // public: measure → pick → polish → rounded
+class Router implements Router {
+  route(ranks, boxes, edges, rules): EdgePath[]   // public: measure → pick → polish → rounded
   // private steps:
   //   measure(ranks, boxes, rules): Grid   boxes → { id, r, i, lo, hi, o, m0, m1 } per node
   //   pick(): Route[]                       pathways + ports (parts 1, 2)
@@ -163,9 +162,11 @@ nothing to avoid, it still lands at the centre.
 
 ## The types
 
-- `BoxConnectors` — the interface: `route(ranks, boxes, edges): string[]`.
-- `Connectors` — the class that implements it: `constructor(rules)`.
-- `ConnectorRules` — `{ gap, clear, inset, lane, radius }` in px. New, in `types.ts`.
-- `Ranks`, `Box`, `DiagramEdge` — already in `src/types.ts`, unchanged.
+- `Router` — the interface, `route(ranks, boxes, edges, rules): EdgePath[]`,
+  and the class that implements it.
+- `RouteRules` — `{ gap, clear, inset, lane, radius }` in px, in `src/types.ts`.
+- `EdgePath` — `{ edge, d }`: paired by object, since parallel edges share an id.
+- `Ranks`, `NodeBox`, `DiagramEdge` — in `src/types.ts`.
 
-The lab's inner records stay inside `connectors.ts` with their lab names.
+The lab's inner records stay inside `router.ts` with their lab names; its
+`[m, c]` point is `MC`, so it never shadows the shared `Point`.

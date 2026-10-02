@@ -6,16 +6,18 @@
 // which rank they share, and CSS owns the real size.
 
 import { expect, test } from "bun:test";
-import { DotReader } from "../src/read/dot-reader.ts";
-import { GraphvizLayout } from "../src/layout/graphviz-layout.ts";
+import { Parser } from "../src/engine/parser.ts";
+
+const parse = (dot: string) => new Parser().parse(dot);
+import { Layout } from "../src/engine/layout.ts";
 import type { DiagramModel, Ranks } from "../src/types.ts";
 
-const layout = await GraphvizLayout.load();
+const layout = await Layout.load();
 
 const dotOf = (name: string): Promise<string> =>
   Bun.file(new URL(`../research-lab/${name}.dot`, import.meta.url)).text();
 
-const ranksOf = (dot: string): Ranks => layout.layout(new DotReader(dot).points());
+const ranksOf = (dot: string): Ranks => layout.ranks(parse(dot).points);
 
 const rankOf = (ranks: Ranks, id: string): number => ranks.findIndex((rank) => rank.includes(id));
 
@@ -40,14 +42,14 @@ for (const name of ["example-1", "example-2"]) {
     const dot = await dotOf(name);
     // `layout` takes any DOT; given the author's own, it is Graphviz's answer
     // with real sizes — the reference the trimmed points must match.
-    expect(ranksOf(dot)).toEqual(layout.layout(dot));
+    expect(ranksOf(dot)).toEqual(layout.ranks(dot));
   });
 
   test(`${name}: every node is placed once, with no crossing`, async () => {
-    const reader = new DotReader(await dotOf(name));
-    const ranks = layout.layout(reader.points());
-    expect(ranks.flat().sort()).toEqual([...reader.model().nodes.keys()].sort());
-    expect(crossings(ranks, reader.model())).toBe(0);
+    const reader = parse(await dotOf(name));
+    const ranks = layout.ranks(reader.points);
+    expect(ranks.flat().sort()).toEqual([...reader.model.nodes.keys()].sort());
+    expect(crossings(ranks, reader.model)).toBe(0);
   });
 }
 
@@ -103,6 +105,6 @@ test("`rankdir` turns the axis, and rank 0 is always where arrows start", () => 
 });
 
 test("`positions` answers a point for every node, keyed by id", () => {
-  const positions = layout.positions(new DotReader('digraph { "a b" -> c }').points());
+  const positions = layout.positions(parse('digraph { "a b" -> c }').points);
   expect([...positions.keys()].sort()).toEqual(["a_b", "c"]);
 });

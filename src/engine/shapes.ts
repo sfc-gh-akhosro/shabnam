@@ -1,17 +1,53 @@
-// SHAPE_HTML — a registry, not a class (§8). shape → the node's HTML layer.
-// The HTML layer exists to be measured, so it stays in flow and carries the
-// identity: the DOT's names, plus at most one kind and one membership class (§3).
+// Shapes — what a node is made of: its HTML (`SHAPES`), the SVG drawn around it
+// (`SHELLS`), its glyphs (`ICONS`), and the one markdown engine its label and
+// every note go through. Pure strings, no DOM; the Painter writes them.
+//
+// A shape, a shell or an icon is a file plus a registry entry and nothing else.
 
+import MarkdownIt from "markdown-it";
 import type * as T from "../types.ts";
-import { renderLabel } from "./markdown.ts";
 
-export const SHAPE_HTML: T.ShapeHtml = new Map([
+import boxShell from "../../svg/box.svg";
+
+import bucket from "../../icon/bucket.svg";
+import burst from "../../icon/burst.svg";
+import chart from "../../icon/chart.svg";
+import cloud from "../../icon/cloud.svg";
+import database from "../../icon/database.svg";
+import python from "../../icon/python.svg";
+import star from "../../icon/star.svg";
+
+/** shell → the fragment drawn around a box, `{{x}}`-style holes. Unknown falls back to "box". */
+export const SHELLS = new Map<string, string>([["box", boxShell]]);
+
+/** icon file name → its markup. Keyed by file name, as `icon=` and `![](x.svg)` say it. */
+export const ICONS = new Map<string, string>([
+  ["bucket.svg", bucket],
+  ["burst.svg", burst],
+  ["chart.svg", chart],
+  ["cloud.svg", cloud],
+  ["database.svg", database],
+  ["python.svg", python],
+  ["star.svg", star],
+]);
+
+/** SVG markup as a data URI: Redraw never fetches, the PNG canvas is never
+ *  tainted, and Export HTML stays standalone (§7). */
+export const svgUri = (svg: string): string => `data:image/svg+xml,${encodeURIComponent(svg)}`;
+
+// ---------------------------------------------------------------- the HTML layer
+//
+// shape → the node's HTML. The HTML layer exists to be measured, so it stays in
+// flow and carries the identity: the DOT's names, plus at most one kind and one
+// membership class (§3).
+
+const SHAPES = new Map<string, (node: T.DiagramNode) => string>([
   ["box", box],
   ["record", record],
 ]);
 
 export function shapeHtml(node: T.DiagramNode): string {
-  const render = SHAPE_HTML.get(node.shape) ?? SHAPE_HTML.get("box")!;
+  const render = SHAPES.get(node.shape) ?? SHAPES.get("box")!;
   return render(node);
 }
 
@@ -23,7 +59,7 @@ export function shapeHtml(node: T.DiagramNode): string {
 // values the author wrote, passed through so the styles tab can reach them.
 // Giving each one a class would put a bare DOT word in the class space, where a
 // subgraph of the same name already lives (§3.1).
-const SHAPE_CLASS: T.ShapeClass = new Map([["record", "record"]]);
+const KIND = new Map<string, string>([["record", "record"]]);
 
 function box(node: T.DiagramNode): string {
   return `<div ${identity(node)}><span class="label">${renderLabel(node.label)}</span></div>`;
@@ -157,7 +193,7 @@ function splitPort(text: string): [string, string] {
 // --------------------------------------------------------------------- shared
 
 function identity(node: T.DiagramNode): string {
-  const kind = SHAPE_CLASS.get(node.shape) ?? "node";
+  const kind = KIND.get(node.shape) ?? "node";
   const classes = [kind, ...styleWords(node.style), ...node.classes, ...membership(node.classes)].join(" ");
   const shape = kind === "node" ? ` data-shape="${node.shape}"` : "";
   return `id="${node.id}" class="${classes}"${shape}`;
@@ -178,4 +214,74 @@ export function styleWords(style: string): string[] {
     .split(",")
     .map((word) => word.trim())
     .filter((word) => word !== "");
+}
+
+// ------------------------------------------------------------------- markdown
+//
+// We hand-rolled this once — six regexes whose own comment called it "the
+// second grammar we own". Nobody writes a markdown parser.
+
+// A name we do not carry is passed through — the author gets a broken image
+// and can see why.
+function iconSrc(src: string): string {
+  const svg = ICONS.get(src.replace(/^(\.\/)?icon\//, ""));
+  return svg === undefined ? src : svgUri(svg);
+}
+
+// `xhtmlOut` because a picture export is parsed as XML (§4.1), so a void element
+// closes itself everywhere we send markup.
+const md = new MarkdownIt({ html: true, breaks: true, linkify: true, xhtmlOut: true });
+
+// The library's own extension point, so the parser's output is never
+// post-processed (§7). `.icon` is the class the theme and the export already know.
+md.renderer.rules.image = (tokens, idx) => {
+  const token = tokens[idx]!;
+  const src = iconSrc(String(token.attrGet("src") ?? ""));
+  const alt = md.utils.escapeHtml(token.content);
+
+  return `<img class="icon" src="${src}" alt="${alt}" />`;
+};
+
+// markdown-it pretty-prints a newline after the break. In an inline label that
+// newline is rendered whitespace, so the next line starts with a stray space.
+md.renderer.rules.softbreak = () => "<br />";
+
+// The line-break contract (§7): `\n` is a literal backslash and the letter n,
+// because a single-line `<input>` can produce neither a real newline nor a
+// two-space hard break. `\l` / `\r` are Graphviz's, and `\|` / `\{` / `\}` are
+// the characters the record split above reserved.
+//
+// A left-to-right walk rather than a chain of `replace`, so `\\n` stays the
+// escape markdown already documents: the pair passes through, markdown-it turns
+// it into one backslash, and the `n` is text.
+const BREAKS = "nlr";
+const LITERALS = "|{}";
+
+function unescape(label: string): string {
+  let out = "";
+  for (let i = 0; i < label.length; i++) {
+    const char = label[i]!;
+    if (char !== "\\") {
+      out += char;
+      continue;
+    }
+    const next = label[i + 1] ?? "";
+    if (BREAKS.includes(next)) out += "\n";
+    else if (LITERALS.includes(next)) out += next;
+    else out += char + next;
+    i++;
+  }
+  return out;
+}
+
+// A label is a name, not a document, so there is no `<p>` around it.
+function renderLabel(label: string): string {
+  return md.renderInline(unescape(label));
+}
+
+// An annotation is the opposite: a note wants paragraphs and lists, so it is
+// block mode. Same pre-pass, so `\n` means the same thing in both (§7) — with
+// `\n\n` reading as a paragraph break here, which is the point of block mode.
+export function renderAnnotation(text: string): string {
+  return md.render(unescape(text));
 }

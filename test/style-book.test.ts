@@ -1,15 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { admits, asDocument, asFile, type Book, documentStyles, expand, fileStyles, mixins, painted } from "../src/style/book.ts";
-import { priority } from "../src/style/sheet.ts";
+import { admits, asFile, asProject, type Book, expand, fileStyles, mixins, painted, priority } from "../src/engine/stylist.ts";
 import * as T from "../src/types.ts";
 
 import basicTheme from "../theme/basic-theme.json";
 
-// The StyleBook class needs CSSOM, which bun does not have. What is testable
+// The Stylist class needs CSSOM, which bun does not have. What is testable
 // headless is the interesting half: the source guard, `@apply`, and the files.
 // The live sheet and the rows tab are the browser half's job.
 
-/** A book built the way the StyleBook builds one: each style through `admits`,
+/** A book built the way the Stylist builds one: each style through `admits`,
  *  in order. CSSOM's own verdict is the browser half's. */
 function book(styles: T.Style[]): Book {
   const out: Book = new Map();
@@ -172,7 +171,7 @@ describe("the shipped theme", () => {
   });
 });
 
-describe("the saved document — your rules, over a named theme", () => {
+describe("the saved project — your rules, over a named theme", () => {
   const mixed = [
     theme(".node", "background", "white"),
     dot(".node", "border-color", "grey"),
@@ -181,9 +180,10 @@ describe("the saved document — your rules, over a named theme", () => {
   ];
 
   test("only source 2 travels; the theme and the DOT are left to regenerate", () => {
-    expect(asDocument(mixed)).toEqual({
+    expect(asProject("digraph {}", mixed)).toEqual({
       theme: "basic-theme.json",
-      style: {
+      dot: "digraph {}",
+      "user-styles": {
         ".node": { color: { value: "pink", source: 2 } },
         "#lake": { color: { value: "red", source: 2 } },
       },
@@ -191,21 +191,21 @@ describe("the saved document — your rules, over a named theme", () => {
   });
 
   test("a selector the user never touched leaves no empty husk behind", () => {
-    expect(asDocument([theme(".only-theme", "color", "red")]).style).toEqual({});
+    expect(asProject("", [theme(".only-theme", "color", "red")])["user-styles"]).toEqual({});
   });
 
   test("the whole book serialises as a file, every source kept", () => {
     expect(fileStyles(asFile(mixed))).toEqual(mixed);
   });
 
-  test("a document round-trips: save, read back, same rules", () => {
-    const saved = asDocument(mixed);
-    expect(asDocument(documentStyles(saved))).toEqual(saved);
+  test("a project round-trips: save, read back, same rules", () => {
+    const saved = asProject("digraph {}", mixed);
+    expect(asProject(saved.dot, fileStyles(saved["user-styles"]))).toEqual(saved);
   });
 
   test("a bare file still reads — what an exported page carries", () => {
     const file: T.StyleFile = { ".node": { padding: { value: "1em", source: 2 } } };
-    expect(documentStyles(file)).toEqual([user(".node", "padding", "1em")]);
+    expect(fileStyles(file)).toEqual([user(".node", "padding", "1em")]);
   });
 });
 

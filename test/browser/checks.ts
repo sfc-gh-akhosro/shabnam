@@ -2,7 +2,7 @@
 // but the DOM: the rows tab is driven the way a person drives it (set the box,
 // dispatch the event the component listens for), and every assertion is read back
 // off the live sheet or out of `getComputedStyle`. No app internals, so this
-// cannot pass by agreeing with the StyleBook about something wrong.
+// cannot pass by agreeing with the Stylist about something wrong.
 //
 // The picture *files* are **not** covered here — see `docs/archive.md`, V10.
 // Reading a download back out of headless Chrome needed a patched
@@ -98,7 +98,7 @@ const blankRow = () => rows()[rows().length - 1]!;
 
 // The tabs are a strip of radios; a label click is how a person picks one.
 const tabs = () => $$("body > aside > .radios label");
-const redrawButton = () => $('button[data-command="draw"]');
+const redrawButton = () => $('button[data-action="draw"]');
 // The tab has no toolbar of its own: ➕ on a row opens another blank after it,
 // and it is that row's last button.
 const addRow = () => ([...blankRow().querySelectorAll("button")].pop() as HTMLElement).click();
@@ -562,7 +562,7 @@ async function exportDialog(): Promise<void> {
 
   check("the dialog starts closed", !dialog.open, dialog.open);
 
-  $('button[data-command="export-picture"]').click();
+  $('button[data-action="export-picture"]').click();
   await tick();
   check("the Export button opens it", dialog.open, dialog.open);
 

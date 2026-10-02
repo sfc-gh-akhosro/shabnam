@@ -1,14 +1,13 @@
-// Connectors, one test per claim in `src/connectors/connectors-story.md`.
+// The router, one test per claim in `src/engine/story-router.md`.
 // Boxes are hand-written in LR (ranks 120 apart on x, `start` is y), and the
 // radius is 0, so every `Q` in a `d` is one bend and the corners read straight
 // back out of it.
 
 import { expect, test } from "bun:test";
-import { Connectors } from "../src/connectors/connectors.ts";
-import type { ConnectorRules } from "../src/connectors/types.ts";
-import type { Box, DiagramEdge } from "../src/types.ts";
+import { Router } from "../src/engine/router.ts";
+import type { DiagramEdge, NodeBox, RouteRules } from "../src/types.ts";
 
-const SHARP: ConnectorRules = { gap: 65, clear: 24, inset: 6, lane: 6, radius: 0 };
+const SHARP: RouteRules = { gap: 65, clear: 24, inset: 6, lane: 6, radius: 0 };
 
 type Row = [id: string, rank: number, start: number, length: number];
 
@@ -17,8 +16,8 @@ const edge = ([from, to]: [string, string]): DiagramEdge => ({ id: `${from}_${to
 /** Every node 60 wide, ranks 120 apart. */
 function draw(rows: Row[], links: [string, string][], rules = SHARP): string[] {
   const ranks = [...new Set(rows.map(([, rank]) => rank))].sort().map((r) => rows.filter(([, rank]) => rank === r).map(([id]) => id));
-  const boxes = rows.map(([id, rank, start, length]): Box => ({ id, left: rank * 120, top: start, width: 60, height: length }));
-  return new Connectors(rules).route(ranks, boxes, links.map(edge));
+  const boxes = rows.map(([id, rank, start, length]): NodeBox => ({ id, left: rank * 120, top: start, width: 60, height: length }));
+  return new Router().route(ranks, boxes, links.map(edge), rules).map((path) => path.d);
 }
 
 const bends = (d: string) => (d.match(/Q/g) ?? []).length;
@@ -120,9 +119,9 @@ const TD: Measured = [
 for (const [name, measured] of [["LR", LR], ["TD", TD]] as const) {
   test(`the lab fixture keeps its bends per edge in ${name}`, () => {
     const ranks = measured.map((rank) => rank.map(([id]) => id));
-    const boxes = measured.flat().map(([id, left, top, width, height]): Box => ({ id, left, top, width, height }));
+    const boxes = measured.flat().map(([id, left, top, width, height]): NodeBox => ({ id, left, top, width, height }));
     // The lab's numbers: gap 5em and clear 2em, at 13px.
-    const connectors = new Connectors({ ...SHARP, gap: 65, clear: 26 });
-    expect(connectors.route(ranks, boxes, EDGES.map(edge)).map(bends)).toEqual(LAB_BENDS);
+    const paths = new Router().route(ranks, boxes, EDGES.map(edge), { ...SHARP, gap: 65, clear: 26 });
+    expect(paths.map((path) => bends(path.d))).toEqual(LAB_BENDS);
   });
 }

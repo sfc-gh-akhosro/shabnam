@@ -1,12 +1,14 @@
 // Cluster shells: SVG bounding boxes drawn around member nodes of `subgraph cluster_...`.
 
 import { expect, test } from "bun:test";
-import { NodeSheller } from "../src/paint/node-sheller.ts";
-import { DotReader } from "../src/read/dot-reader.ts";
-import type { Box, DiagramModel } from "../src/types.ts";
+import { clusterSvg } from "../src/engine/painter.ts";
+import { Parser } from "../src/engine/parser.ts";
+
+const parse = (dot: string) => new Parser().parse(dot);
+import type { NodeBox, DiagramModel } from "../src/types.ts";
 
 function makeModel(dot: string): DiagramModel {
-  return new DotReader(dot).model();
+  return parse(dot).model;
 }
 
 test("clusters draw an SVG box enclosing member node bounding boxes", () => {
@@ -18,14 +20,13 @@ test("clusters draw an SVG box enclosing member node bounding boxes", () => {
   }`;
 
   const model = makeModel(dot);
-  const sheller = new NodeSheller();
 
-  const boxes: Box[] = [
+  const boxes: NodeBox[] = [
     { id: "a", left: 100, top: 50, width: 80, height: 40 },
     { id: "b", left: 100, top: 120, width: 90, height: 40 },
   ];
 
-  const svg = sheller.clusters(boxes, model);
+  const svg = clusterSvg(boxes, model);
 
   expect(svg).toContain('<g id="cluster_sources" class="cluster_">');
   expect(svg).toContain('<rect x="84" y="22" width="122" height="154" rx="8" ry="8" />');
@@ -44,14 +45,13 @@ test("cluster with style=invis is omitted from cluster SVG output", () => {
   }`;
 
   const model = makeModel(dot);
-  const sheller = new NodeSheller();
 
-  const boxes: Box[] = [
+  const boxes: NodeBox[] = [
     { id: "a", left: 50, top: 50, width: 60, height: 30 },
     { id: "b", left: 150, top: 50, width: 60, height: 30 },
   ];
 
-  const svg = sheller.clusters(boxes, model);
+  const svg = clusterSvg(boxes, model);
 
   expect(svg).not.toContain("cluster_hidden");
   expect(svg).toContain("cluster_visible");
@@ -68,14 +68,13 @@ test("non-cluster subgraphs (anonymous or without cluster prefix) do not emit cl
   }`;
 
   const model = makeModel(dot);
-  const sheller = new NodeSheller();
 
-  const boxes: Box[] = [
+  const boxes: NodeBox[] = [
     { id: "a", left: 50, top: 50, width: 60, height: 30 },
     { id: "b", left: 150, top: 50, width: 60, height: 30 },
   ];
 
-  const svg = sheller.clusters(boxes, model);
+  const svg = clusterSvg(boxes, model);
   expect(svg).toBe("");
 });
 
@@ -92,14 +91,13 @@ test("nested clusters compute bounds encompassing member nodes", () => {
   }`;
 
   const model = makeModel(dot);
-  const sheller = new NodeSheller();
 
-  const boxes: Box[] = [
+  const boxes: NodeBox[] = [
     { id: "p1", left: 50, top: 50, width: 100, height: 40 },
     { id: "c1", left: 200, top: 100, width: 80, height: 40 },
   ];
 
-  const svg = sheller.clusters(boxes, model);
+  const svg = clusterSvg(boxes, model);
 
   expect(svg).toContain('id="cluster_parent"');
   expect(svg).toContain('id="cluster_child"');

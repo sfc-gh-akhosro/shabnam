@@ -30,9 +30,9 @@ Three kinds, and all three are the design:
 
 | Kind | Holds | Written as |
 |---|---|---|
-| **interface** | behaviour: a set of methods, like a Rust trait | `interface StyleBook { add(style: Style): boolean }` |
+| **interface** | behaviour: a set of methods, like a Rust trait | `interface Stylist { add(style: Style): boolean }` |
 | **type** | state: data, no methods | `type Style = { selector; property; value; source }` |
-| **enum** | a lookup table: key → value, or key → function | `Map` or `Record`, nested when needed: `SHAPE_HTML: Map<Shape, (node) => Html>` |
+| **enum** | a lookup table: key → value, or key → function | `Map` or `Record`, nested when needed: `SHAPES: Map<Shape, (node) => Html>` |
 
 **Interfaces are the core of the design**, and the easiest to overlook: they are
 the conversations between players. Types hold what is known; enums are how a
@@ -41,8 +41,8 @@ polymorphism is a `Map` from case to function.
 
 So "the types" of a story or a package almost always means: the **major
 types**, the **major interfaces and their methods**, the **major class** named
-with what it implements and from which types ("`Connectors` implements
-`Connectors` over `Placement` and `ConnectorRules`"), and the **enums**. Not
+with what it implements and from which types ("`Router` implements
+`Router` over `Ranks`, `NodeBox` and `RouteRules`"), and the **enums**. Not
 every record; inner ones stay with their code.
 
 Name the atomic types. `sameRank: NodeId[][]` reads on its own; `string[][]`
@@ -56,23 +56,23 @@ them, so `types.ts` stays readable top to bottom.
 
 Ideally — not necessarily — each package has its own `story.md` and
 `types.ts`. The perspective changes with the package: the root story is the
-user's; the story inside `paint/` is told from the painter's chair. A package
+user's; the story inside `engine/` is told from the painter's chair. A package
 without one is fine until its story is worth telling.
 
 ### Names read
 
 A name alone should say what it holds. `Book`, `Reader`, `Table` say nothing;
-`StyleBook`, `DotReader` do. Then a method needs one word:
-`styleBook.add(style)` reads as a sentence, and `addStyle` would repeat the
-class. A class does one job through a few verbs — two `add`s means two classes,
-or one verb.
+`Stylist`, `Parser`, `Router` say the job in an app with one domain. Then a
+method needs one word: `stylist.add(style)` reads as a sentence, and
+`addStyle` would repeat the class. A class does one job through a few verbs —
+two `add`s means two classes, or one verb.
 
 ### Wall each library off behind one named class
 
-A third-party library is visible inside exactly one class, named after it —
-`DotReader` over `@ts-graphviz/ast`, `DagreLayout` over dagre. The type list
-alone then tells you where a dependency could leak from, and replacing one is
-one file.
+A third-party library is visible inside exactly one class, and that class's
+header says so — `Parser` over `@ts-graphviz/ast`, `Layout` over
+`@hpcc-js/wasm-graphviz`. The players table in `app-architecture.md` then tells
+you where a dependency could leak from, and replacing one is one file.
 
 ### Experiment in `research-lab/` before touching `src/`
 

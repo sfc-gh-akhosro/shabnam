@@ -1,8 +1,8 @@
-// Shabnam — data types and package interfaces.
+// Shabnam — the shared vocabulary and the players' interfaces.
 //
-// `type` is data, `interface` is methods, a `Map` is an enum. The reasoning for
-// every shape here lives in `app-architecture.md`; this file carries only what a
-// signature cannot say on its own.
+// `type` is data, `interface` is methods, a `Map` is an enum. Only what crosses
+// a player's wall lives here; a shape one player keeps to itself lives in that
+// player's file. The reasoning is `app-architecture.md`.
 
 // ---------------------------------------------------------------------------
 // names — every atomic type gets one. `NodeId[][]` reads on its own.
@@ -10,7 +10,7 @@
 
 /** A DOT node name, spaces turned to underscores. Also the HTML id. */
 export type NodeId = string;
-/** `tail_head`, then `_2`, `_3` … for parallel edges. */
+/** `tail_head`. Parallel edges share one. */
 export type EdgeId = string;
 /** `cluster_a` — the name the DOT wrote, and the CSS class. Never stripped. */
 export type SubgraphName = string;
@@ -18,19 +18,16 @@ export type SubgraphName = string;
 /** `.cluster_a.node, .cluster_a.record` — composed flat, never nested. */
 export type Selector = string;
 export type Property = string;
-/** As the author typed it, but for a bare number, which gains `px` (§3.2). */
+/** As the author typed it, but for a bare number, which gains `px` (§2). */
 export type CssValue = string;
 
 export type DotAttr = string;
 export type DotValue = string;
 
-/** Rough pixels from layout, not a measurement of anything painted. */
-export type Px = number;
-
 export type Rankdir = "TB" | "BT" | "LR" | "RL";
 
 // ---------------------------------------------------------------------------
-// the reader's answer 1 — the semantics. No coordinates (§3.1).
+// the parse — one DOT, three answers (§2)
 // ---------------------------------------------------------------------------
 
 export type DiagramNode = {
@@ -63,8 +60,8 @@ export type DiagramCluster = {
   clusters: SubgraphName[];
 };
 
-/** `nodes` is keyed because every consumer asks for one by id; insertion order
- *  is DOT order, so iterating `.values()` still reads the diagram as written. */
+/** Semantics, no coordinates. `nodes` is keyed because every consumer asks for
+ *  one by id; insertion order is DOT order. */
 export type DiagramModel = {
   rankdir: Rankdir;
   nodes: Map<NodeId, DiagramNode>;
@@ -72,115 +69,54 @@ export type DiagramModel = {
   clusters: DiagramCluster[];
 };
 
-// ---------------------------------------------------------------------------
-// answer 2 — appearance, at the branch it was written on (§3.2)
-// ---------------------------------------------------------------------------
-
-/** selector → property → value. The selector *is* the branch. */
-export type DotStyles = Map<Selector, Map<Property, CssValue>>;
-
-// ---------------------------------------------------------------------------
-// answer 3 — what layout is given, and what it answers
-// ---------------------------------------------------------------------------
-
-/**
- * The author's DOT, parsed, trimmed of everything that gives a node size, every
- * node a 0×0 point, printed. Whatever else `dot` reads passes through (§2).
- */
+/** The author's DOT, parsed, trimmed of everything that gives a node size,
+ *  every node a 0×0 point, printed. */
 export type PointDot = string;
 
-/** rank → order → node. `ranks[r][o]` is the o-th node of rank r. */
-export type Ranks = NodeId[][];
+/** What one parse answers: who exists, how they look (source 1), what layout is given. */
+export type Parsed = { model: DiagramModel; styles: Style[]; points: PointDot };
 
 // ---------------------------------------------------------------------------
-// the walk's record — what was written, and where (§2)
-// ---------------------------------------------------------------------------
-
-/**
- * A list of enclosing subgraph names, outermost first; `[]` is the root graph.
- * This is the provenance the whole design rests on.
- */
-export type Scope = SubgraphName[];
-
-/** `node [...]` / `edge [...]` / `graph [...]`, kept at its branch. */
-export type Declaration = {
-  scope: Scope;
-  about: "node" | "edge" | "graph";
-  attrs: Map<DotAttr, DotValue>;
-};
-
-/** A node or edge statement that carried attributes of its own. */
-export type Stated = {
-  id: string;
-  scope: Scope;
-  attrs: Map<DotAttr, DotValue>;
-};
-
-export type EdgeStated = Stated & { from: NodeId; to: NodeId };
-
-/**
- * Everything one walk recorded. The three answers are each a pure reading of
- * this, which is why they can disagree about resolution.
- */
-export type Written = {
-  rankdir: Rankdir;
-  /** What each subgraph said about itself: `label`, `rank`, `style`. */
-  scopes: Map<SubgraphName, Map<DotAttr, DotValue>>;
-  /** Where each subgraph sits, so nesting can be recovered. */
-  nesting: Map<SubgraphName, Scope>;
-  /** Cumulative: a node named in two subgraphs belongs to both. */
-  members: Map<NodeId, Set<SubgraphName>>;
-  declarations: Declaration[];
-  nodes: Stated[];
-  edges: EdgeStated[];
-};
-
-// ---------------------------------------------------------------------------
-// types — data only
+// geometry
 // ---------------------------------------------------------------------------
 
 export type Point = { x: number; y: number };
 
-/** Measured, after paint. The single source of truth for size and position —
- *  which is why the model carries no Graphviz `width` / `height` (§3.4). */
-export type Box = {
-  id: string;
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-};
+/** rank → order → node. `ranks[r][o]` is the o-th node of rank r. */
+export type Ranks = NodeId[][];
 
-/** Four tabs, in order. `styles` and `notes` are rows views, not text. */
-export type TabId = "dot" | "styles" | "notes" | "script";
+/** Measured, after paint: the single source of size and position (§3.4). */
+export type NodeBox = { id: NodeId; left: number; top: number; width: number; height: number };
 
-/** Every verb. The toolbar and the chords share one map of them. */
-export type Command = "draw" | "open" | "save" | "load-dot" | "export-picture" | "export-html";
+/** One routed connector: the edge, and its outline. */
+export type EdgePath = { edge: DiagramEdge; d: string };
+
+/** The router's numbers, in px, each a CSS token on the canvas (§4): `gap`
+ *  (outer gutters, open-port corridor), `clear` (grows nodes), `inset` (marker
+ *  room at a face), `lane` (parts colliding gutter runs), `radius` (rounds bends). */
+export type RouteRules = { gap: number; clear: number; inset: number; lane: number; radius: number };
+
+/** One SVG string per group under `#diagram-svg`, named by its sink. */
+export type SvgLayers = { clusters: string; shells: string; connectors: string };
+
+// ---------------------------------------------------------------------------
+// what you wrote
+// ---------------------------------------------------------------------------
 
 /**
- * One note, as its row holds it — and the row is the model (§4). An **ordered
- * list**, not a map keyed by selector: two marks may point at the same node,
- * and the second is not an overwrite.
- *
- * `selector` goes to `querySelectorAll`. `dx` / `dy` are any CSS length, spent
- * by the theme inside `calc()` and never parsed here. `text` is markdown.
+ * One note, as its row holds it — and the row is the model (§6). An ordered
+ * list, not a map keyed by selector: two marks may point at the same node.
+ * `selector` goes to `querySelectorAll`; `dx` / `dy` are CSS lengths the theme
+ * spends inside `calc()`; `text` is markdown.
  */
-export type Note = {
-  selector: string;
-  dx: string;
-  dy: string;
-  class: string;
-  text: string;
-};
+export type Note = { selector: string; dx: string; dy: string; class: string; text: string };
 
-// ---------------------------------------------------------------------------
-// style — one line each: selector's property = value, and who wrote it
-// ---------------------------------------------------------------------------
+/** Everything a diagram is written as, but its styles. */
+export type Sketch = { dot: string; notes: Note[]; script: string };
 
 /** Who wrote a style: theme · DOT · you. The order *is* the access rule. */
 export type Source = 0 | 1 | 2;
-
-export type SourceName = "theme" | "dot" | "user";
+type SourceName = "theme" | "dot" | "user";
 
 /** Source → its name, in access order. The style filter's labels. */
 export const SOURCE: Map<Source, SourceName> = new Map([
@@ -192,80 +128,24 @@ export const SOURCE: Map<Source, SourceName> = new Map([
 /** One style rule. Found by selector + property, as CSSOM finds it. */
 export type Style = { selector: Selector; property: Property; value: CssValue; source: Source };
 
-/** What a style JSON holds. One shape, sourced; the theme is all `0`. */
-export type StyleFile = Record<string, Record<string, { value: string; source: Source }>>;
+/** Styles written down: `{ selector: { property: { value, source } } }`. */
+export type StyleFile = Record<Selector, Record<Property, { value: CssValue; source: Source }>>;
 
-/** Your rules, and the theme they were laid over — what a project carries.
- *  Only source `2` travels (§4.4). */
-export type StyleDocument = { theme: string; style: StyleFile };
-
-/** What Save writes and Open reads: the theme by name, the DOT as text, and
- *  your rules. Only source `2` travels in `user-styles`. */
+/** What Save writes and Open reads. Only source `2` travels in `user-styles`. */
 export type Project = { theme: string; dot: string; "user-styles": StyleFile };
 
-/** A typed value you subscribe to. A fact, never a verb. */
-export interface Topic<T> {
-  readonly value: T;
-  pub(v: T): void;
-  sub(fn: (v: T) => void): void;
-}
+/** What an exported page boots from: the sketch and the whole book. */
+export type Seed = Sketch & { styles: StyleFile };
 
 // ---------------------------------------------------------------------------
-// interfaces — methods only. Packages implement these, not every file.
+// verbs and views
 // ---------------------------------------------------------------------------
 
-/**
- * The DOT reader. One parse, three answers, and the parsed tree escapes nowhere.
- * One implementation: the `DotReader` class, which is the only thing that reads DOT.
- */
-export interface DotReader {
-  model(): DiagramModel;
-  /** The DOT's appearance, each stamped source 1. */
-  styles(): Style[];
-  /** What layout is given. */
-  points(): PointDot;
-}
+/** Every verb. The toolbar's `data-action` and the chords share one map. */
+export type Action = "draw" | "open" | "save" | "load-dot" | "export-picture" | "export-html";
 
-/**
- * The only source of geometry. One implementation: `GraphvizLayout`, which
- * walls `@hpcc-js/wasm-graphviz`.
- */
-export interface GraphvizLayout {
-  /** `dot` on the points, as it answers: where each 0×0 point landed. */
-  positions(points: PointDot): Map<NodeId, Point>;
-  /** `positions`, grouped by the rank axis and sorted along the other. */
-  layout(points: PointDot): Ranks;
-}
-
-export interface DiagramPainter {
-  frame(model: DiagramModel, ranks: Ranks): string;
-  /** `ds[i]` is the connector outline of `model.edges[i]`. */
-  svg(boxes: Box[], model: DiagramModel, ds: string[]): SvgLayers;
-}
-
-/** One SVG string per group under `#diagram-svg`, named by its sink. */
-export type SvgLayers = { clusters: string; shells: string; connectors: string };
-
-export interface StyleBook {
-  /** The only way in. False: a higher source owns it, an `@apply` names a
-   *  selector not in the book, or CSSOM refuses the value. */
-  add(style: Style): boolean;
-  remove(style: Style): void;
-  /** What the styles tab shows, in order. */
-  styles(): Style[];
-}
-
-/** The living state: what you wrote, and how it draws itself. */
-export interface Diagram {
-  readonly dot: Topic<string>;
-  readonly styleBook: StyleBook;
-  readonly notes: Topic<Note[]>;
-  readonly script: Topic<string>;
-  draw(): Promise<void>;
-  /** Notes → sink → anchors. A short path: no parse, no frame, and no
-   *  waiting for a paint, so it cannot interleave with a draw. */
-  place(): void;
-}
+/** Four tabs, in order. `styles` and `notes` are row views, not text. */
+export type TabId = "dot" | "styles" | "notes" | "script";
 
 export type PictureFormat = "svg" | "png";
 
@@ -277,33 +157,75 @@ export type PictureOptions = {
   scale: number;
 };
 
-// ---------------------------------------------------------------------------
-// the pieces — native controls with a CSS face. None of them knows DOT exists.
-// ---------------------------------------------------------------------------
-
-/** The host already exists in the skeleton; the piece fills it and binds. */
-export interface Piece {
-  readonly el: HTMLElement;
+/** A typed value you subscribe to. A fact, never a verb. */
+export interface Topic<T> {
+  readonly value: T;
+  pub(v: T): void;
+  sub(fn: (v: T) => void): void;
 }
 
-export interface RowList<R> extends Piece {
-  render(rows: R[]): void;
-  mark(i: number, invalid: boolean): void;
-}
-
-export interface DialogAsk<A> extends Piece {
-  /** `undefined` is cancelled. */
-  ask(): Promise<A | undefined>;
-}
-// Radios and Checks add no methods: they read and write their Topic.
+/** A record of facts, each its own Topic. */
+export type Topics<T> = { readonly [K in keyof T]: Topic<T[K]> };
 
 // ---------------------------------------------------------------------------
-// registry shapes — live with the workers that consult them
+// the players — one interface each, one class each (§1)
 // ---------------------------------------------------------------------------
 
-export type ShapeHtml = Map<string, (node: DiagramNode) => string>;
-/** shape → the node's type class. Absent means `.node` plus `data-shape`. */
-export type ShapeClass = Map<string, string>;
-export type ShellSvg = Map<string, string>;
-/** DOT attribute → CSS property. Absent means it is not appearance. */
-export type AttrCss = Map<DotAttr, Property>;
+/** The only reader of DOT. The parse tree escapes nowhere. */
+export interface Parser {
+  /** Throws on malformed DOT; the caller holds the one catch. */
+  parse(dot: string): Parsed;
+}
+
+/** The only source of geometry. Walls `@hpcc-js/wasm-graphviz`. */
+export interface Layout {
+  /** Where each 0×0 point landed. */
+  positions(points: PointDot): Map<NodeId, Point>;
+  /** `positions`, grouped by the rank axis and sorted along the other. */
+  ranks(points: PointDot): Ranks;
+}
+
+/** Placement in, one outline per edge out. No DOM, no CSS. */
+export interface Router {
+  route(ranks: Ranks, boxes: NodeBox[], edges: DiagramEdge[], rules: RouteRules): EdgePath[];
+}
+
+/** The style book and the one live CSSOM sheet it paints. */
+export interface Stylist {
+  /** The only way in. False: a higher source owns it, an `@apply` names a
+   *  selector not in the book, or CSSOM refuses the value. */
+  add(style: Style): boolean;
+  remove(style: Style): void;
+  /** What the styles tab lists, in order. */
+  styles(): Style[];
+  /** The live sheet as CSS text, for the exports. */
+  css(): string;
+}
+
+/** Owns `#diagram-canvas`: the only writer of the picture. */
+export interface Painter {
+  /** parse → styles → layout → frame → measure → route → SVG → notes → script. */
+  draw(sketch: Sketch, stylist: Stylist): Promise<void>;
+  frame(model: DiagramModel, ranks: Ranks): void;
+  measure(): NodeBox[];
+  drawSvg(layers: SvgLayers): void;
+  /** The short path: no parse, no frame, no await. */
+  annotate(notes: Note[]): void;
+  /** The canvas as a standalone SVG, the given CSS inlined. */
+  snapshot(css: string): string;
+}
+
+/** The side panel: tabs, their editors, hover and pin. Holds what you wrote. */
+export interface Workbench {
+  readonly sketch: Topics<Sketch>;
+  readonly stylist: Stylist;
+  readonly tab: Topic<TabId>;
+  /** A new stylist from the theme plus `styles`, the tabs refilled, then a draw. */
+  adopt(sketch: Sketch, styles: Style[]): Promise<void>;
+  draw(): Promise<void>;
+}
+
+/** The nav bar: the verbs, their chords, files in and out. */
+export interface Chrome {
+  run(action: Action): Promise<void>;
+}
